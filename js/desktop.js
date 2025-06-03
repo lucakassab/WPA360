@@ -1,87 +1,119 @@
 // js/desktop.js
 
-export async function init() {
+// Importa Three.js como módulo via CDN
+import * as THREE from 'https://unpkg.com/three@0.158.0/build/three.module.js';
+
+let scene, camera, renderer, sphereMesh, animationId;
+
+// Chamado pelo loader.js quando detectar modo DESKTOP
+export function init() {
   console.log('[desktop.js] Iniciando modo DESKTOP');
 
-  const select = document.getElementById('mediaDropdown');
-  if (!select) return;
+  // Pega o canvas do index.html
+  const canvas = document.getElementById('viewer');
 
-  // Função que carrega e exibe a mídia baseada na URL
-  async function loadAndDisplayMedia(url) {
-    try {
-      // Usa a função global pra buscar/cachear a mídia
-      const res = await window.fetchAndCacheMedia(url);
-      const blob = await res.blob();
-      const objectURL = URL.createObjectURL(blob);
+  // Cria o renderer usando esse canvas
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
 
-      // Aqui você coloca a lógica pra exibir no canvas/WebGL ou <video>
-      // Por enquanto, só loga o objectURL
-      console.log('[desktop.js] Mídia pronta para renderizar:', objectURL);
+  // Cria cena e câmera
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(
+    75,                              // FOV
+    window.innerWidth / window.innerHeight, // aspect
+    0.1,                             // near
+    1000                             // far
+  );
+  camera.position.set(0, 0, 0.1);
 
-      // Exemplo simples: se fosse um <video> ou <img>, você poderia fazer algo assim:
-      // const viewer = document.getElementById('viewer');
-      // if (url.endsWith('.mp4')) {
-      //   // Para vídeo
-      //   const video = document.createElement('video');
-      //   video.src = objectURL;
-      //   video.loop = true;
-      //   video.autoplay = true;
-      //   video.style.width = '100%';
-      //   video.style.height = '100%';
-      //   viewer.replaceWith(video);
-      // } else {
-      //   // Para imagem 360 (precisa de renderer WebGL real)
-      //   // Supondo que você tenha uma função render360(objectURL, canvasElement)
-      //   render360(objectURL, document.getElementById('viewer'));
-      // }
-    } catch (err) {
-      console.error('[desktop.js] Falha ao carregar mídia:', err);
-    }
-  }
-
-  // Quando o usuário mudar o dropdown
-  select.addEventListener('change', async (e) => {
-    const url = e.target.value;
-    if (!url) return;
-    await loadAndDisplayMedia(url);
-  });
-
-  // Se houver botões “Próxima” e “Anterior”, pode-se implementá-los assim:
-  let currentIndex = 0;
-  const prevBtn = document.getElementById('prevBtn');
-  const nextBtn = document.getElementById('nextBtn');
-
-  if (prevBtn) {
-    prevBtn.addEventListener('click', () => {
-      if (window.mediaList.length === 0) return;
-      currentIndex = (currentIndex - 1 + window.mediaList.length) % window.mediaList.length;
-      select.selectedIndex = currentIndex;
-      select.dispatchEvent(new Event('change'));
-    });
-  }
-
-  if (nextBtn) {
-    nextBtn.addEventListener('click', () => {
-      if (window.mediaList.length === 0) return;
-      currentIndex = (currentIndex + 1) % window.mediaList.length;
-      select.selectedIndex = currentIndex;
-      select.dispatchEvent(new Event('change'));
-    });
-  }
-
-  // **Carrega automaticamente a primeira mídia** (se houver)
-  if (select.options.length > 0) {
-    // Ajusta o índice para 0 (primeira opção disponível que tenha URL)
-    currentIndex = 0;
-    select.selectedIndex = 0;
-    const firstUrl = select.options[0].value;
-    if (firstUrl) {
-      await loadAndDisplayMedia(firstUrl);
-    }
-  }
+  // Ajusta onResize
+  window.addEventListener('resize', onWindowResize);
 }
 
+// Função para carregar e renderizar a mídia 360 (URL já cacheado ou remoto)
+// stereo: booleano (se for stereo, você pode futuramente lidar com side-by-side, top-bottom, etc.)
+export function loadMedia(url, stereo) {
+  console.log('[desktop.js] Carregando mídia:', url, 'stereo?', stereo);
+
+  const loader = new THREE.TextureLoader();
+
+  // Se já tiver uma esfera antiga, remove e libera memória
+  if (sphereMesh) {
+    scene.remove(sphereMesh);
+    sphereMesh.geometry.dispose();
+    sphereMesh.material.dispose();
+    sphereMesh = null;
+  }
+
+  // Carrega a textura
+  loader.load(
+    url,
+    (texture) => {
+      // Ao finalizar load:
+      // Define mapeamento e cria esfera invertida
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+
+      const geometry = new THREE.SphereGeometry(500, 60, 40);
+      geometry.scale(-1, 1, 1); // Inverte normals
+
+      const material = new THREE.MeshBasicMaterial({ map: texture });
+
+      sphereMesh = new THREE.Mesh(geometry, material);
+      scene.add(sphereMesh);
+
+      // Começa o loop de render
+      animate();
+    },
+    undefined,
+    (err) => {
+      console.error('[desktop.js] Erro ao carregar textura 360:', err);
+    }
+  );
+}
+
+// Loop de render contínuo
+function animate() {
+  renderer.render(scene, camera);
+  animationId = requestAnimationFrame(animate);
+}
+
+// Ajusta câmera e renderer ao redimensionar janela
+function onWindowResize() {
+  if (!renderer || !camera) return;
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// Chamado pelo loader.js quando mudar de modo ou descartar este módulo
 export function dispose() {
   console.log('[desktop.js] Limpando modo DESKTOP');
-  // Limpe listeners, revokeObjectURLs, etc., conforme necessário
+
+  // Para o loop de animação
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
+
+  // Remove e libera a esfera
+  if (sphereMesh) {
+    scene.remove(sphereMesh);
+    sphereMesh.geometry.dispose();
+    sphereMesh.material.dispose();
+    sphereMesh = null;
+  }
+
+  // Dispose do renderer
+  if (renderer) {
+    renderer.dispose();
+    renderer = null;
+  }
+
+  // Remove listeners
+  window.removeEventListener('resize', onWindowResize);
+
+  // Limpa cena e câmera
+  scene = null;
+  camera = null;
 }
