@@ -25,7 +25,7 @@ async function loadDesktop() {
     currentModule = await import('./desktop.js');
     if (currentModule.init) {
       console.log('[loader.js] Invocando desktop.init()');
-      await currentModule.init(); // aguarda a init() do desktop
+      await currentModule.init();
     }
   } catch (err) {
     console.error('[loader.js] Falha ao carregar desktop.js:', err);
@@ -182,7 +182,6 @@ function detectAndLoad() {
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  console.log('[loader.js] DOMContentLoaded');
-  detectAndLoad();
-});
+// **Aqui** chamamos detectAndLoad() assim que o loader.js é importado
+console.log('[loader.js] arquivo importado – chamando detectAndLoad() imediatamente');
+detectAndLoad();
