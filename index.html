@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tour360 – Visualizador 360°</title>
+  <!-- Manifest pro PWA -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Estilo básico mas bonitão -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+      font-family: sans-serif;
+    }
+
+    #interface {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px 15px;
+      border-radius: 6px;
+      z-index: 10;
+    }
+
+    #mediaDropdown {
+      appearance: none;
+      background: #fff;
+      color: #000;
+      padding: 8px 12px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 4px;
+      outline: none;
+      min-width: 150px;
+    }
+
+    button {
+      background-color: #1e90ff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: #0066cc;
+    }
+
+    #viewer {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="interface">
+    <select id="mediaDropdown">
+      <option value="">Carregando...</option>
+    </select>
+    <button id="prevBtn">Anterior</button>
+    <button id="nextBtn">Próxima</button>
+    <button id="enterVrBtn" style="display: none;">Entrar no VR</button>
+  </div>
+
+  <canvas id="viewer"></canvas>
+
+  <!-- Carrega a lógica base e o loader que detecta o ambiente -->
+  <script src="js/core.js" type="module"></script>
+  <!-- Não precisa colocar loader.js separado, pois core.js já faz import do loader. 
+       Mas se preferir, pode manter: -->
+  <!-- <script src="js/loader.js" type="module"></script> -->
+
+  <!-- Registro do Service Worker pra deixar offline (PWA) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('sw.js')
+        .then(() => console.log('Service Worker registrado com sucesso'))
+        .catch(err => console.log('Falha ao registrar SW:', err));
+    }
+  </script>
+</body>
+</html>
