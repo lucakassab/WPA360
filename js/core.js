@@ -7,7 +7,7 @@ const isStandalone = window.matchMedia('(display-mode: standalone)').matches
 console.log(`[core.js] Rodando como PWA? ${isStandalone ? 'SIM' : 'NÃO'}`);
 
 // 2. URL do medialist.json no GitHub (ajusta pra sua URL real)
-const MEDIA_LIST_URL = 'https://raw.githubusercontent.com/lucakassab/WPA360/main/medialist.json';
+const MEDIA_LIST_URL = 'https://raw.githubusercontent.com/lucakassab/WPA360/master/medialist.json';
 
 // 3. Nome do cache onde guardaremos as mídias
 const MEDIA_CACHE = 'media-cache-v1';
