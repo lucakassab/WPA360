@@ -4,7 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tour360 – Visualizador 360°</title>
-  <!-- Manifest pro PWA -->
+
+  <!-- Ícone (favicon) -->
+  <link rel="icon" href="icons/favicon.ico" />
+
+  <!-- Manifest do PWA -->
   <link rel="manifest" href="manifest.json" />
 
   <!-- Estilo básico mas bonitão -->
@@ -69,27 +73,28 @@
 </head>
 <body>
   <div id="interface">
+    <!-- O loader.js vai popular esse dropdown com as mídias -->
     <select id="mediaDropdown">
       <option value="">Carregando...</option>
     </select>
+
     <button id="prevBtn">Anterior</button>
     <button id="nextBtn">Próxima</button>
+    <!-- O loader.js só vai exibir esse botão se suportar XR -->
     <button id="enterVrBtn" style="display: none;">Entrar no VR</button>
   </div>
 
+  <!-- Canvas/WebGL onde o 360 será renderizado -->
   <canvas id="viewer"></canvas>
 
-  <!-- Carrega a lógica base e o loader que detecta o ambiente -->
-  <script src="js/core.js" type="module"></script>
-  <!-- Não precisa colocar loader.js separado, pois core.js já faz import do loader. 
-       Mas se preferir, pode manter: -->
-  <!-- <script src="js/loader.js" type="module"></script> -->
+  <!-- Puxa o core.js (que injeta o loader.js internamente) -->
+  <script type="module" src="js/core.js"></script>
 
-  <!-- Registro do Service Worker pra deixar offline (PWA) -->
+  <!-- Registra o Service Worker para deixar offline -->
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
-        .register('sw.js')
+        .register('./sw.js')
         .then(() => console.log('Service Worker registrado com sucesso'))
         .catch(err => console.log('Falha ao registrar SW:', err));
     }
