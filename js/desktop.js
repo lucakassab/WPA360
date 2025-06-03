@@ -1,13 +1,14 @@
 // js/desktop.js
 
-import * as THREE from 'https://unpkg.com/three@0.158.0/build/three.module.js';
+import * as THREE              from 'https://unpkg.com/three@0.158.0/build/three.module.js';
+import { OrbitControls }       from 'https://unpkg.com/three@0.158.0/examples/jsm/controls/OrbitControls.js';
 
-let scene, camera, renderer;
-let debugSphere = null;        // esfera única p/ debug (verde interno, vermelho externo)
+let scene, camera, renderer, controls;
+let debugSphere   = null;      // esfera única de debug (verde interno / vermelho externo)
 let textureSphere = null;      // esfera texturizada
-let animationId = null;
+let animationId   = null;
 
-// ---------- API chamada pelo loader.js ---------- //
+// ---------- API para o loader.js ---------- //
 export function init() {
   console.log('[desktop.js] Iniciando modo DESKTOP');
 
@@ -17,14 +18,25 @@ export function init() {
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
 
-  scene = new THREE.Scene();
+  scene  = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(
     75,
     window.innerWidth / window.innerHeight,
     0.1,
-    2000
+    5000
   );
-  camera.position.set(0, 0, 0);
+  camera.position.set(0, 0, 0.1); // começa dentro da esfera, bem perto do centro
+
+  // OrbitControls — habilita rotação e zoom (scroll do mouse)
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.rotateSpeed   = 0.3;
+
+  // Distâncias permitidas p/ o zoom (scroll)
+  // < 500 ⇒ dentro |  > 500 ⇒ fora (esfera de raio 500)
+  controls.minDistance = 0.1;   // não deixa colapsar no centro
+  controls.maxDistance = 1500;  // ir um pouco além p/ ver a esfera por fora
 
   addDebugSphere();
 
@@ -32,12 +44,11 @@ export function init() {
   animate();
 }
 
-// loader.js chama isto quando o usuário escolhe uma mídia
 export function loadMedia(url, stereo = false) {
   console.log('[desktop.js] Carregando mídia:', url, 'stereo?', stereo);
 
-  removeDebugSphere(); // tira a esfera de debug
-  removeTextureSphere(); // remove anterior se existir
+  removeDebugSphere();    // tira esfera de debug
+  removeTextureSphere();  // remove textura anterior (se havia)
 
   const loader = new THREE.TextureLoader();
   loader.load(
@@ -46,39 +57,38 @@ export function loadMedia(url, stereo = false) {
       texture.mapping = THREE.EquirectangularReflectionMapping;
 
       const geom = new THREE.SphereGeometry(500, 64, 40);
-      geom.scale(-1, 1, 1); // inverte para ficar dentro
+      geom.scale(-1, 1, 1); // inverte pra ver por dentro
 
-      const mat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+      const mat  = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
       textureSphere = new THREE.Mesh(geom, mat);
       scene.add(textureSphere);
     },
     undefined,
-    (err) => console.error('[desktop.js] Erro ao carregar textura 360:', err)
+    err => console.error('[desktop.js] Erro ao carregar textura 360:', err)
   );
 }
 
-// opcional – chamadas do loader.js
+// callbacks opcionais pro loader.js
 export const onSelectMedia = loadMedia;
-export function onPrevMedia() {/* implementar depois */}
-export function onNextMedia() {/* implementar depois */}
+export function onPrevMedia() { /* implementar depois */ }
+export function onNextMedia() { /* implementar depois */ }
 
-// ---------- Debug sphere ---------- //
+// ---------- Debug Sphere ---------- //
 function addDebugSphere() {
-  const geom = new THREE.SphereGeometry(500, 64, 40);
-  // NÃO faz scale(-1); queremos ver ambos os lados
+  const geom = new THREE.SphereGeometry(500, 64, 40); // NÃO invertida
+  const mat  = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 
-  const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-  // patcha o shader p/ cores diferentes
   mat.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <color_fragment>',
       `
         #include <color_fragment>
-        // Front face = vermelho, Back face = verde
+        // Vermelho para faces front-facing (externas)
+        // Verde para faces back-facing (vistas de dentro)
         if (gl_FrontFacing) {
-          diffuseColor.rgb = vec3(1.0, 0.0, 0.0);  // vermelho externo
+          diffuseColor.rgb = vec3(1.0, 0.0, 0.0);
         } else {
-          diffuseColor.rgb = vec3(0.0, 1.0, 0.0);  // verde interno
+          diffuseColor.rgb = vec3(0.0, 1.0, 0.0);
         }
       `
     );
@@ -106,8 +116,9 @@ function removeTextureSphere() {
   }
 }
 
-// ---------- Render loop ---------- //
+// ---------- Loop de render ---------- //
 function animate() {
+  controls.update();              // OrbitControls (damping)
   renderer.render(scene, camera);
   animationId = requestAnimationFrame(animate);
 }
@@ -127,8 +138,9 @@ export function dispose() {
   removeDebugSphere();
   removeTextureSphere();
 
+  controls?.dispose();
   renderer?.dispose();
   window.removeEventListener('resize', onWindowResize);
 
-  scene = camera = renderer = null;
+  scene = camera = renderer = controls = null;
 }
