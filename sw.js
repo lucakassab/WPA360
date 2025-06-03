@@ -1,8 +1,8 @@
 // sw.js
 
-const CACHE_NAME = 'tour360-cache-v2'; // se for atualizar, muda a versão
+const CACHE_NAME = 'tour360-cache-v3'; // versão incrementada
 
-// Lista de arquivos que vai ser cacheada (use caminhos relativos a partir da raiz)
+// Lista de arquivos a serem cacheados (caminhos relativos à raiz)
 const ASSETS_TO_CACHE = [
   './index.html',
   './manifest.json',
@@ -11,12 +11,13 @@ const ASSETS_TO_CACHE = [
   './js/desktop.js',
   './js/mobile.js',
   './js/xr.js',
-  // Se tiver CSS ou outras imagens pousa aqui
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-192x192.png', // nome real do arquivo
+  './icons/icon-512x512.png', // nome real do arquivo
+  './icons/favicon.ico'       // opcional, para cachear o favicon
 ];
 
 self.addEventListener('install', event => {
+  console.log('[sw.js] Instalando e cacheando ativos...');
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       return cache.addAll(ASSETS_TO_CACHE);
@@ -26,11 +27,13 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
+  console.log('[sw.js] Ativando e limpando caches antigos...');
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
         keys.map(key => {
           if (key !== CACHE_NAME) {
+            console.log('[sw.js] Deletando cache antigo:', key);
             return caches.delete(key);
           }
         })
