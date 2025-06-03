@@ -3,9 +3,9 @@
 import * as THREE from 'https://unpkg.com/three@0.158.0/build/three.module.js';
 
 let scene, camera, renderer;
-let debugInner, debugOuter;            // esferas-wireframe p/ debug
-let textureSphere;                     // esfera com a mídia
-let animationId;
+let debugSphere = null;        // esfera única p/ debug (verde interno, vermelho externo)
+let textureSphere = null;      // esfera texturizada
+let animationId = null;
 
 // ---------- API chamada pelo loader.js ---------- //
 export function init() {
@@ -24,9 +24,9 @@ export function init() {
     0.1,
     2000
   );
-  camera.position.set(0, 0, 0);        // fica no centro da esfera
+  camera.position.set(0, 0, 0);
 
-  addDebugSpheres();
+  addDebugSphere();
 
   window.addEventListener('resize', onWindowResize);
   animate();
@@ -36,16 +36,8 @@ export function init() {
 export function loadMedia(url, stereo = false) {
   console.log('[desktop.js] Carregando mídia:', url, 'stereo?', stereo);
 
-  // Remove esferas de debug se ainda existirem
-  removeDebugSpheres();
-
-  // Remove esfera anterior (se houver)
-  if (textureSphere) {
-    scene.remove(textureSphere);
-    textureSphere.geometry.dispose();
-    textureSphere.material.dispose();
-    textureSphere = null;
-  }
+  removeDebugSphere(); // tira a esfera de debug
+  removeTextureSphere(); // remove anterior se existir
 
   const loader = new THREE.TextureLoader();
   loader.load(
@@ -54,7 +46,7 @@ export function loadMedia(url, stereo = false) {
       texture.mapping = THREE.EquirectangularReflectionMapping;
 
       const geom = new THREE.SphereGeometry(500, 64, 40);
-      geom.scale(-1, 1, 1);  // inverte as faces
+      geom.scale(-1, 1, 1); // inverte para ficar dentro
 
       const mat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
       textureSphere = new THREE.Mesh(geom, mat);
@@ -65,47 +57,62 @@ export function loadMedia(url, stereo = false) {
   );
 }
 
-// opcional: o loader.js verifica essas funções
+// opcional – chamadas do loader.js
 export const onSelectMedia = loadMedia;
-export function onPrevMedia() { /* implementar quando tiver navegação */ }
-export function onNextMedia() { /* implementar quando tiver navegação */ }
+export function onPrevMedia() {/* implementar depois */}
+export function onNextMedia() {/* implementar depois */}
 
-// ---------- Funções internas ---------- //
-function addDebugSpheres() {
-  // Esfera interna (verde, wireframe)
-  const gInner = new THREE.SphereGeometry(500, 32, 32);
-  gInner.scale(-1, 1, 1);
-  const mInner = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
-  debugInner = new THREE.Mesh(gInner, mInner);
-  scene.add(debugInner);
+// ---------- Debug sphere ---------- //
+function addDebugSphere() {
+  const geom = new THREE.SphereGeometry(500, 64, 40);
+  // NÃO faz scale(-1); queremos ver ambos os lados
 
-  // Esfera externa (vermelha, wireframe)  — ligeiramente maior pra enxergar
-  const gOuter = new THREE.SphereGeometry(510, 32, 32);
-  const mOuter = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
-  debugOuter = new THREE.Mesh(gOuter, mOuter);
-  scene.add(debugOuter);
+  const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  // patcha o shader p/ cores diferentes
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      `
+        #include <color_fragment>
+        // Front face = vermelho, Back face = verde
+        if (gl_FrontFacing) {
+          diffuseColor.rgb = vec3(1.0, 0.0, 0.0);  // vermelho externo
+        } else {
+          diffuseColor.rgb = vec3(0.0, 1.0, 0.0);  // verde interno
+        }
+      `
+    );
+  };
+
+  debugSphere = new THREE.Mesh(geom, mat);
+  scene.add(debugSphere);
 }
 
-function removeDebugSpheres() {
-  if (debugInner) {
-    scene.remove(debugInner);
-    debugInner.geometry.dispose();
-    debugInner.material.dispose();
-    debugInner = null;
-  }
-  if (debugOuter) {
-    scene.remove(debugOuter);
-    debugOuter.geometry.dispose();
-    debugOuter.material.dispose();
-    debugOuter = null;
+function removeDebugSphere() {
+  if (debugSphere) {
+    scene.remove(debugSphere);
+    debugSphere.geometry.dispose();
+    debugSphere.material.dispose();
+    debugSphere = null;
   }
 }
 
+function removeTextureSphere() {
+  if (textureSphere) {
+    scene.remove(textureSphere);
+    textureSphere.geometry.dispose();
+    textureSphere.material.dispose();
+    textureSphere = null;
+  }
+}
+
+// ---------- Render loop ---------- //
 function animate() {
   renderer.render(scene, camera);
   animationId = requestAnimationFrame(animate);
 }
 
+// ---------- Resize ---------- //
 function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -115,15 +122,10 @@ function onWindowResize() {
 // ---------- Limpeza quando sair do modo DESKTOP ---------- //
 export function dispose() {
   console.log('[desktop.js] Limpando modo DESKTOP');
-  cancelAnimationFrame(animationId);
-  removeDebugSpheres();
 
-  if (textureSphere) {
-    scene.remove(textureSphere);
-    textureSphere.geometry.dispose();
-    textureSphere.material.dispose();
-    textureSphere = null;
-  }
+  cancelAnimationFrame(animationId);
+  removeDebugSphere();
+  removeTextureSphere();
 
   renderer?.dispose();
   window.removeEventListener('resize', onWindowResize);
