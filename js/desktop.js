@@ -1,7 +1,7 @@
 // js/desktop.js
 
-import * as THREE from './js/vendor/three.module.js';
-import { OrbitControls } from './js/vendor/OrbitControls.js';
+import * as THREE from '/js/vendor/three.module.js';
+import { OrbitControls } from '/js/vendor/OrbitControls.js';
 
 
 let scene, camera, renderer, controls;
