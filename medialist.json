@@ -1,22 +1,22 @@
 [
   {
     "name": "Imagem mono 1",
-    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/Media/A1_Mono.jpg"
+    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/media/A1_Mono.jpg"
   },
   {
     "name": "Imagem stereo 1",
-    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/Media/A2_Stereo.jpg"
+    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/media/A2_Stereo.jpg"
   },
   {
     "name": "Vídeo mono 1",
-    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/Media/Parque2k_Mono.mp4"
+    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/media/Parque2k_Mono.mp4"
   },
   {
     "name": "Imagem mono 2",
-    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/Media/img_Mono.jpg"
+    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/media/img_Mono.jpg"
   },
   {
     "name": "Imagem stereo 2",
-    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/Media/img_stereo.png"
+    "url": "https://raw.githubusercontent.com/lucakassab/WPA360/master/media/img_stereo.png"
   }
 ]
