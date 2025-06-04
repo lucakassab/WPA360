@@ -25,18 +25,15 @@ export function init() {
     0.1,
     5000
   );
-  camera.position.set(0, 0, 0.1); // começa dentro da esfera, bem perto do centro
+  camera.position.set(0, 0, 0.1); // começa dentro da esfera
 
-  // OrbitControls — habilita rotação e zoom (scroll do mouse)
+  // OrbitControls — habilita rotação e zoom
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
   controls.rotateSpeed   = 0.3;
-
-  // Distâncias permitidas p/ o zoom (scroll)
-  // < 500 ⇒ dentro |  > 500 ⇒ fora (esfera de raio 500)
-  controls.minDistance = 0.1;   // não deixa colapsar no centro
-  controls.maxDistance = 1500;  // ir um pouco além p/ ver a esfera por fora
+  controls.minDistance   = 0.1;
+  controls.maxDistance   = 1500;
 
   addDebugSphere();
 
@@ -47,19 +44,18 @@ export function init() {
 export async function loadMedia(url, stereo = false) {
   console.log('[desktop.js] Carregando mídia:', url, 'stereo?', stereo);
 
-  removeDebugSphere();    // tira esfera de debug
-  removeTextureSphere();  // remove textura anterior (se havia)
+  removeDebugSphere();
+  removeTextureSphere();
 
   try {
-    // 1) Baixa via fetchAndCacheMedia (cache do Service Worker)
+    // 1) Pega a imagem via fetchAndCacheMedia (usa cache do SW)
     const response = await window.fetchAndCacheMedia(url);
-    // 2) Converte pra Blob e gera objectURL
-    const blob = await response.blob();
+    const blob     = await response.blob();
     const objectURL = URL.createObjectURL(blob);
 
-    // 3) TextureLoader a partir do objectURL
+    // 2) Carrega a textura a partir do objectURL local
     const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin('anonymous');
+    loader.setCrossOrigin('anonymous'); // só pra garantir, mas objectURL não costuma exigir
     loader.load(
       objectURL,
       (texture) => {
@@ -68,11 +64,14 @@ export async function loadMedia(url, stereo = false) {
         const geom = new THREE.SphereGeometry(500, 64, 40);
         geom.scale(-1, 1, 1); // inverte pra ver por dentro
 
-        const mat  = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+        const mat = new THREE.MeshBasicMaterial({
+          map: texture,
+          side: THREE.BackSide
+        });
         textureSphere = new THREE.Mesh(geom, mat);
         scene.add(textureSphere);
 
-        // libera o objectURL após carregar
+        // libera o objectURL pra não vazar memória
         URL.revokeObjectURL(objectURL);
       },
       undefined,
@@ -83,14 +82,14 @@ export async function loadMedia(url, stereo = false) {
   }
 }
 
-// callbacks opcionais pro loader.js
+// callbacks pro loader.js
 export const onSelectMedia = loadMedia;
 export function onPrevMedia() { /* implementar depois */ }
 export function onNextMedia() { /* implementar depois */ }
 
 // ---------- Debug Sphere ---------- //
 function addDebugSphere() {
-  const geom = new THREE.SphereGeometry(500, 64, 40); // NÃO invertida
+  const geom = new THREE.SphereGeometry(500, 64, 40);
   const mat  = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 
   mat.onBeforeCompile = (shader) => {
@@ -98,8 +97,6 @@ function addDebugSphere() {
       '#include <color_fragment>',
       `
         #include <color_fragment>
-        // Vermelho para faces front-facing (externas)
-        // Verde para faces back-facing (vistas de dentro)
         if (gl_FrontFacing) {
           diffuseColor.rgb = vec3(1.0, 0.0, 0.0);
         } else {
@@ -133,7 +130,7 @@ function removeTextureSphere() {
 
 // ---------- Loop de render ---------- //
 function animate() {
-  controls.update();              // OrbitControls (damping)
+  controls.update();
   renderer.render(scene, camera);
   animationId = requestAnimationFrame(animate);
 }
@@ -145,17 +142,14 @@ function onWindowResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// ---------- Limpeza quando sair do modo DESKTOP ---------- //
+// ---------- Dispose ---------- //
 export function dispose() {
   console.log('[desktop.js] Limpando modo DESKTOP');
-
   cancelAnimationFrame(animationId);
   removeDebugSphere();
   removeTextureSphere();
-
   controls?.dispose();
   renderer?.dispose();
   window.removeEventListener('resize', onWindowResize);
-
   scene = camera = renderer = controls = null;
 }
