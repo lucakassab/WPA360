@@ -1,4 +1,3 @@
-
 // js/desktop.js
 
 import * as THREE from './vendor/three.module.js';
@@ -45,28 +44,43 @@ export function init() {
   animate();
 }
 
-export function loadMedia(url, stereo = false) {
+export async function loadMedia(url, stereo = false) {
   console.log('[desktop.js] Carregando mídia:', url, 'stereo?', stereo);
 
   removeDebugSphere();    // tira esfera de debug
   removeTextureSphere();  // remove textura anterior (se havia)
 
-  const loader = new THREE.TextureLoader();
-  loader.load(
-    url,
-    (texture) => {
-      texture.mapping = THREE.EquirectangularReflectionMapping;
+  try {
+    // 1) Baixa via fetchAndCacheMedia (cache do Service Worker)
+    const response = await window.fetchAndCacheMedia(url);
+    // 2) Converte pra Blob e gera objectURL
+    const blob = await response.blob();
+    const objectURL = URL.createObjectURL(blob);
 
-      const geom = new THREE.SphereGeometry(500, 64, 40);
-      geom.scale(-1, 1, 1); // inverte pra ver por dentro
+    // 3) TextureLoader a partir do objectURL
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    loader.load(
+      objectURL,
+      (texture) => {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
 
-      const mat  = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
-      textureSphere = new THREE.Mesh(geom, mat);
-      scene.add(textureSphere);
-    },
-    undefined,
-    err => console.error('[desktop.js] Erro ao carregar textura 360:', err)
-  );
+        const geom = new THREE.SphereGeometry(500, 64, 40);
+        geom.scale(-1, 1, 1); // inverte pra ver por dentro
+
+        const mat  = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+        textureSphere = new THREE.Mesh(geom, mat);
+        scene.add(textureSphere);
+
+        // libera o objectURL após carregar
+        URL.revokeObjectURL(objectURL);
+      },
+      undefined,
+      err => console.error('[desktop.js] Erro ao carregar textura 360:', err)
+    );
+  } catch (err) {
+    console.error('[desktop.js] Falha no fetchAndCacheMedia ou blob:', err);
+  }
 }
 
 // callbacks opcionais pro loader.js
