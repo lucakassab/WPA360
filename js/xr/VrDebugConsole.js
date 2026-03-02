@@ -4,25 +4,36 @@ export function registerVrDebugConsole(AFRAME) {
 
   AFRAME.registerComponent("vr-debug-console", {
     schema: {
-      maxLines: { type: "int", default: 22 },
-      width: { type: "number", default: 1.85 },
-      height: { type: "number", default: 0.95 },
+      maxLines: { type: "int", default: 14 },
 
-      // ✅ aumentei MUITO
-      fontSize: { type: "number", default: 0.18 }
+      // ✅ painel menor (não invade lateral)
+      width: { type: "number", default: 1.10 },
+      height: { type: "number", default: 0.55 },
+
+      // ✅ fonte MUITO maior (isso aqui é o que manda de verdade)
+      fontScale: { type: "number", default: 0.34 },
+
+      // ✅ texto com largura menor pra não “encolher” automaticamente
+      textWidth: { type: "number", default: 1.05 },
+      wrapCount: { type: "int", default: 44 }
     },
 
     init() {
       this.lines = [];
       this._orig = null;
 
+      // fundo
       const bg = document.createElement("a-plane");
       bg.setAttribute("width", this.data.width);
       bg.setAttribute("height", this.data.height);
-      bg.setAttribute("material", "color:#000; opacity:0.78; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+      bg.setAttribute(
+        "material",
+        "color:#000; opacity:0.78; transparent:true; shader:flat; depthTest:false; depthWrite:false"
+      );
       bg.setAttribute("position", "0 0 0");
       this.el.appendChild(bg);
 
+      // texto
       const text = document.createElement("a-entity");
       text.setAttribute("text", [
         "value:VR DEBUG CONSOLE",
@@ -30,16 +41,26 @@ export function registerVrDebugConsole(AFRAME) {
         "align:left",
         "baseline:top",
         "anchor:left",
-        `width:${this.data.width * 2.2}`,
-        `wrapCount:${Math.floor(this.data.width * 80)}`,
-        "lineHeight: 52"
+        `width:${this.data.textWidth}`,
+        `wrapCount:${this.data.wrapCount}`,
+        "lineHeight: 64"
       ].join(";"));
 
-      // canto superior esquerdo do painel
-      text.setAttribute("position", `${(-this.data.width / 2) + 0.04} ${(this.data.height / 2) - 0.06} 0.01`);
-      text.setAttribute("scale", `${this.data.fontSize} ${this.data.fontSize} ${this.data.fontSize}`);
-      this.el.appendChild(text);
+      // top-left do painel
+      const padX = 0.03;
+      const padY = 0.035;
+      text.setAttribute(
+        "position",
+        `${(-this.data.width / 2) + padX} ${(this.data.height / 2) - padY} 0.01`
+      );
 
+      // ✅ aqui é onde aumenta a fonte DE VERDADE
+      text.setAttribute(
+        "scale",
+        `${this.data.fontScale} ${this.data.fontScale} ${this.data.fontScale}`
+      );
+
+      this.el.appendChild(text);
       this._textEl = text;
 
       this._hookConsole();
