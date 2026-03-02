@@ -6,8 +6,12 @@ export default class VR {
     this._unsubs = [];
     this._session = null;
     this._running = false;
+
+    // inputSource -> { pressed: boolean[] , pinch: bool }
     this._srcState = new Map();
+
     this._lastDebugToggleMs = 0;
+    this._lastSwapMs = 0;
   }
 
   init(app) {
@@ -44,16 +48,24 @@ export default class VR {
     const cfg = this.app?.vrConfig || {};
     if (cfg.logInputs) this._installInputLogging();
 
+    // ✅ novos mapeamentos só quando vr_debug=true
     if (cfg.debugConsole) {
-      this._installDebugPanelToggle();
+      this._installThumbstickMappings();
     }
   }
 
+  // =====================================================
+  // 🧽 REMOVE ESFERAS / GEOMETRY BUGADA
+  // =====================================================
+
   _cleanupHandVisuals(handEl) {
     if (!handEl) return;
+
     try { handEl.removeAttribute("geometry"); } catch {}
     try { handEl.removeAttribute("material"); } catch {}
+
     try { handEl.querySelectorAll("a-sphere").forEach(n => n.remove()); } catch {}
+
     try {
       handEl.querySelectorAll("[geometry]").forEach(n => {
         const g = (n.getAttribute("geometry") || "").toString();
@@ -61,6 +73,10 @@ export default class VR {
       });
     } catch {}
   }
+
+  // =====================================================
+  // 🔥 QUALIDADE / FFR OFF
+  // =====================================================
 
   _applyVrQuality() {
     const renderer = this.app.sceneEl?.renderer;
@@ -83,6 +99,7 @@ export default class VR {
     };
 
     kick();
+
     const onEnter = () => kick();
     sceneEl?.addEventListener("enter-vr", onEnter);
     this._unsubs.push(() => sceneEl?.removeEventListener("enter-vr", onEnter));
@@ -97,6 +114,7 @@ export default class VR {
       try { renderer.xr.setFoveation?.(0); } catch {}
 
       const rs = session.renderState;
+
       const base = rs?.baseLayer;
       if (base && base.fixedFoveation != null) base.fixedFoveation = 0;
 
@@ -109,40 +127,36 @@ export default class VR {
     } catch {}
   }
 
-  // -------------------- Thumbstick toggle --------------------
+  // =====================================================
+  // ✅ NOVOS MAPAS (vr_debug=true)
+  // =====================================================
 
-  _installDebugPanelToggle() {
-    const sceneEl = this.app.sceneEl;
-
-    const onAnyThumbstickDown = (e) => {
-      // garante que é “down” mesmo
-      this._toggleDebugPanel();
+  _installThumbstickMappings() {
+    // Right thumbstick -> toggle console
+    const onRight = (e) => {
       e?.stopPropagation?.();
+      this._toggleDebugPanel();
     };
 
-    // 1) captura no scene inteiro (mais confiável)
-    sceneEl?.addEventListener("thumbstickdown", onAnyThumbstickDown, true);
-    this._unsubs.push(() => sceneEl?.removeEventListener("thumbstickdown", onAnyThumbstickDown, true));
+    // Left thumbstick -> toggle swapEyes + reload pano
+    const onLeft = (e) => {
+      e?.stopPropagation?.();
+      this._toggleStereoSwapAndReload();
+    };
 
-    // 2) redundância: hands
-    const onL = () => this._toggleDebugPanel();
-    const onR = () => this._toggleDebugPanel();
+    // Eventos A-Frame (preferidos)
+    this.app.rightHandEl?.addEventListener("thumbstickdown", onRight);
+    this.app.leftHandEl?.addEventListener("thumbstickdown", onLeft);
 
-    this.app.leftHandEl?.addEventListener("thumbstickdown", onL);
-    this.app.rightHandEl?.addEventListener("thumbstickdown", onR);
+    this._unsubs.push(() => this.app.rightHandEl?.removeEventListener("thumbstickdown", onRight));
+    this._unsubs.push(() => this.app.leftHandEl?.removeEventListener("thumbstickdown", onLeft));
 
-    this._unsubs.push(() => this.app.leftHandEl?.removeEventListener("thumbstickdown", onL));
-    this._unsubs.push(() => this.app.rightHandEl?.removeEventListener("thumbstickdown", onR));
-
-    console.log("[VR] thumbstickdown => toggle debug panel");
+    console.log("[VR] mappings: RIGHT thumbstick -> console | LEFT thumbstick -> swapEyes+reload");
   }
 
   _getDebugConsoleEntity() {
-    // prioridade: referência do App
-    if (this.app?._vrConsoleEl) return this.app._vrConsoleEl;
-
-    // fallback: busca pelo id
     return (
+      this.app?._vrConsoleEl ||
       this.app?.cameraEl?.querySelector?.("#vrConsole") ||
       this.app?.sceneEl?.querySelector?.("#vrConsole") ||
       null
@@ -151,7 +165,7 @@ export default class VR {
 
   _toggleDebugPanel() {
     const now = performance.now();
-    if (now - this._lastDebugToggleMs < 350) return; // debounce mais forte
+    if (now - this._lastDebugToggleMs < 300) return;
     this._lastDebugToggleMs = now;
 
     const el = this._getDebugConsoleEntity();
@@ -163,14 +177,63 @@ export default class VR {
     const cur = !!el.object3D?.visible;
     const next = !cur;
 
-    // usa o estado REAL do three.js + atributo (pra A-Frame ficar alinhado)
     if (el.object3D) el.object3D.visible = next;
     el.setAttribute("visible", next ? "true" : "false");
 
     console.log(`[VR] debug panel visible=${next}`);
   }
 
-  // -------------------- logging (press only) --------------------
+  _toggleStereoSwapAndReload() {
+    const now = performance.now();
+    if (now - this._lastSwapMs < 350) return;
+    this._lastSwapMs = now;
+
+    const panoEl = this.app?.panoEl || document.querySelector("#pano");
+    if (!panoEl) {
+      console.warn("[VR] não achei #pano");
+      return;
+    }
+
+    const comp = panoEl.components?.["stereo-top-bottom"];
+    const curSwap = !!(comp?.data?.swapEyes ?? panoEl.getAttribute("stereo-top-bottom")?.swapEyes);
+    const nextSwap = !curSwap;
+
+    // pega src atual com prioridade pro componente
+    const src =
+      comp?._currentSrc ||
+      comp?.data?.src ||
+      this.app?.getCurrentScene?.()?.pano ||
+      panoEl.getAttribute("stereo-top-bottom")?.src ||
+      "";
+
+    if (!src) {
+      console.warn("[VR] não consegui achar src atual pra reload");
+      panoEl.setAttribute("stereo-top-bottom", { swapEyes: nextSwap });
+      console.log(`[VR] swapEyes=${nextSwap} (sem src p/ reload)`);
+      return;
+    }
+
+    // 1) aplica swapEyes
+    panoEl.setAttribute("stereo-top-bottom", { swapEyes: nextSwap });
+
+    // 2) força reload: limpa src e seta de volta
+    //    (setSrc(src) não recarrega se url for igual, então fazemos "vazio -> src")
+    try {
+      if (comp?.setSrc) {
+        comp.setSrc("");
+        setTimeout(() => comp.setSrc(src), 30);
+      } else {
+        panoEl.setAttribute("stereo-top-bottom", { src: "" });
+        setTimeout(() => panoEl.setAttribute("stereo-top-bottom", { src }), 30);
+      }
+    } catch {}
+
+    console.log(`[VR] swapEyes=${nextSwap} + reload pano`);
+  }
+
+  // =====================================================
+  // 🎮 LOGGING (press only)
+  // =====================================================
 
   _installInputLogging() {
     const discreteEvs = [
@@ -196,9 +259,12 @@ export default class VR {
     attach(this.app.leftHandEl, "L");
     attach(this.app.rightHandEl, "R");
 
-    // (se tu ainda usa polling/gamepad pra log, mantém aqui; não interfere no toggle agora)
-    console.log("[VR] Input logging ON");
+    console.log("[VR] Input logging ON (press/release apenas)");
   }
+
+  // =====================================================
+  // CLEANUP
+  // =====================================================
 
   dispose() {
     this._running = false;
