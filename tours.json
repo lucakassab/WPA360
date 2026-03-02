@@ -8,7 +8,7 @@
         {
           "id": "Apartamento_Col_1_Studio",
           "name": "Apartamento_Col_1_Studio",
-          "pano": "./assets/panoramas/Coluna_1/APARTAMENTO_COLUNA_01_Studio.jpg",
+          "pano": "./assets/Panoramas/Coluna_1/APARTAMENTO_COLUNA_01_Studio.jpg",
           "scene_map_position": "70,66",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -50,7 +50,7 @@
         {
           "id": "Apartamento_Col_1_Suite",
           "name": "Apartamento_Col_1_Suite",
-          "pano": "./assets/panoramas/Coluna_1/APARTAMENTO_COLUNA_01_Suite.jpg",
+          "pano": "./assets/Panoramas/Coluna_1/APARTAMENTO_COLUNA_01_Suite.jpg",
           "scene_map_position": "83,70",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -66,7 +66,7 @@
         {
           "id": "Banheiro_Col_1_Suite",
           "name": "Banheiro_Col_1_Suite",
-          "pano": "./assets/panoramas/Coluna_1/BANHO_SUITE_COL-01.jpg",
+          "pano": "./assets/Panoramas/Coluna_1/BANHO_SUITE_COL-01.jpg",
           "scene_map_position": "94.5,66",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -95,7 +95,7 @@
         {
           "id": "Banheiro_Col_1_Studio",
           "name": "Banheiro_Col_1_Studio",
-          "pano": "./assets/panoramas/Coluna_1/BANHO_STUDIO_COL-01.jpg",
+          "pano": "./assets/Panoramas/Coluna_1/BANHO_STUDIO_COL-01.jpg",
           "scene_map_position": "64,73",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -117,7 +117,7 @@
         {
           "id": "Apartamento_Col_2_Studio",
           "name": "Apartamento_Col_2_Studio",
-          "pano": "./assets/panoramas/Coluna_2/APARTAMENTO_COLUNA_02_Studio.jpg",
+          "pano": "./assets/Panoramas/Coluna_2/APARTAMENTO_COLUNA_02_Studio.jpg",
           "scene_map_position": "56,60",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -133,7 +133,7 @@
         {
           "id": "Apartamento_Col_2_Social",
           "name": "Apartamento_Col_2_Social",
-          "pano": "./assets/panoramas/Coluna_2/APARTAMENTO_COLUNA_02_Social.jpg",
+          "pano": "./assets/Panoramas/Coluna_2/APARTAMENTO_COLUNA_02_Social.jpg",
           "scene_map_position": "41,60",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -149,7 +149,7 @@
         {
           "id": "Banheiro_Col_2_Social",
           "name": "Banheiro_Col_2_Social",
-          "pano": "./assets/panoramas/Coluna_2/BANHO_SOCIAL_COL-02.jpg",
+          "pano": "./assets/Panoramas/Coluna_2/BANHO_SOCIAL_COL-02.jpg",
           "scene_map_position": "33,63",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -165,7 +165,7 @@
         {
           "id": "Banheiro_Col_2_Studio",
           "name": "Banheiro_Col_2_Studio",
-          "pano": "./assets/panoramas/Coluna_2/BANHO_STUDIO_COL-02.jpg",
+          "pano": "./assets/Panoramas/Coluna_2/BANHO_STUDIO_COL-02.jpg",
           "scene_map_position": "64,56",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -187,7 +187,7 @@
         {
           "id": "Apartamento_Col_3",
           "name": "Apartamento_Col_3",
-          "pano": "./assets/panoramas/Coluna_3/APARTAMENTO_COLUNA_03.jpg",
+          "pano": "./assets/Panoramas/Coluna_3/APARTAMENTO_COLUNA_03.jpg",
           "scene_map_position": "15,25",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -203,7 +203,7 @@
         {
           "id": "Banheiro_Social_Col_3",
           "name": "Banheiro_Social_Col_3",
-          "pano": "./assets/panoramas/Coluna_3/BANHO_SOCIAL_COL-03.jpg",
+          "pano": "./assets/Panoramas/Coluna_3/BANHO_SOCIAL_COL-03.jpg",
           "scene_map_position": "20,36",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -219,7 +219,7 @@
         {
           "id": "Banheiro_Suite_Col_3",
           "name": "Banheiro_Suite_Col_3",
-          "pano": "./assets/panoramas/Coluna_3/BANHO_SUITE_COL-03.jpg",
+          "pano": "./assets/Panoramas/Coluna_3/BANHO_SUITE_COL-03.jpg",
           "scene_map_position": "10,55.7",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -241,7 +241,7 @@
         {
           "id": "Apartamento_Col_4_Direita",
           "name": "Apartamento_Col_4_Direita",
-          "pano": "./assets/panoramas/Coluna_4/APARTAMENTO_COLUNA_04.jpg",
+          "pano": "./assets/Panoramas/Coluna_4/APARTAMENTO_COLUNA_04.jpg",
           "scene_map_position": "57,24",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -257,7 +257,7 @@
         {
           "id": "Banheiro_Studio_Direito_Col_4",
           "name": "Banheiro_Studio_Direito_Col_4",
-          "pano": "./assets/panoramas/Coluna_4/BANHO_STUDIO_COL-04_DIREITO.jpg",
+          "pano": "./assets/Panoramas/Coluna_4/BANHO_STUDIO_COL-04_DIREITO.jpg",
           "scene_map_position": "63,33",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -279,7 +279,7 @@
         {
           "id": "Apartamento_Col_4_Esquerda",
           "name": "Apartamento_Col_4_Esquerda",
-          "pano": "./assets/panoramas/Coluna_4/APARTAMENTO_COLUNA_04.jpg",
+          "pano": "./assets/Panoramas/Coluna_4/APARTAMENTO_COLUNA_04.jpg",
           "scene_map_position": "42,24",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -295,7 +295,7 @@
         {
           "id": "Banheiro_Studio_Esquerdo_Col_4",
           "name": "Banheiro_Studio_Esquerdo_Col_4",
-          "pano": "./assets/panoramas/Coluna_4/BANHO_STUDIO_COL-04_ESQUERDO.jpg",
+          "pano": "./assets/Panoramas/Coluna_4/BANHO_STUDIO_COL-04_ESQUERDO.jpg",
           "scene_map_position": "37,33",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -317,7 +317,7 @@
         {
           "id": "Apartamento_Col_5",
           "name": "Apartamento_Col_5",
-          "pano": "./assets/panoramas/Coluna_5/APARTAMENTO_COLUNA_05.jpg",
+          "pano": "./assets/Panoramas/Coluna_5/APARTAMENTO_COLUNA_05.jpg",
           "scene_map_position": "77,22",
           "yawOffset": 0,
           "pitchOffset": 0,
@@ -333,7 +333,7 @@
         {
           "id": "Banheiro_Studio_Col_5",
           "name": "Banheiro_Studio_Col_5",
-          "pano": "./assets/panoramas/Coluna_5/BANHO_STUDIO_COL-05.jpg",
+          "pano": "./assets/Panoramas/Coluna_5/BANHO_STUDIO_COL-05.jpg",
           "scene_map_position": "72,33",
           "yawOffset": 0,
           "pitchOffset": 0,
