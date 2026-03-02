@@ -4,7 +4,6 @@ export function registerStereoTopBottom(AFRAME) {
 
   const THREE = AFRAME.THREE;
 
-  // ===== Cache global de textures (memória) =====
   const MAX_CACHE = 12;
   const cache = new Map(); // url -> { tex, promise, lastUsed }
 
@@ -40,14 +39,6 @@ export function registerStereoTopBottom(AFRAME) {
     }
   }
 
-  function getMaxTextureSize(sceneEl) {
-    try {
-      return sceneEl?.renderer?.capabilities?.maxTextureSize ?? 0;
-    } catch {
-      return 0;
-    }
-  }
-
   function loadTextureCached(url, sceneEl) {
     const existing = cache.get(url);
 
@@ -65,21 +56,12 @@ export function registerStereoTopBottom(AFRAME) {
       loader.load(
         url,
         (tex) => {
-          // ✅ sampling
           tex.minFilter = THREE.LinearFilter;
           tex.magFilter = THREE.LinearFilter;
           tex.generateMipmaps = false;
 
           const aniso = getMaxAnisotropy(sceneEl);
           if (aniso && Number.isFinite(aniso)) tex.anisotropy = aniso;
-
-          // ✅ warning útil: se teu arquivo excede limite do device, ele vai ser redimensionado.
-          const maxTex = getMaxTextureSize(sceneEl);
-          const iw = tex?.image?.width ?? 0;
-          const ih = tex?.image?.height ?? 0;
-          if (maxTex && (iw > maxTex || ih > maxTex)) {
-            console.warn(`[StereoTB] Textura maior que MAX_TEXTURE_SIZE (${maxTex}). Provável resize:`, iw, "x", ih, "->", maxTex);
-          }
 
           cache.set(url, { tex, promise: null, lastUsed: performance.now() });
           trimCache();
@@ -109,7 +91,12 @@ export function registerStereoTopBottom(AFRAME) {
       radius: { type: "number", default: 5000 },
       segmentsWidth: { type: "int", default: 64 },
       segmentsHeight: { type: "int", default: 32 },
-      flipX: { type: "boolean", default: true }
+      flipX: { type: "boolean", default: true },
+
+      // ✅ corrige olho invertido (teu caso): true = troca left/right
+      // padrão comum em top/bottom: top=left, bottom=right :contentReference[oaicite:1]{index=1}
+      // como tu tá vendo invertido, deixei true por default.
+      swapEyes: { type: "boolean", default: true }
     },
 
     init() {
@@ -118,7 +105,6 @@ export function registerStereoTopBottom(AFRAME) {
       this._makeMesh();
       this._bindBeforeRender();
 
-      // API programática
       this.setSrc = async (src) => this._setSrcInternal(src);
       this.preload = async (src) => {
         if (!src) return null;
@@ -151,7 +137,6 @@ export function registerStereoTopBottom(AFRAME) {
 
     remove() {
       if (this.el.getObject3D("mesh")) this.el.removeObject3D("mesh");
-      // cache segura o dispose
     },
 
     _makeMesh(rebuild = false) {
@@ -163,7 +148,6 @@ export function registerStereoTopBottom(AFRAME) {
           uEye: { value: 0.0 },
           uFlipX: { value: this.data.flipX ? 1.0 : 0.0 }
         },
-        // ✅ highp reduz shimmering/quantização em mobile
         vertexShader: `
           precision highp float;
           varying highp vec2 vUv;
@@ -193,7 +177,10 @@ export function registerStereoTopBottom(AFRAME) {
 
             if (uFlipX > 0.5) uv.x = 1.0 - uv.x;
 
+            // top/bottom: sempre metade vertical
             uv.y = uv.y * 0.5;
+
+            // VR: escolhe metade por olho
             if (uStereo > 0.5) {
               uv.y += 0.5 * uEye;
             }
@@ -234,9 +221,15 @@ export function registerStereoTopBottom(AFRAME) {
         const left = xrCam?.cameras?.[0];
         const right = xrCam?.cameras?.[1];
 
-        if (left && camera === left) this.material.uniforms.uEye.value = 0.0;
-        else if (right && camera === right) this.material.uniforms.uEye.value = 1.0;
-        else this.material.uniforms.uEye.value = 0.0;
+        // olho padrão: left=0, right=1
+        let eye = 0.0;
+        if (left && camera === left) eye = 0.0;
+        else if (right && camera === right) eye = 1.0;
+
+        // ✅ swap (corrige inversão)
+        if (this.data.swapEyes) eye = 1.0 - eye;
+
+        this.material.uniforms.uEye.value = eye;
       };
     },
 
