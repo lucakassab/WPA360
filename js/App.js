@@ -29,8 +29,8 @@ export default class App {
     // multi-tour store
     this._defaultTourId = null;
     this._tourOrder = [];
-    this._toursById = new Map();
-    this._scenesByTour = new Map();
+    this._toursById = new Map();       // tourId -> {title, scenes[], map_png?}
+    this._scenesByTour = new Map();    // tourId -> {sceneOrder, sceneById}
 
     // current
     this.currentTourId = null;
@@ -67,13 +67,17 @@ export default class App {
     this._mapOpen = false;
     this._mapImgLoaded = false;
 
-    // ✅ MiniMap state
+    // MiniMap
     this._miniMap = false;
 
-    // zoom/pan do mapa
+    // zoom/pan
     this._mapZoom = 1;
     this._mapZoomMin = 1;
     this._mapZoomMax = 6;
+
+    // VR debug console
+    this._vrDebugEnabled = false;
+    this._vrConsoleEl = null;
   }
 
   on(type, handler) { this._events.addEventListener(type, handler); }
@@ -93,7 +97,7 @@ export default class App {
     return this._sceneById.get(this.currentSceneId) ?? null;
   }
 
-  async init({ debugHotspots = false } = {}) {
+  async init({ debugHotspots = false, vrDebug = false } = {}) {
     await new Promise((resolve) => {
       if (this.sceneEl.hasLoaded) return resolve();
       this.sceneEl.addEventListener("loaded", resolve, { once: true });
@@ -125,18 +129,35 @@ export default class App {
       else this.sceneEl.enterVR();
     });
 
+    // ===== VR Debug Console (dentro do VR) =====
+    this._vrDebugEnabled = !!vrDebug;
+    if (this._vrDebugEnabled) {
+      this._vrConsoleEl = document.createElement("a-entity");
+      this._vrConsoleEl.setAttribute("id", "vrConsole");
+      this._vrConsoleEl.setAttribute("position", "0 -0.25 -1.2");
+      this._vrConsoleEl.setAttribute("visible", "false");
+      this._vrConsoleEl.setAttribute("vr-debug-console", "");
+      this.cameraEl.appendChild(this._vrConsoleEl);
+    }
+
     this.sceneEl.addEventListener("enter-vr", () => {
       if (this.ui.btnVR) this.ui.btnVR.textContent = "Sair VR";
       this.emit("vr:enter");
+
       this.hideTooltip();
       if (this._fadeEl) this._fadeEl.style.opacity = "0";
+
       this._setMenuOpen(false);
       this._setMapOpen(false, { updateHash: true });
+
+      if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", "true");
     });
 
     this.sceneEl.addEventListener("exit-vr", () => {
       if (this.ui.btnVR) this.ui.btnVR.textContent = "VR";
       this.emit("vr:exit");
+
+      if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", "false");
     });
 
     this._canHover = window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches ?? false;
@@ -164,7 +185,7 @@ export default class App {
       }
     });
 
-    // ===== Init from hash =====
+    // ===== Init from hash (Tour:Scene|Map) =====
     const initial = this._getInitialFromHash();
 
     if (initial?.tourId && initial?.sceneId) {
@@ -238,6 +259,7 @@ export default class App {
     const base = parts.find(p => p.toLowerCase() !== "map") || "";
     if (!base) return null;
 
+    // Tour:Scene
     const m = base.match(/^([^:\/]+)[:\/](.+)$/);
     if (m) {
       const tid = this._canonicalTourId(m[1]);
@@ -247,9 +269,11 @@ export default class App {
       }
     }
 
+    // só SceneId (tour atual)
     const sid = base;
     if (this._sceneById.has(sid)) return { tourId: this.currentTourId, sceneId: sid, mapOpen };
 
+    // linkTours: procura em todos
     if (this._linkTours) {
       for (const tid of this._tourOrder) {
         const pack = this._scenesByTour.get(tid);
@@ -257,6 +281,7 @@ export default class App {
       }
     }
 
+    // fallback: default
     if (this._scenesByTour.get(this._defaultTourId)?.sceneById?.has(sid)) {
       return { tourId: this._defaultTourId, sceneId: sid, mapOpen };
     }
@@ -272,10 +297,9 @@ export default class App {
     const closeBtn = this.ui.btnMapClose;
 
     if (btn) btn.addEventListener("click", () => this.toggleMap());
-
     if (closeBtn) closeBtn.addEventListener("click", () => this._setMapOpen(false));
 
-    // ✅ MiniMap toggle
+    // MiniMap toggle
     this.ui.btnMiniMap?.addEventListener("click", () => {
       if (!this._mapOpen) return;
       this._setMiniMap(!this._miniMap, { persist: true });
@@ -283,8 +307,6 @@ export default class App {
 
     if (overlay) {
       overlay.addEventListener("click", (e) => {
-        // no MiniMap a overlay é click-through, então isso praticamente não dispara,
-        // mas manter aqui é ok pro modo full.
         if (e.target === overlay) this._setMapOpen(false);
       });
     }
@@ -348,7 +370,6 @@ export default class App {
       }, { passive: false });
     }
 
-    // aplica UI inicial do minimap (se salvo)
     this._applyMiniMapUI();
   }
 
@@ -510,6 +531,7 @@ export default class App {
 
     this._setMenuOpen(false);
 
+    // tour dropdown
     if (this.ui.topTourSelect) {
       this.ui.topTourSelect.innerHTML = "";
       for (const tid of this._tourOrder) {
@@ -530,6 +552,7 @@ export default class App {
       });
     }
 
+    // scene dropdown
     this._populateSceneSelect();
     this.ui.topSceneSelect?.addEventListener("change", () => {
       const id = this.ui.topSceneSelect.value;
@@ -537,6 +560,7 @@ export default class App {
       void this.goToScene(id, { tourId: this.currentTourId });
     });
 
+    // link toggle
     if (this.ui.linkToursToggle) {
       this.ui.linkToursToggle.checked = this._linkTours;
       this.ui.linkToursToggle.addEventListener("change", () => {
@@ -546,6 +570,7 @@ export default class App {
       });
     }
 
+    // menu show/hide
     if (btn && bar) {
       btn.addEventListener("click", () => this._setMenuOpen(!this._menuOpen));
       window.addEventListener("resize", () => {
@@ -633,7 +658,7 @@ export default class App {
     }
   }
 
-  // ===== Download / Cache =====
+  // ===== Download / Cache (tour atual) =====
 
   _setupDownloadTour() {
     const btn = this.ui.btnDownloadTour;
@@ -721,7 +746,7 @@ export default class App {
     this.toast(`Download "${tourLabel}": ${ok}/${total} (falhas ${fail})`);
   }
 
-  // ===== Hotspot target resolve =====
+  // ===== Hotspot resolution (multi-tour) =====
 
   _resolveHotspotTarget(hs) {
     if (!hs) return null;
@@ -978,6 +1003,8 @@ export default class App {
 
     return true;
   }
+
+  // ===== Fade/Toast/Tooltip =====
 
   _createFadeOverlay() {
     let el = document.querySelector("#sceneFade");
