@@ -8,7 +8,7 @@ export function registerVrDebugConsole(AFRAME) {
       width: { type: "number", default: 1.15 },
       height: { type: "number", default: 0.55 },
       // tua fonte (já tava tunada)
-      fontSize: { type: "number", default: 0.1375 }
+      fontSize: { type: "number", default: 0.8 }
     },
 
     init() {
