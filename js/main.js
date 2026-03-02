@@ -5,34 +5,26 @@ import { registerFaceCamera } from "./tour/FaceCamera.js";
 import { registerRenderOnTop } from "./tour/RenderOnTop.js";
 import { initPWA } from "./pwa/pwa.js";
 import { registerVrDebugConsole } from "./xr/VrDebugConsole.js";
+import { registerVrWidget } from "./xr/vr_widget.js"; // ✅ novo
 
 window.addEventListener("DOMContentLoaded", async () => {
   const DEBUG_HOTSPOTS = false;
 
-  // ✅ VR DEBUG
-  const vr_debug = true; // <-- liga/desliga console no VR
+  const vr_debug = true;
 
-  // ✅ Foveated Rendering (FFR) toggle (ficar OFF no cenário atual)
-  // Se isso estiver ON, o Quest pode ficar com bordas serrilhadas + shimmering por render periférico.
-  const vr_foveated_rendering_enabled = false; // <-- MANTER FALSE AGORA
-  const vr_foveation_level = 0.7;              // 0..1 (só usado se enabled=true)
+  const vr_foveated_rendering_enabled = false;
+  const vr_foveation_level = 0.7;
+  const vr_framebuffer_scale = 1.6;
 
-  // ✅ Render resolution do XR (ajuda MUITO contra “low res / serrilhado”)
-  const vr_framebuffer_scale = 1.6;            // 1.3–1.8 (se pesar, baixa)
-
-  // ✅ Logar inputs no console VR
-  const vr_log_inputs = true;                 // recomendado junto do vr_debug
-
-  // ✅ Se tu quiser que ele tente ouvir eventos de pinch quando hand tracking existir
+  const vr_log_inputs = true;
   const vr_handtracking_logging = true;
 
   registerStereoTopBottom(window.AFRAME);
   registerFaceCamera(window.AFRAME);
   registerRenderOnTop(window.AFRAME);
 
-  if (vr_debug) {
-    registerVrDebugConsole(window.AFRAME);
-  }
+  if (vr_debug) registerVrDebugConsole(window.AFRAME);
+  registerVrWidget(window.AFRAME); // ✅ sempre registra
 
   const app = new App({
     sceneEl: document.querySelector("#scene"),
@@ -75,7 +67,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     },
   });
 
-  // ✅ Config do VR fica no app (VR.js lê isso)
   app.vrConfig = {
     debugConsole: vr_debug,
     logInputs: vr_debug && vr_log_inputs,
