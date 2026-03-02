@@ -130,7 +130,7 @@ export default class App {
       this._vrConsoleEl.setAttribute("id", "vrConsole");
 
       // mais perto e maior na visão
-      this._vrConsoleEl.setAttribute("position", "0 -0.18 -0.85");
+      this._vrConsoleEl.setAttribute("position", "0 -0.12 -0.65");
       this._vrConsoleEl.setAttribute("visible", "false");
 
       // força parâmetros grandes (além dos defaults)
@@ -1079,3 +1079,4 @@ function clamp(v, a, b) {
   if (!Number.isFinite(v)) return a;
   return Math.max(a, Math.min(b, v));
 }
+
