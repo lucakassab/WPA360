@@ -17,6 +17,7 @@ const APP_SHELL = [
   "./js/platform/VR.js",
 
   "./js/xr/StereoTopBottom.js",
+  "./js/xr/vr_widget.js",        // ✅ NOVO
 
   "./js/tour/TourLoader.js",
   "./js/tour/tours.json",
