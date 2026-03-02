@@ -9,12 +9,14 @@ export default class VR {
 
     // inputSource -> { pressed: boolean[] , pinch: bool }
     this._srcState = new Map();
+
+    // debounce do toggle do painel
+    this._lastDebugToggleMs = 0;
   }
 
   init(app) {
     this.app = app;
 
-    // remove qualquer geometry/sphere chata presa nas mãos
     this._cleanupHandVisuals(this.app.leftHandEl);
     this._cleanupHandVisuals(this.app.rightHandEl);
 
@@ -45,6 +47,11 @@ export default class VR {
 
     const cfg = this.app?.vrConfig || {};
     if (cfg.logInputs) this._installInputLogging();
+
+    // ✅ Thumbstick press => toggle debug panel (somente se vr_debug true)
+    if (cfg.debugConsole) {
+      this._installDebugPanelToggle();
+    }
   }
 
   // =====================================================
@@ -125,11 +132,47 @@ export default class VR {
   }
 
   // =====================================================
+  // 🪟 Debug panel toggle via thumbstick press
+  // =====================================================
+
+  _installDebugPanelToggle() {
+    const toggle = () => this._toggleDebugPanel();
+
+    // A-Frame events (quando o laser-controls emite)
+    const onL = () => toggle();
+    const onR = () => toggle();
+
+    this.app.leftHandEl?.addEventListener("thumbstickdown", onL);
+    this.app.rightHandEl?.addEventListener("thumbstickdown", onR);
+
+    this._unsubs.push(() => this.app.leftHandEl?.removeEventListener("thumbstickdown", onL));
+    this._unsubs.push(() => this.app.rightHandEl?.removeEventListener("thumbstickdown", onR));
+
+    console.log("[VR] thumbstickdown => toggle debug panel (vr_debug)");
+  }
+
+  _toggleDebugPanel() {
+    const now = performance.now();
+    if (now - this._lastDebugToggleMs < 250) return; // debounce
+    this._lastDebugToggleMs = now;
+
+    const el = this.app?._vrConsoleEl;
+    if (!el) {
+      console.warn("[VR] vrConsole entity não existe no App");
+      return;
+    }
+
+    const cur = el.getAttribute("visible");
+    const next = (cur === false || cur === "false") ? true : !cur;
+    el.setAttribute("visible", next ? "true" : "false");
+    console.log(`[VR] debug panel visible=${next}`);
+  }
+
+  // =====================================================
   // 🎮 INPUT LOGGING (SÓ PRESS/RELEASE)
   // =====================================================
 
   _installInputLogging() {
-    // Eventos A-Frame discretos (press/release). NÃO loga touch/move.
     const discreteEvs = [
       "triggerdown","triggerup",
       "gripdown","gripup",
@@ -153,7 +196,6 @@ export default class VR {
     attach(this.app.leftHandEl, "L");
     attach(this.app.rightHandEl, "R");
 
-    // WebXR session events (press/release equivalentes)
     this._attachSessionLogging();
 
     console.log("[VR] Input logging ON (press/release apenas; touch/value/axes ignorados)");
@@ -177,7 +219,6 @@ export default class VR {
         this._unsubs.push(() => session.removeEventListener(name, fn));
       }
 
-      // polling: SOMENTE pressed changed
       this._startPolling();
       return true;
     };
@@ -215,13 +256,12 @@ export default class VR {
     for (const src of sources) {
       if (src.gamepad) this._pollGamepadPressOnly(src);
 
-      // hand tracking pinch continua (é evento relevante)
-      // se tu quiser matar também, eu removo
       if (src.hand) this._pollHandPinchDiscrete(src, frame);
     }
   }
 
   // ✅ controllers: LOGA SOMENTE pressed mudou (down/up)
+  // + fallback: thumbstick press pode cair aqui (btn3)
   _pollGamepadPressOnly(src) {
     const gp = src.gamepad;
     if (!gp?.buttons) return;
@@ -235,6 +275,12 @@ export default class VR {
 
       if (pressedNow !== pressedPrev) {
         console.log(`[GP ${src.handedness || "?"}] btn${i} pressed=${pressedNow} (${this._describeSource(src)})`);
+
+        // fallback toggle: thumbstick button costuma ser 3 no padrão Gamepad
+        const cfg = this.app?.vrConfig || {};
+        if (cfg.debugConsole && i === 3 && pressedNow === true) {
+          this._toggleDebugPanel();
+        }
       }
 
       prev[i] = pressedNow;
