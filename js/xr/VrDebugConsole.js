@@ -8,16 +8,18 @@ export function registerVrDebugConsole(AFRAME) {
       width: { type: "number", default: 1.15 },
       height: { type: "number", default: 0.55 },
 
-      // ✅ fonte MUITO maior de verdade (só afeta o TEXTO)
-      // se ainda achar pequeno, sobe pra 1.6 ou 2.0
-      fontSize: { type: "number", default: 1.2 }
+      // valor base (se você setar no atributo)
+      fontSize: { type: "number", default: 0.055 }
     },
 
     init() {
       this.lines = [];
       this._orig = null;
 
-      // painel (NÃO mexi em tamanho/escala aqui)
+      // ✅ 600% garantido (só na fonte)
+      this._FONT_BOOST = 6.0;
+
+      // painel (não altera dimensões/escala)
       const bg = document.createElement("a-plane");
       bg.setAttribute("width", this.data.width);
       bg.setAttribute("height", this.data.height);
@@ -36,7 +38,6 @@ export function registerVrDebugConsole(AFRAME) {
         "align:left",
         "baseline:top",
         "anchor:left",
-        // manter igual ao que tu tava usando (não é background)
         `width:${this.data.width * 1.0}`,
         `wrapCount:${Math.floor(this.data.width * 42)}`
       ].join(";"));
@@ -46,33 +47,33 @@ export function registerVrDebugConsole(AFRAME) {
         `${(-this.data.width / 2) + 0.03} ${(this.data.height / 2) - 0.04} 0.01`
       );
 
-      // ✅ aplica fonte AGORA
-      text.setAttribute("scale", `${this.data.fontSize} ${this.data.fontSize} ${this.data.fontSize}`);
-
-      // ✅ e garante depois que o mesh do texto existir (A-Frame às vezes cria depois)
-      const applyScaleHard = () => {
-        if (!text.object3D) return;
-        text.object3D.scale.set(this.data.fontSize, this.data.fontSize, this.data.fontSize);
-      };
-      text.addEventListener("object3dset", applyScaleHard);
-      this.el.addEventListener("loaded", applyScaleHard);
-
       this.el.appendChild(text);
       this._textEl = text;
 
       // botão copiar
       this._makeCopyButton();
 
+      // hooks
       this._hookConsole();
       this._hookErrors();
       this._append("vr_debug: ON");
+
+      // aplica agora e garante depois do mesh existir
+      this._applyFontScale(true);
+
+      const reapply = () => this._applyFontScale(false);
+      text.addEventListener("object3dset", reapply);
+      this.el.addEventListener("loaded", reapply);
     },
 
     update() {
       // se mudar fontSize via atributo, reaplica
-      if (this._textEl?.object3D) {
-        this._textEl.object3D.scale.set(this.data.fontSize, this.data.fontSize, this.data.fontSize);
-      }
+      this._applyFontScale(true);
+    },
+
+    // ✅ reaplica frequentemente pra impedir overwrite do A-Frame/text
+    tick() {
+      this._applyFontScale(false);
     },
 
     remove() {
@@ -82,6 +83,30 @@ export function registerVrDebugConsole(AFRAME) {
 
     getLogText() {
       return this.lines.join("\n");
+    },
+
+    _effectiveFontScale() {
+      const base = Number(this.data.fontSize) || 0.055;
+      const effective = base * this._FONT_BOOST;
+
+      // mínimo pra ficar legível em VR mesmo se alguém passar valor pequeno
+      return Math.max(0.6, effective);
+    },
+
+    _applyFontScale(forceLog) {
+      const t = this._textEl;
+      if (!t || !t.object3D) return;
+
+      const s = this._effectiveFontScale();
+      const cur = t.object3D.scale.x;
+
+      // só mexe se mudou (evita custo)
+      if (Math.abs(cur - s) > 1e-4) {
+        t.object3D.scale.set(s, s, s);
+        // mantém atributo também
+        t.setAttribute("scale", `${s} ${s} ${s}`);
+        if (forceLog) console.log(`[vr-debug-console] fontScale efetivo=${s.toFixed(3)} (base=${this.data.fontSize})`);
+      }
     },
 
     _append(msg) {
