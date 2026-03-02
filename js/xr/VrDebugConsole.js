@@ -4,32 +4,22 @@ export function registerVrDebugConsole(AFRAME) {
 
   AFRAME.registerComponent("vr-debug-console", {
     schema: {
-      maxLines: { type: "int", default: 14 },
-
-      // ✅ painel menor (não invade lateral)
-      width: { type: "number", default: 0.60 },
+      maxLines: { type: "int", default: 18 },
+      width: { type: "number", default: 1.15 },
       height: { type: "number", default: 0.55 },
-
-      // ✅ fonte MUITO maior (isso aqui é o que manda de verdade)
-      fontScale: { type: "number", default: 0.40 },
-
-      // ✅ texto com largura menor pra não “encolher” automaticamente
-      textWidth: { type: "number", default: 1.05 },
-      wrapCount: { type: "int", default: 44 }
+      // 🔥 250% maior (2.5x)
+      fontSize: { type: "number", default: 0.1375 }
     },
 
     init() {
       this.lines = [];
       this._orig = null;
 
-      // fundo
+      // painel
       const bg = document.createElement("a-plane");
       bg.setAttribute("width", this.data.width);
       bg.setAttribute("height", this.data.height);
-      bg.setAttribute(
-        "material",
-        "color:#000; opacity:0.78; transparent:true; shader:flat; depthTest:false; depthWrite:false"
-      );
+      bg.setAttribute("material", "color:#000; opacity:0.75; transparent:true; shader:flat; depthTest:false; depthWrite:false");
       bg.setAttribute("position", "0 0 0");
       this.el.appendChild(bg);
 
@@ -41,23 +31,18 @@ export function registerVrDebugConsole(AFRAME) {
         "align:left",
         "baseline:top",
         "anchor:left",
-        `width:${this.data.textWidth}`,
-        `wrapCount:${this.data.wrapCount}`,
-        "lineHeight: 64"
+        `width:${this.data.width * 1.8}`,
+        `wrapCount:${Math.floor(this.data.width * 30)}`
       ].join(";"));
 
-      // top-left do painel
-      const padX = 0.03;
-      const padY = 0.035;
       text.setAttribute(
         "position",
-        `${(-this.data.width / 2) + padX} ${(this.data.height / 2) - padY} 0.01`
+        `${(-this.data.width / 2) + 0.03} ${(this.data.height / 2) - 0.04} 0.01`
       );
 
-      // ✅ aqui é onde aumenta a fonte DE VERDADE
       text.setAttribute(
         "scale",
-        `${this.data.fontScale} ${this.data.fontScale} ${this.data.fontScale}`
+        `${this.data.fontSize} ${this.data.fontSize} ${this.data.fontSize}`
       );
 
       this.el.appendChild(text);
@@ -90,7 +75,11 @@ export function registerVrDebugConsole(AFRAME) {
     _hookConsole() {
       if (this._orig) return;
 
-      this._orig = { log: console.log, warn: console.warn, error: console.error };
+      this._orig = {
+        log: console.log,
+        warn: console.warn,
+        error: console.error
+      };
 
       console.log = (...a) => { this._orig.log(...a); this._append(a.join(" ")); };
       console.warn = (...a) => { this._orig.warn(...a); this._append("WARN: " + a.join(" ")); };
