@@ -31,7 +31,16 @@ export function registerStereoTopBottom(AFRAME) {
     }
   }
 
-  function loadTextureCached(url) {
+  function getMaxAnisotropy(sceneEl) {
+    try {
+      const r = sceneEl?.renderer;
+      return r?.capabilities?.getMaxAnisotropy?.() ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  function loadTextureCached(url, sceneEl) {
     const existing = cache.get(url);
 
     if (existing?.tex) {
@@ -48,9 +57,18 @@ export function registerStereoTopBottom(AFRAME) {
       loader.load(
         url,
         (tex) => {
+          // ✅ qualidade / estabilidade
           tex.minFilter = THREE.LinearFilter;
           tex.magFilter = THREE.LinearFilter;
-          tex.generateMipmaps = false;
+          tex.generateMipmaps = false; // manter por memória/perf (8K já é gigante)
+
+          // ✅ melhora nitidez em ângulo (principalmente em VR)
+          const aniso = getMaxAnisotropy(sceneEl);
+          if (aniso && Number.isFinite(aniso)) tex.anisotropy = aniso;
+
+          // ✅ cor correta (A-Frame moderno usa colorManagement: true)
+          // Se teu A-Frame estiver antigo e não tiver SRGBColorSpace, isso não quebra.
+          try { tex.colorSpace = THREE.SRGBColorSpace; } catch {}
 
           cache.set(url, { tex, promise: null, lastUsed: performance.now() });
           trimCache();
@@ -94,7 +112,7 @@ export function registerStereoTopBottom(AFRAME) {
       this.preload = async (src) => {
         if (!src) return null;
         const url = resolveUrl(src);
-        try { return await loadTextureCached(url); } catch { return null; }
+        try { return await loadTextureCached(url, this.el.sceneEl); } catch { return null; }
       };
       this.isCached = (src) => isCached(src);
 
@@ -230,12 +248,11 @@ export function registerStereoTopBottom(AFRAME) {
         return;
       }
 
-      // mantém textura antiga até a nova ficar pronta
       this._currentSrc = src;
       this._currentUrl = url;
 
       try {
-        const tex = await loadTextureCached(url);
+        const tex = await loadTextureCached(url, this.el.sceneEl);
         touch(url);
 
         this.material.uniforms.uMap.value = tex;
