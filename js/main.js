@@ -4,13 +4,21 @@ import { registerStereoTopBottom } from "./xr/StereoTopBottom.js";
 import { registerFaceCamera } from "./tour/FaceCamera.js";
 import { registerRenderOnTop } from "./tour/RenderOnTop.js";
 import { initPWA } from "./pwa/pwa.js";
+import { registerVrDebugConsole } from "./xr/VrDebugConsole.js";
 
 window.addEventListener("DOMContentLoaded", async () => {
-  const DEBUG_HOTSPOTS = false;
+  const DEBUG_HOTSPOTS = true;
+
+  // ✅ nova flag
+  const vr_debug = true;
 
   registerStereoTopBottom(window.AFRAME);
   registerFaceCamera(window.AFRAME);
   registerRenderOnTop(window.AFRAME);
+
+  if (vr_debug) {
+    registerVrDebugConsole(window.AFRAME);
+  }
 
   const app = new App({
     sceneEl: document.querySelector("#scene"),
@@ -37,7 +45,6 @@ window.addEventListener("DOMContentLoaded", async () => {
       mapMarker: document.querySelector("#mapMarker"),
       btnMapClose: document.querySelector("#btnMapClose"),
 
-      // ✅ novo
       btnMiniMap: document.querySelector("#btnMiniMap"),
 
       btnDownloadTour: document.querySelector("#btnDownloadTour"),
@@ -55,7 +62,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     },
   });
 
-  await app.init({ debugHotspots: DEBUG_HOTSPOTS });
+  await app.init({ debugHotspots: DEBUG_HOTSPOTS, vrDebug: vr_debug });
 
   const pm = new PlatformManager();
   await pm.init(app);
