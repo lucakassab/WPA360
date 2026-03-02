@@ -4,25 +4,25 @@ export function registerVrDebugConsole(AFRAME) {
 
   AFRAME.registerComponent("vr-debug-console", {
     schema: {
-      maxLines: { type: "int", default: 18 },
-      width: { type: "number", default: 1.15 },
-      height: { type: "number", default: 0.55 },
-      fontSize: { type: "number", default: 0.055 }
+      maxLines: { type: "int", default: 22 },
+      width: { type: "number", default: 1.85 },
+      height: { type: "number", default: 0.95 },
+
+      // ✅ aumentei MUITO
+      fontSize: { type: "number", default: 0.18 }
     },
 
     init() {
       this.lines = [];
       this._orig = null;
 
-      // painel
       const bg = document.createElement("a-plane");
       bg.setAttribute("width", this.data.width);
       bg.setAttribute("height", this.data.height);
-      bg.setAttribute("material", "color:#000; opacity:0.75; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+      bg.setAttribute("material", "color:#000; opacity:0.78; transparent:true; shader:flat; depthTest:false; depthWrite:false");
       bg.setAttribute("position", "0 0 0");
       this.el.appendChild(bg);
 
-      // texto
       const text = document.createElement("a-entity");
       text.setAttribute("text", [
         "value:VR DEBUG CONSOLE",
@@ -30,16 +30,18 @@ export function registerVrDebugConsole(AFRAME) {
         "align:left",
         "baseline:top",
         "anchor:left",
-        `width:${this.data.width * 1.8}`,
-        `wrapCount:${Math.floor(this.data.width * 30)}`
+        `width:${this.data.width * 2.2}`,
+        `wrapCount:${Math.floor(this.data.width * 80)}`,
+        "lineHeight: 52"
       ].join(";"));
-      text.setAttribute("position", `${(-this.data.width / 2) + 0.03} ${(this.data.height / 2) - 0.04} 0.01`);
+
+      // canto superior esquerdo do painel
+      text.setAttribute("position", `${(-this.data.width / 2) + 0.04} ${(this.data.height / 2) - 0.06} 0.01`);
       text.setAttribute("scale", `${this.data.fontSize} ${this.data.fontSize} ${this.data.fontSize}`);
       this.el.appendChild(text);
 
       this._textEl = text;
 
-      // hooks
       this._hookConsole();
       this._hookErrors();
 
@@ -67,11 +69,7 @@ export function registerVrDebugConsole(AFRAME) {
     _hookConsole() {
       if (this._orig) return;
 
-      this._orig = {
-        log: console.log,
-        warn: console.warn,
-        error: console.error
-      };
+      this._orig = { log: console.log, warn: console.warn, error: console.error };
 
       console.log = (...a) => { this._orig.log(...a); this._append(a.join(" ")); };
       console.warn = (...a) => { this._orig.warn(...a); this._append("WARN: " + a.join(" ")); };
