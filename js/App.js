@@ -36,7 +36,6 @@ export default class App {
     this.currentSceneId = null;
 
     this._linkTours = false;
-
     this._fov = 80;
 
     this.hotspotAnchorEl = null;
@@ -49,8 +48,9 @@ export default class App {
     this._vrDebugEnabled = false;
     this._vrConsoleEl = null;
 
-    // ✅ VR widget
+    // ✅ VR widget: agora só existe DURANTE immersive-vr
     this._vrWidgetEl = null;
+    this._vrWidgetHandlers = null;
 
     this.vrConfig = {};
   }
@@ -84,22 +84,16 @@ export default class App {
 
     this._linkTours = localStorage.getItem(LS_LINK) === "1";
 
-    // FOV from storage
     const savedFov = Number(localStorage.getItem(LS_FOV));
     this._fov = Number.isFinite(savedFov) ? savedFov : 80;
     this._applyFov(this._fov);
 
-    // UI DOM wiring (mantém teu comportamento atual)
     this._wireDomUI();
 
-    // setup VR debug (se você já usa)
     this._vrDebugEnabled = !!vrDebug;
     if (this._vrDebugEnabled) this._setupVrDebugConsole();
 
-    // ✅ cria vr widget sempre (fica invisível fora do VR)
-    this._setupVrWidget();
-
-    // initial tour
+    // tour inicial
     this._setCurrentTour(this._defaultTourId);
 
     // hotspot renderer
@@ -115,19 +109,32 @@ export default class App {
       }
     });
 
-    // initial scene
+    // cena inicial
     const firstScene = this._sceneOrder[0];
     await this.goToScene(firstScene, { tourId: this.currentTourId, pushHash: false });
 
-    // VR enter/exit: mostra widget
-    this.sceneEl.addEventListener("enter-vr", () => {
-      if (this._vrWidgetEl) this._vrWidgetEl.setAttribute("visible", "true");
-      if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", this._vrDebugEnabled ? "true" : "false");
-      this._syncVrWidget();
+    // ✅ ENTER/EXIT VR: cria/destrói widget só em immersive-vr
+    this.sceneEl.addEventListener("enter-vr", async () => {
+      // A-Frame pode entrar em "vr-mode" sem session pronta ainda, então espera um tiquinho
+      const session = await this._waitXRSession(600);
+      const isImmersive = session?.mode === "immersive-vr";
+
+      if (isImmersive) {
+        this._ensureVrWidget();
+        this._syncVrWidget();
+      } else {
+        // se não é immersive, garante que não existe
+        this._destroyVrWidget();
+      }
+
+      if (this._vrConsoleEl) {
+        this._vrConsoleEl.setAttribute("visible", (this._vrDebugEnabled && isImmersive) ? "true" : "false");
+      }
     });
 
     this.sceneEl.addEventListener("exit-vr", () => {
-      if (this._vrWidgetEl) this._vrWidgetEl.setAttribute("visible", "false");
+      // ✅ sai da sessão: remove do DOM
+      this._destroyVrWidget();
       if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", "false");
     });
 
@@ -141,7 +148,7 @@ export default class App {
     }
   }
 
-  // ---------------- DOM UI (mantém) ----------------
+  // ---------------- DOM UI ----------------
 
   _wireDomUI() {
     this.ui.btnPrev?.addEventListener("click", () => void this.prevScene());
@@ -169,38 +176,73 @@ export default class App {
     this.cameraEl.appendChild(this._vrConsoleEl);
   }
 
-  // ---------------- VR Widget ----------------
+  // ---------------- VR Widget lifecycle (NEW) ----------------
 
-  _setupVrWidget() {
+  async _waitXRSession(timeoutMs = 600) {
+    const start = performance.now();
+    while (performance.now() - start < timeoutMs) {
+      const s = this.sceneEl?.renderer?.xr?.getSession?.() || null;
+      if (s) return s;
+      await new Promise(r => setTimeout(r, 30));
+    }
+    return this.sceneEl?.renderer?.xr?.getSession?.() || null;
+  }
+
+  _ensureVrWidget() {
+    if (this._vrWidgetEl) {
+      // garante visível (dentro da session)
+      this._vrWidgetEl.setAttribute("visible", "true");
+      return;
+    }
+
     const el = document.createElement("a-entity");
     el.setAttribute("id", "vrWidget");
-    el.setAttribute("visible", "false");
-    el.setAttribute("vr-widget", ""); // usa defaults
+    el.setAttribute("visible", "true");
+    el.setAttribute("vr-widget", "");
 
-    // ancorado na câmera
+    // ancorado na câmera (mas só existe em immersive-vr agora)
     this.cameraEl.appendChild(el);
     this._vrWidgetEl = el;
 
-    // eventos do widget -> App
-    el.addEventListener("vrwidget:prevscene", () => void this.prevScene());
-    el.addEventListener("vrwidget:nextscene", () => void this.nextScene());
-
-    el.addEventListener("vrwidget:fovdelta", (e) => {
+    // Handlers guardados pra remover depois
+    const hPrev = () => void this.prevScene();
+    const hNext = () => void this.nextScene();
+    const hFov = (e) => {
       const d = Number(e?.detail?.delta || 0);
       this._applyFov(this._fov + d);
       try { localStorage.setItem(LS_FOV, String(this._fov)); } catch {}
       this._syncVrWidget();
-    });
+    };
+    const hTour = (e) => this._stepTour(Number(e?.detail?.delta || 0));
+    const hScene = (e) => this._stepScene(Number(e?.detail?.delta || 0));
 
-    el.addEventListener("vrwidget:tourstep", (e) => {
-      const delta = Number(e?.detail?.delta || 0);
-      this._stepTour(delta);
-    });
+    el.addEventListener("vrwidget:prevscene", hPrev);
+    el.addEventListener("vrwidget:nextscene", hNext);
+    el.addEventListener("vrwidget:fovdelta", hFov);
+    el.addEventListener("vrwidget:tourstep", hTour);
+    el.addEventListener("vrwidget:scenestep", hScene);
 
-    el.addEventListener("vrwidget:scenestep", (e) => {
-      const delta = Number(e?.detail?.delta || 0);
-      this._stepScene(delta);
-    });
+    this._vrWidgetHandlers = { hPrev, hNext, hFov, hTour, hScene };
+  }
+
+  _destroyVrWidget() {
+    const el = this._vrWidgetEl;
+    if (!el) return;
+
+    try {
+      const hs = this._vrWidgetHandlers;
+      if (hs) {
+        el.removeEventListener("vrwidget:prevscene", hs.hPrev);
+        el.removeEventListener("vrwidget:nextscene", hs.hNext);
+        el.removeEventListener("vrwidget:fovdelta", hs.hFov);
+        el.removeEventListener("vrwidget:tourstep", hs.hTour);
+        el.removeEventListener("vrwidget:scenestep", hs.hScene);
+      }
+    } catch {}
+
+    try { el.remove(); } catch {}
+    this._vrWidgetEl = null;
+    this._vrWidgetHandlers = null;
   }
 
   _syncVrWidget() {
@@ -284,7 +326,7 @@ export default class App {
   }
 
   async goToScene(sceneId, opts = {}) {
-    const { pushHash = true, fromHotspot = null } = opts;
+    const { fromHotspot = null } = opts;
     const tourId = this._canonicalTourId(opts.tourId) ?? this.currentTourId ?? this._defaultTourId;
 
     if (this._isTransitioning) {
@@ -302,17 +344,14 @@ export default class App {
 
     this.currentSceneId = sceneId;
 
-    // pano
     await this._setPanoAndWait(scene.pano);
 
-    // view (desktop) ignorado em VR
     this._applyViewForScene(scene, fromHotspot);
 
-    // hotspots
     this._ensureHotspotAnchor();
     this._renderHotspots(scene);
 
-    // sync widget
+    // ✅ atualiza widget se existir (em VR immersive)
     this._syncVrWidget();
 
     this._isTransitioning = false;
@@ -380,7 +419,7 @@ export default class App {
   }
 
   _applyViewForScene(_scene, _fromHotspot) {
-    // mantém como no teu app (no VR ignora)
+    // no VR ignora (mantém teu comportamento antigo se tiver)
   }
 
   _applyFov(fov) {
