@@ -1,12 +1,21 @@
-// js/platform/VR.js
+// js/platform/vr.js
 
 export default class VR {
-  init(app) {
+  constructor(app) {
     this.app = app;
     this._unsubs = [];
+    this._session = null;
+    this._running = false;
+
+    // estado pra polling
+    this._srcState = new Map(); // inputSource -> { axes:[], buttons:[], pinch:boolean }
+  }
+
+  init(app) {
+    this.app = app;
 
     // Em VR, não precisa mouse/touch
-    app.cameraEl.setAttribute("look-controls", {
+    this.app.cameraEl.setAttribute("look-controls", {
       enabled: true,
       mouseEnabled: false,
       touchEnabled: false,
@@ -14,91 +23,72 @@ export default class VR {
       magicWindowTrackingEnabled: false,
     });
 
-    // Some com cursor 2D
-    app.cursorEl.setAttribute("visible", "false");
+    // some com cursor 2D
+    this.app.cursorEl.setAttribute("visible", "false");
 
-    // Controladores com laser
-    app.leftHandEl.setAttribute("visible", "true");
-    app.rightHandEl.setAttribute("visible", "true");
+    // lasers
+    this.app.leftHandEl.setAttribute("visible", "true");
+    this.app.rightHandEl.setAttribute("visible", "true");
 
-    app.leftHandEl.setAttribute("laser-controls", "hand: left");
-    app.rightHandEl.setAttribute("laser-controls", "hand: right");
+    this.app.leftHandEl.setAttribute("laser-controls", "hand: left");
+    this.app.rightHandEl.setAttribute("laser-controls", "hand: right");
 
-    app.leftHandEl.setAttribute("raycaster", "objects: .clickable; far: 10000");
-    app.rightHandEl.setAttribute("raycaster", "objects: .clickable; far: 10000");
+    this.app.leftHandEl.setAttribute("raycaster", "objects: .clickable; far: 10000");
+    this.app.rightHandEl.setAttribute("raycaster", "objects: .clickable; far: 10000");
 
-    app.leftHandEl.setAttribute("line", "opacity: 0.7");
-    app.rightHandEl.setAttribute("line", "opacity: 0.7");
+    this.app.leftHandEl.setAttribute("line", "opacity: 0.7");
+    this.app.rightHandEl.setAttribute("line", "opacity: 0.7");
 
-    // ✅ qualidade XR
     this._applyVrQualityPipeline();
 
-    // ✅ log de inputs (teclas + controle + hand tracking)
     const cfg = this.app?.vrConfig || {};
     if (cfg.logInputs) this._installInputLogging();
   }
 
   _applyVrQualityPipeline() {
-    const sceneEl = this.app.sceneEl;
-    const renderer = sceneEl?.renderer;
+    const renderer = this.app.sceneEl?.renderer;
     if (!renderer?.xr) return;
 
     const cfg = this.app?.vrConfig || {};
+    const fbScale = clamp(Number(cfg.framebufferScale ?? 1.6), 0.8, 2.0);
 
-    const fbScale = Number(cfg.framebufferScale ?? 1.6);
     const ffrEnabled = !!cfg.foveatedRenderingEnabled;
-    const foveation = ffrEnabled ? Number(cfg.foveationLevel ?? 0.7) : 0.0; // ✅ OFF por padrão
+    const foveation = ffrEnabled ? clamp(Number(cfg.foveationLevel ?? 0.7), 0, 1) : 0.0;
 
-    try { renderer.xr.setFramebufferScaleFactor?.(clamp(fbScale, 0.8, 2.0)); } catch {}
-    try { renderer.xr.setFoveation?.(clamp(foveation, 0.0, 1.0)); } catch {}
+    try { renderer.xr.setFramebufferScaleFactor?.(fbScale); } catch {}
+    try { renderer.xr.setFoveation?.(foveation); } catch {}
 
     console.log("[VR] framebufferScale =", fbScale, "| foveated =", ffrEnabled ? foveation : "OFF");
   }
 
   _installInputLogging() {
-    const log = (tag, e) => {
-      const info = summarizeEvent(e);
-      console.log(`[IN] ${tag}${info ? " " + info : ""}`);
-    };
-
-    // keyboard
-    const onKeyDown = (e) => log(`keydown ${e.key} (${e.code})`, e);
-    const onKeyUp = (e) => log(`keyup ${e.key} (${e.code})`, e);
+    // teclado (se existir)
+    const onKeyDown = (e) => console.log(`[IN] keydown ${e.key} (${e.code})`);
+    const onKeyUp = (e) => console.log(`[IN] keyup ${e.key} (${e.code})`);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     this._unsubs.push(() => window.removeEventListener("keydown", onKeyDown));
     this._unsubs.push(() => window.removeEventListener("keyup", onKeyUp));
 
-    // Controllers / A-Frame input events (mais comuns)
+    // eventos A-Frame comuns (controllers)
     const evs = [
       "triggerdown","triggerup",
       "gripdown","gripup",
       "thumbstickdown","thumbstickup","thumbstickmoved",
-      "trackpaddown","trackpadup","trackpadmoved",
+      "axismove",
+      "buttonchanged",
       "abuttondown","abuttonup",
       "bbuttondown","bbuttonup",
       "xbuttondown","xbuttonup",
       "ybuttondown","ybuttonup",
       "menudown","menuup",
-      "axismove",
-      "buttonchanged"
+      "trackpaddown","trackpadup","trackpadmoved"
     ];
 
-    const attach = (el, prefix) => {
+    const attach = (el, tag) => {
       if (!el) return;
       for (const name of evs) {
-        const fn = (e) => log(`${prefix}.${name}`, e);
-        el.addEventListener(name, fn);
-        this._unsubs.push(() => el.removeEventListener(name, fn));
-      }
-
-      // Hand tracking pinch (se existir)
-      const pinchEvents = [
-        "pinchstarted","pinchended","pinchmoved",
-        "pinchstart","pinchend","pinchmove"
-      ];
-      for (const name of pinchEvents) {
-        const fn = (e) => log(`${prefix}.${name}`, e);
+        const fn = (e) => console.log(`[IN] ${tag}.${name}`, e.detail || "");
         el.addEventListener(name, fn);
         this._unsubs.push(() => el.removeEventListener(name, fn));
       }
@@ -107,46 +97,177 @@ export default class VR {
     attach(this.app.leftHandEl, "L");
     attach(this.app.rightHandEl, "R");
 
-    // WebXR session-level events (quando disponíveis)
-    const sceneEl = this.app.sceneEl;
-    const onEnter = () => {
-      try {
-        const session = sceneEl?.renderer?.xr?.getSession?.();
-        if (!session) return;
+    // WebXR session events (captura controller e PINCH como "select")
+    this._attachSessionLogging();
 
-        const onSelectStart = (e) => log("session.selectstart", e);
-        const onSelectEnd = (e) => log("session.selectend", e);
-        const onSqueezeStart = (e) => log("session.squeezestart", e);
-        const onSqueezeEnd = (e) => log("session.squeezeend", e);
+    console.log("[IN] input logging ON");
+  }
 
-        session.addEventListener("selectstart", onSelectStart);
-        session.addEventListener("selectend", onSelectEnd);
-        session.addEventListener("squeezestart", onSqueezeStart);
-        session.addEventListener("squeezeend", onSqueezeEnd);
-
-        this._unsubs.push(() => session.removeEventListener("selectstart", onSelectStart));
-        this._unsubs.push(() => session.removeEventListener("selectend", onSelectEnd));
-        this._unsubs.push(() => session.removeEventListener("squeezestart", onSqueezeStart));
-        this._unsubs.push(() => session.removeEventListener("squeezeend", onSqueezeEnd));
-
-        console.log("[IN] session listeners attached");
-      } catch {}
+  _attachSessionLogging() {
+    const getSession = () => {
+      try { return this.app.sceneEl?.renderer?.xr?.getSession?.() || null; } catch { return null; }
     };
 
-    onEnter();
-    const onEnterVr = () => onEnter();
-    sceneEl?.addEventListener("enter-vr", onEnterVr);
-    this._unsubs.push(() => sceneEl?.removeEventListener("enter-vr", onEnterVr));
+    const tryAttach = () => {
+      const s = getSession();
+      if (!s) return false;
 
-    // Se tu quiser tentar capturar pinch de verdade, sem quebrar nada:
-    // (não força hand tracking; só deixa pronto se o projeto habilitar depois)
-    const cfg = this.app?.vrConfig || {};
-    if (cfg.handTrackingLogging) {
-      console.log("[IN] hand tracking pinch listeners ON (waiting for events)");
+      this._session = s;
+
+      const log = (name, e) => console.log(`[XR] ${name}`, summarizeXR(e));
+      const onSelectStart = (e) => log("selectstart", e);
+      const onSelectEnd = (e) => log("selectend", e);
+      const onSqueezeStart = (e) => log("squeezestart", e);
+      const onSqueezeEnd = (e) => log("squeezeend", e);
+
+      s.addEventListener("selectstart", onSelectStart);
+      s.addEventListener("selectend", onSelectEnd);
+      s.addEventListener("squeezestart", onSqueezeStart);
+      s.addEventListener("squeezeend", onSqueezeEnd);
+
+      this._unsubs.push(() => s.removeEventListener("selectstart", onSelectStart));
+      this._unsubs.push(() => s.removeEventListener("selectend", onSelectEnd));
+      this._unsubs.push(() => s.removeEventListener("squeezestart", onSqueezeStart));
+      this._unsubs.push(() => s.removeEventListener("squeezeend", onSqueezeEnd));
+
+      console.log("[XR] session listeners attached");
+
+      // começa polling de inputSources + gamepad + pinch joints
+      this._startPolling();
+      return true;
+    };
+
+    // se por algum motivo init rodar antes da session existir:
+    if (tryAttach()) return;
+
+    const onEnter = () => { tryAttach(); };
+    this.app.sceneEl?.addEventListener("enter-vr", onEnter);
+    this._unsubs.push(() => this.app.sceneEl?.removeEventListener("enter-vr", onEnter));
+  }
+
+  _startPolling() {
+    if (this._running) return;
+    const session = this._session;
+    if (!session) return;
+
+    this._running = true;
+
+    const tick = (t, frame) => {
+      if (!this._running) return;
+      try {
+        this._pollInputs(frame);
+      } catch (e) {
+        console.warn("[XR] poll error", e);
+      }
+      session.requestAnimationFrame(tick);
+    };
+
+    session.requestAnimationFrame(tick);
+    console.log("[XR] polling ON");
+  }
+
+  _pollInputs(frame) {
+    const session = frame?.session;
+    if (!session) return;
+
+    const sources = Array.from(session.inputSources || []);
+    if (!sources.length) return;
+
+    // refspace pra joint poses (hand tracking)
+    let refSpace = null;
+    try { refSpace = this.app.sceneEl?.renderer?.xr?.getReferenceSpace?.() || null; } catch {}
+
+    // log mudança de fontes
+    if (this._lastSourceCount !== sources.length) {
+      this._lastSourceCount = sources.length;
+      console.log("[XR] inputSources =", sources.map(describeSource).join(" | "));
+    }
+
+    for (const src of sources) {
+      // gamepad (controllers e às vezes hands)
+      if (src.gamepad) this._pollGamepad(src);
+
+      // hand joints => pinch real (thumb-tip vs index-tip)
+      if (src.hand && refSpace) this._pollHandPinch(src, frame, refSpace);
+    }
+  }
+
+  _pollGamepad(src) {
+    const gp = src.gamepad;
+    if (!gp) return;
+
+    const prev = this._srcState.get(src) || { axes: [], buttons: [], pinch: false };
+
+    // axes
+    const axes = gp.axes || [];
+    for (let i = 0; i < axes.length; i++) {
+      const v = Number(axes[i] || 0);
+      const pv = Number(prev.axes[i] || 0);
+      if (Math.abs(v - pv) > 0.08) {
+        console.log(`[GP] ${src.handedness || "?"} axis${i}=${v.toFixed(2)} (${describeSource(src)})`);
+      }
+    }
+
+    // buttons
+    const buttons = gp.buttons || [];
+    for (let i = 0; i < buttons.length; i++) {
+      const b = buttons[i];
+      const pb = prev.buttons[i] || {};
+      const pressed = !!b.pressed;
+      const value = Number(b.value || 0);
+
+      const pressedChanged = pressed !== !!pb.pressed;
+      const valueChanged = Math.abs(value - Number(pb.value || 0)) > 0.15;
+
+      if (pressedChanged || valueChanged) {
+        console.log(`[GP] ${src.handedness || "?"} btn${i} pressed=${pressed} value=${value.toFixed(2)} (${describeSource(src)})`);
+      }
+    }
+
+    prev.axes = axes.slice();
+    prev.buttons = buttons.map(b => ({ pressed: !!b.pressed, value: Number(b.value || 0) }));
+    this._srcState.set(src, prev);
+  }
+
+  _pollHandPinch(src, frame, refSpace) {
+    const hand = src.hand;
+    const thumbTip = hand.get?.("thumb-tip");
+    const indexTip = hand.get?.("index-finger-tip");
+    if (!thumbTip || !indexTip) return;
+
+    const pThumb = frame.getJointPose?.(thumbTip, refSpace);
+    const pIndex = frame.getJointPose?.(indexTip, refSpace);
+    if (!pThumb?.transform?.position || !pIndex?.transform?.position) return;
+
+    const a = pThumb.transform.position;
+    const b = pIndex.transform.position;
+
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    const dz = a.z - b.z;
+    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+    // threshold ajustável
+    const PINCH_ON = 0.020;   // 2.0 cm
+    const PINCH_OFF = 0.030;  // 3.0 cm (histerese)
+
+    const prev = this._srcState.get(src) || { axes: [], buttons: [], pinch: false };
+    const was = !!prev.pinch;
+
+    let now = was;
+    if (!was && dist <= PINCH_ON) now = true;
+    if (was && dist >= PINCH_OFF) now = false;
+
+    if (now !== was) {
+      prev.pinch = now;
+      console.log(`[HAND] ${src.handedness || "?"} pinch=${now} dist=${dist.toFixed(3)} (${describeSource(src)})`);
+      this._srcState.set(src, prev);
     }
   }
 
   dispose() {
+    this._running = false;
+
     // volta cursor
     this.app.cursorEl.setAttribute("visible", "true");
 
@@ -160,11 +281,11 @@ export default class VR {
     this.app.leftHandEl.removeAttribute("line");
     this.app.rightHandEl.removeAttribute("line");
 
-    // remove listeners
     for (const fn of this._unsubs) {
       try { fn(); } catch {}
     }
     this._unsubs = [];
+    this._srcState.clear();
   }
 }
 
@@ -174,25 +295,14 @@ function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
 
-function summarizeEvent(e) {
-  if (!e) return "";
-  const d = e.detail;
-  if (!d) return "";
+function describeSource(src) {
+  const prof = (src.profiles && src.profiles[0]) ? src.profiles[0] : "unknown";
+  const hand = src.hand ? "hand" : "ctrl";
+  return `${hand}/${src.handedness || "?"}/${prof}`;
+}
 
-  // tenta pegar eixos comuns
-  const x = d.x ?? d.axis?.[0];
-  const y = d.y ?? d.axis?.[1];
-
-  // pinch/gestures podem vir com "position"/"hand"/etc
-  const hand = d.hand || d.handedness || "";
-  const pressed = (d.pressed != null) ? `pressed=${d.pressed}` : "";
-  const val = (d.value != null) ? `value=${d.value}` : "";
-
-  const parts = [];
-  if (hand) parts.push(`hand=${hand}`);
-  if (Number.isFinite(x) && Number.isFinite(y)) parts.push(`xy=${Number(x).toFixed(2)},${Number(y).toFixed(2)}`);
-  if (pressed) parts.push(pressed);
-  if (val) parts.push(val);
-
-  return parts.join(" ");
+function summarizeXR(e) {
+  const src = e?.inputSource;
+  if (!src) return "";
+  return describeSource(src);
 }
