@@ -1,0 +1,211 @@
+{
+  "defaultTour": "Coluna_1",
+  "tours": {
+    "Coluna_1": {
+      "title": "Coluna_1",
+      "map_png": "./assets/maps/Coluna_1_map.png",
+      "scenes": [
+        {
+          "id": "Banheiro_Col_1",
+          "name": "Banheiro_Col_1",
+          "pano": "./assets/panoramas/Coluna_1/BANHO_COL-01.jpg",
+          "scene_map_position": "94.5,66",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        },
+        {
+          "id": "Banheiro_Studio_Col_1",
+          "name": "Banheiro_Studio_Col_1",
+          "pano": "./assets/panoramas/Coluna_1/BANHO_STUDIO_COL-01.jpg",
+          "scene_map_position": "64,73",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        }
+      ]
+    },
+    "Coluna_2": {
+      "title": "Coluna_2",
+      "map_png": "./assets/maps/Coluna_1_map.png",
+      "scenes": [
+        {
+          "id": "Banheiro_Col_2",
+          "name": "Banheiro_Col_2",
+          "pano": "./assets/panoramas/Coluna_2/BANHO_SOCIAL_COL-02.jpg",
+          "scene_map_position": "33,63",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        },
+        {
+          "id": "Banheiro_Studio_Col_2",
+          "name": "Banheiro_Studio_Col_2",
+          "pano": "./assets/panoramas/Coluna_2/BANHO_STUDIO_COL-02.jpg",
+          "scene_map_position": "64,74",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        }
+      ]
+    },
+    "Coluna_3": {
+      "title": "Coluna_3",
+      "map_png": "./assets/maps/Coluna_1_map.png",
+      "scenes": [
+        {
+          "id": "Banheiro_Social_Col_3",
+          "name": "Banheiro_Social_Col_3",
+          "pano": "./assets/panoramas/Coluna_3/BANHO_SOCIAL_COL-03.jpg",
+          "scene_map_position": "32,44",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        },
+        {
+          "id": "Banheiro_Suite_Col_3",
+          "name": "Banheiro_Suite_Col_3",
+          "pano": "./assets/panoramas/Coluna_3/BANHO_SUITE_COL-03.jpg",
+          "scene_map_position": "27.2,55.7",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        }
+      ]
+    },
+    "Coluna_4": {
+      "title": "Coluna_4",
+      "map_png": "./assets/maps/Coluna_1_map.png",
+      "scenes": [
+        {
+          "id": "Apartamento_Col_4",
+          "name": "Apartamento_Col_4",
+          "pano": "./assets/panoramas/Coluna_4/APARTAMENTO_COLUNA_04.jpg",
+          "scene_map_position": "47,35",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        },
+        {
+          "id": "Banheiro_Studio_Direito_Col_4",
+          "name": "Banheiro_Studio_Direito_Col_4",
+          "pano": "./assets/panoramas/Coluna_4/BANHO_STUDIO_COL-04_DIREITO.jpg",
+          "scene_map_position": "61,42",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        },
+        {
+          "id": "Banheiro_Studio_Esquerdo_Col_4",
+          "name": "Banheiro_Studio_Esquerdo_Col_4",
+          "pano": "./assets/panoramas/Coluna_4/BANHO_STUDIO_COL-04_ESQUERDO.jpg",
+          "scene_map_position": "44,42",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        }
+      ]
+    },
+    "Coluna_5": {
+      "title": "Coluna_5",
+      "map_png": "./assets/maps/Coluna_1_map.png",
+      "scenes": [
+        {
+          "id": "Apartamento_Col_5",
+          "name": "Apartamento_Col_5",
+          "pano": "./assets/panoramas/Coluna_5/APARTAMENTO_COLUNA_05.jpg",
+          "scene_map_position": "72,35",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        },
+        {
+          "id": "Banheiro_Studio_Col_5",
+          "name": "Banheiro_Studio_Col_5",
+          "pano": "./assets/panoramas/Coluna_5/BANHO_STUDIO_COL-05.jpg",
+          "scene_map_position": "68,42",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": []
+        }
+      ]
+    }
+  }
+}

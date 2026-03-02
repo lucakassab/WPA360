@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <link rel="manifest" href="./manifest.json" />
+
+  <script src="./vendor/aframe.min.js"></script>
+  <link rel="stylesheet" href="./css/app.css" />
+
+  <style>
+    :root{
+      /* altura "segura" pro topo quando o mapa está aberto */
+      --uiTopSafe: 74px; /* ~ barra + margem; ajuste fino se quiser */
+    }
+
+    #topMenuWrap{
+      position:fixed;
+      top:10px;
+      left:10px;
+      z-index:6001; /* fica acima do overlay */
+      pointer-events:auto;
+    }
+    #btnTopMenu{
+      border:1px solid rgba(255,255,255,0.16);
+      background:rgba(0,0,0,0.55);
+      color:rgba(255,255,255,0.92);
+      border-radius:12px;
+      padding:10px 12px;
+      font:700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      cursor:pointer;
+      backdrop-filter: blur(10px);
+    }
+
+    #topMenuBar{
+      position:fixed;
+      top:10px;
+      left:10px; /* JS ajusta quando abrir pra não bater no botão Menu */
+      right:10px;
+      z-index:6000; /* fica acima do overlay */
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+
+      padding:10px 12px;
+      border:1px solid rgba(255,255,255,0.16);
+      background:rgba(0,0,0,0.55);
+      color:rgba(255,255,255,0.92);
+      border-radius:14px;
+      backdrop-filter: blur(10px);
+      pointer-events:auto;
+    }
+    #topMenuBar[hidden]{ display:none; }
+
+    .bar-left{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+      flex:1;
+    }
+
+    #sceneTitle{
+      font:800 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:min(260px, 28vw);
+    }
+
+    /* Dropdowns estilosos */
+    .bar-select{
+      -webkit-appearance:none;
+      appearance:none;
+      border:1px solid rgba(255,255,255,0.16);
+      background:rgba(0,0,0,0.35);
+      backdrop-filter: blur(10px);
+      color:rgba(255,255,255,0.92);
+      border-radius:12px;
+      padding:10px 36px 10px 12px;
+      outline:none;
+      font:700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      max-width:min(280px, 30vw);
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;
+      background-position:right 12px center;
+      background-size:16px 16px;
+    }
+    .bar-select:hover{
+      border-color:rgba(255,255,255,0.26);
+      background:rgba(0,0,0,0.42);
+    }
+    .bar-select:focus,
+    .bar-select:focus-visible{
+      border-color:rgba(0,160,255,0.55);
+      box-shadow:0 0 0 3px rgba(0,160,255,0.18);
+    }
+    .bar-select::-ms-expand{ display:none; }
+    .bar-select option{
+      background:#111;
+      color:rgba(255,255,255,0.92);
+    }
+
+    .bar-toggle{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 8px;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(255,255,255,0.06);
+      border-radius:12px;
+      user-select:none;
+    }
+    .bar-toggle label{
+      font:800 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      opacity:0.9;
+      cursor:pointer;
+    }
+    #linkToursToggle{
+      width:16px;
+      height:16px;
+      cursor:pointer;
+    }
+
+    .bar-right{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex:0 0 auto;
+    }
+    .bar-btn{
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(255,255,255,0.08);
+      color:rgba(255,255,255,0.92);
+      border-radius:12px;
+      padding:10px 12px;
+      cursor:pointer;
+      font:700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      white-space:nowrap;
+    }
+    .bar-btn[disabled]{ opacity:.55; cursor:default; }
+
+    .bar-fov{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 8px;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(255,255,255,0.06);
+      border-radius:12px;
+    }
+    .bar-fov label{
+      font:800 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      opacity:0.9;
+    }
+    #fovSlider{ width:140px; accent-color:#ffffff; }
+    #fovValue{
+      width:36px;
+      text-align:right;
+      font:800 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      opacity:0.9;
+    }
+
+    #toast{
+      position:fixed;
+      left:50%;
+      bottom:70px;
+      transform:translateX(-50%);
+      z-index:2200;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(0,0,0,0.70);
+      color:rgba(255,255,255,0.92);
+      backdrop-filter: blur(10px);
+      font:600 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      pointer-events:none;
+    }
+    #toast[hidden]{ display:none; }
+
+    #tooltip{
+      position:fixed;
+      z-index:2200;
+      transform:translate(12px, 12px);
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(0,0,0,0.70);
+      color:rgba(255,255,255,0.92);
+      backdrop-filter: blur(10px);
+      font:600 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      pointer-events:none;
+      white-space:nowrap;
+    }
+    #tooltip[hidden]{ display:none; }
+
+    /* ===== Overlay da Planta ===== */
+    #mapOverlay{
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      top:var(--uiTopSafe); /* ✅ não invade a barra */
+      z-index:5000;
+
+      background:rgba(0,0,0,0.65);
+      backdrop-filter: blur(6px);
+
+      display:flex;
+      align-items:flex-start; /* ✅ começa abaixo do topo seguro */
+      justify-content:center;
+
+      padding:16px;
+      pointer-events:auto;
+      box-sizing:border-box;
+    }
+    #mapOverlay[hidden]{ display:none; }
+
+    #mapPanel{
+      width:min(1000px, 96vw);
+      height:min(720px, calc(100vh - var(--uiTopSafe) - 32px)); /* ✅ respeita espaço */
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(15,15,15,0.78);
+      backdrop-filter: blur(10px);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+    }
+
+    #mapHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:12px 12px;
+      border-bottom:1px solid rgba(255,255,255,0.10);
+      flex:0 0 auto;
+    }
+    #mapTitle{
+      font:900 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      letter-spacing:0.4px;
+      color:rgba(255,255,255,0.92);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:60%;
+    }
+
+    .map-zoom{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex:0 0 auto;
+    }
+    .map-zoom button{
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(255,255,255,0.08);
+      color:rgba(255,255,255,0.92);
+      border-radius:12px;
+      padding:8px 10px;
+      cursor:pointer;
+      font:800 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    #btnMapClose{
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(255,255,255,0.08);
+      color:rgba(255,255,255,0.92);
+      border-radius:12px;
+      padding:10px 12px;
+      cursor:pointer;
+      font:800 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    /* ✅ mapBody vira viewport com pan via scroll */
+    #mapBody{
+      position:relative;
+      flex:1 1 auto;
+      display:flex;
+      align-items:flex-start;
+      justify-content:flex-start;
+      padding:12px;
+      min-height:0;
+
+      overflow:auto;              /* ✅ pan quando zoom */
+      overscroll-behavior: contain;
+    }
+
+    /* ✅ mapWrap recebe o scale (img + marker juntos) */
+    #mapWrap{
+      position:relative;
+      display:inline-block;
+      max-width:none;
+      max-height:none;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    #mapImg{
+      display:block;
+      max-width:100%;
+      max-height:100%;
+      width:auto;
+      height:auto;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.10);
+      user-select:none;
+      -webkit-user-drag:none;
+    }
+
+    #mapMarker{
+      position:absolute;
+      width:14px;
+      height:14px;
+      border-radius:999px;
+      background:#ff3b30;
+      border:2px solid rgba(255,255,255,0.95);
+      box-shadow:0 6px 18px rgba(0,0,0,0.45);
+      transform:translate(-50%,-50%);
+      pointer-events:none;
+    }
+    #mapMarker[hidden]{ display:none; }
+  </style>
+</head>
+
+<body>
+  <div id="topMenuWrap">
+    <button id="btnTopMenu" type="button">Menu</button>
+  </div>
+
+  <div id="topMenuBar" hidden>
+    <div class="bar-left">
+      <div id="sceneTitle">—</div>
+
+      <select id="topTourSelect" class="bar-select" aria-label="Selecionar tour"></select>
+      <select id="topSceneSelect" class="bar-select" aria-label="Selecionar cena"></select>
+
+      <div class="bar-toggle">
+        <input id="linkToursToggle" type="checkbox" />
+        <label for="linkToursToggle">Link</label>
+      </div>
+    </div>
+
+    <div class="bar-right">
+      <button id="btnMap" class="bar-btn" type="button">Planta Baixa</button>
+      <button id="btnDownloadTour" class="bar-btn" type="button">Baixar Tour Completo</button>
+
+      <div class="bar-fov">
+        <label for="fovSlider">FOV</label>
+        <input id="fovSlider" type="range" min="50" max="110" step="1" value="80" />
+        <div id="fovValue">80</div>
+      </div>
+
+      <button id="btnPrev" class="bar-btn" type="button">◀</button>
+      <button id="btnNext" class="bar-btn" type="button">▶</button>
+      <button id="btnVR" class="bar-btn" type="button">VR</button>
+      <button id="btnInstall" class="bar-btn" type="button" hidden>Instalar</button>
+    </div>
+  </div>
+
+  <!-- Overlay Planta -->
+  <div id="mapOverlay" hidden>
+    <div id="mapPanel">
+      <div id="mapHeader">
+        <div id="mapTitle">Planta Baixa</div>
+
+        <div class="map-zoom">
+          <button id="btnMapZoomOut" type="button">−</button>
+          <button id="btnMapZoomReset" type="button">1:1</button>
+          <button id="btnMapZoomIn" type="button">+</button>
+        </div>
+
+        <button id="btnMapClose" type="button">Fechar</button>
+      </div>
+
+      <div id="mapBody">
+        <div id="mapWrap">
+          <img id="mapImg" alt="Planta Baixa" />
+          <div id="mapMarker" hidden></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" hidden></div>
+  <div id="tooltip" hidden></div>
+
+  <a-scene id="scene" embedded renderer="colorManagement: true;">
+    <a-entity id="pano" stereo-top-bottom="src: ; radius: 5000"></a-entity>
+    <a-entity id="hotspots"></a-entity>
+
+    <a-entity id="cameraRig">
+      <a-camera id="camera" wasd-controls-enabled="false" look-controls="reverseMouseDrag: true">
+        <a-entity id="cursor"
+          cursor="rayOrigin: mouse"
+          raycaster="objects: .clickable"
+          position="0 0 -1">
+        </a-entity>
+      </a-camera>
+    </a-entity>
+
+    <a-entity id="leftHand"></a-entity>
+    <a-entity id="rightHand"></a-entity>
+  </a-scene>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
