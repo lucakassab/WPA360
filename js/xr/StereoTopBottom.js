@@ -40,6 +40,14 @@ export function registerStereoTopBottom(AFRAME) {
     }
   }
 
+  function getMaxTextureSize(sceneEl) {
+    try {
+      return sceneEl?.renderer?.capabilities?.maxTextureSize ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
   function loadTextureCached(url, sceneEl) {
     const existing = cache.get(url);
 
@@ -57,17 +65,21 @@ export function registerStereoTopBottom(AFRAME) {
       loader.load(
         url,
         (tex) => {
-          // ✅ qualidade / estabilidade
+          // ✅ sampling
           tex.minFilter = THREE.LinearFilter;
           tex.magFilter = THREE.LinearFilter;
-          tex.generateMipmaps = false; // panoramas 8K já são gigantes
+          tex.generateMipmaps = false;
 
-          // ✅ melhora nitidez em ângulo (principalmente VR)
           const aniso = getMaxAnisotropy(sceneEl);
           if (aniso && Number.isFinite(aniso)) tex.anisotropy = aniso;
 
-          // ❌ NÃO setar tex.colorSpace aqui.
-          // Isso pode escurecer/alterar as cores no teu ShaderMaterial dependendo do pipeline do A-Frame/Three.
+          // ✅ warning útil: se teu arquivo excede limite do device, ele vai ser redimensionado.
+          const maxTex = getMaxTextureSize(sceneEl);
+          const iw = tex?.image?.width ?? 0;
+          const ih = tex?.image?.height ?? 0;
+          if (maxTex && (iw > maxTex || ih > maxTex)) {
+            console.warn(`[StereoTB] Textura maior que MAX_TEXTURE_SIZE (${maxTex}). Provável resize:`, iw, "x", ih, "->", maxTex);
+          }
 
           cache.set(url, { tex, promise: null, lastUsed: performance.now() });
           trimCache();
@@ -139,7 +151,7 @@ export function registerStereoTopBottom(AFRAME) {
 
     remove() {
       if (this.el.getObject3D("mesh")) this.el.removeObject3D("mesh");
-      // não dá dispose: cache segura
+      // cache segura o dispose
     },
 
     _makeMesh(rebuild = false) {
@@ -151,16 +163,17 @@ export function registerStereoTopBottom(AFRAME) {
           uEye: { value: 0.0 },
           uFlipX: { value: this.data.flipX ? 1.0 : 0.0 }
         },
+        // ✅ highp reduz shimmering/quantização em mobile
         vertexShader: `
-          precision mediump float;
-          varying vec2 vUv;
+          precision highp float;
+          varying highp vec2 vUv;
           void main() {
             vUv = uv;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }
         `,
         fragmentShader: `
-          precision mediump float;
+          precision highp float;
 
           uniform sampler2D uMap;
           uniform float uHasMap;
@@ -168,7 +181,7 @@ export function registerStereoTopBottom(AFRAME) {
           uniform float uEye;
           uniform float uFlipX;
 
-          varying vec2 vUv;
+          varying highp vec2 vUv;
 
           void main() {
             if (uHasMap < 0.5) {
