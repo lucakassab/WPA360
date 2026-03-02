@@ -26,13 +26,11 @@ export default class App {
 
     this._events = new EventTarget();
 
-    // multi-tour store
     this._defaultTourId = null;
     this._tourOrder = [];
-    this._toursById = new Map();       // tourId -> {title, scenes[], map_png?}
-    this._scenesByTour = new Map();    // tourId -> {sceneOrder, sceneById}
+    this._toursById = new Map();
+    this._scenesByTour = new Map();
 
-    // current
     this.currentTourId = null;
     this._sceneOrder = [];
     this._sceneById = new Map();
@@ -63,19 +61,15 @@ export default class App {
 
     this._linkTours = false;
 
-    // Map overlay
     this._mapOpen = false;
     this._mapImgLoaded = false;
 
-    // MiniMap
     this._miniMap = false;
 
-    // zoom/pan
     this._mapZoom = 1;
     this._mapZoomMin = 1;
     this._mapZoomMax = 6;
 
-    // VR debug console
     this._vrDebugEnabled = false;
     this._vrConsoleEl = null;
   }
@@ -129,14 +123,19 @@ export default class App {
       else this.sceneEl.enterVR();
     });
 
-    // ===== VR Debug Console (dentro do VR) =====
+    // ✅ VR Debug Console (maior + mais perto)
     this._vrDebugEnabled = !!vrDebug;
     if (this._vrDebugEnabled) {
       this._vrConsoleEl = document.createElement("a-entity");
       this._vrConsoleEl.setAttribute("id", "vrConsole");
-      this._vrConsoleEl.setAttribute("position", "0 -0.25 -1.2");
+
+      // mais perto e maior na visão
+      this._vrConsoleEl.setAttribute("position", "0 -0.18 -0.85");
       this._vrConsoleEl.setAttribute("visible", "false");
-      this._vrConsoleEl.setAttribute("vr-debug-console", "");
+
+      // força parâmetros grandes (além dos defaults)
+      this._vrConsoleEl.setAttribute("vr-debug-console", "maxLines: 22; width: 1.85; height: 0.95; fontSize: 0.18");
+
       this.cameraEl.appendChild(this._vrConsoleEl);
     }
 
@@ -185,7 +184,6 @@ export default class App {
       }
     });
 
-    // ===== Init from hash (Tour:Scene|Map) =====
     const initial = this._getInitialFromHash();
 
     if (initial?.tourId && initial?.sceneId) {
@@ -234,7 +232,6 @@ export default class App {
   }
 
   // ===== Hash helpers =====
-
   _makeSceneHash({ tourId, sceneId, mapOpen }) {
     const base = `${tourId}:${sceneId}`;
     return mapOpen ? `${base}|Map` : base;
@@ -259,7 +256,6 @@ export default class App {
     const base = parts.find(p => p.toLowerCase() !== "map") || "";
     if (!base) return null;
 
-    // Tour:Scene
     const m = base.match(/^([^:\/]+)[:\/](.+)$/);
     if (m) {
       const tid = this._canonicalTourId(m[1]);
@@ -269,11 +265,9 @@ export default class App {
       }
     }
 
-    // só SceneId (tour atual)
     const sid = base;
     if (this._sceneById.has(sid)) return { tourId: this.currentTourId, sceneId: sid, mapOpen };
 
-    // linkTours: procura em todos
     if (this._linkTours) {
       for (const tid of this._tourOrder) {
         const pack = this._scenesByTour.get(tid);
@@ -281,7 +275,6 @@ export default class App {
       }
     }
 
-    // fallback: default
     if (this._scenesByTour.get(this._defaultTourId)?.sceneById?.has(sid)) {
       return { tourId: this._defaultTourId, sceneId: sid, mapOpen };
     }
@@ -290,7 +283,6 @@ export default class App {
   }
 
   // ===== Map Overlay / MiniMap =====
-
   _setupMapOverlay() {
     const btn = this.ui.btnMap;
     const overlay = this.ui.mapOverlay;
@@ -299,7 +291,6 @@ export default class App {
     if (btn) btn.addEventListener("click", () => this.toggleMap());
     if (closeBtn) closeBtn.addEventListener("click", () => this._setMapOpen(false));
 
-    // MiniMap toggle
     this.ui.btnMiniMap?.addEventListener("click", () => {
       if (!this._mapOpen) return;
       this._setMiniMap(!this._miniMap, { persist: true });
@@ -326,7 +317,6 @@ export default class App {
       });
     }
 
-    // zoom buttons + wheel
     const btnIn = document.querySelector("#btnMapZoomIn");
     const btnOut = document.querySelector("#btnMapZoomOut");
     const btnReset = document.querySelector("#btnMapZoomReset");
@@ -356,7 +346,6 @@ export default class App {
     if (body && wrap) {
       body.addEventListener("wheel", (e) => {
         if (!this._mapOpen) return;
-
         e.preventDefault();
 
         const delta = -Math.sign(e.deltaY);
@@ -406,10 +395,7 @@ export default class App {
   _applyMiniMapUI() {
     const overlay = this.ui.mapOverlay;
     if (overlay) overlay.classList.toggle("minimap", this._miniMap);
-
-    if (this.ui.btnMiniMap) {
-      this.ui.btnMiniMap.textContent = this._miniMap ? "Expandir" : "MiniMap";
-    }
+    if (this.ui.btnMiniMap) this.ui.btnMiniMap.textContent = this._miniMap ? "Expandir" : "MiniMap";
   }
 
   _hasCurrentTourMap() {
@@ -465,10 +451,8 @@ export default class App {
 
     if (body && Number.isFinite(anchorX) && Number.isFinite(anchorY)) {
       const ratio = z1 / z0;
-
       const newScrollLeft = anchorX * ratio - (anchorX - body.scrollLeft);
       const newScrollTop  = anchorY * ratio - (anchorY - body.scrollTop);
-
       body.scrollLeft = newScrollLeft;
       body.scrollTop  = newScrollTop;
     }
@@ -481,7 +465,6 @@ export default class App {
   }
 
   // ===== Tour switching =====
-
   _setCurrentTour(tourId, { rebuildSceneSelect = true } = {}) {
     const tid = this._canonicalTourId(tourId);
     if (!tid) return false;
@@ -524,14 +507,12 @@ export default class App {
   }
 
   // ===== Top bar =====
-
   _setupTopBar() {
     const btn = this.ui.btnTopMenu;
     const bar = this.ui.topMenuBar;
 
     this._setMenuOpen(false);
 
-    // tour dropdown
     if (this.ui.topTourSelect) {
       this.ui.topTourSelect.innerHTML = "";
       for (const tid of this._tourOrder) {
@@ -552,7 +533,6 @@ export default class App {
       });
     }
 
-    // scene dropdown
     this._populateSceneSelect();
     this.ui.topSceneSelect?.addEventListener("change", () => {
       const id = this.ui.topSceneSelect.value;
@@ -560,7 +540,6 @@ export default class App {
       void this.goToScene(id, { tourId: this.currentTourId });
     });
 
-    // link toggle
     if (this.ui.linkToursToggle) {
       this.ui.linkToursToggle.checked = this._linkTours;
       this.ui.linkToursToggle.addEventListener("change", () => {
@@ -570,7 +549,6 @@ export default class App {
       });
     }
 
-    // menu show/hide
     if (btn && bar) {
       btn.addEventListener("click", () => this._setMenuOpen(!this._menuOpen));
       window.addEventListener("resize", () => {
@@ -625,7 +603,6 @@ export default class App {
   }
 
   // ===== FOV =====
-
   _setupFov() {
     const slider = this.ui.fovSlider;
     const valueEl = this.ui.fovValue;
@@ -658,8 +635,7 @@ export default class App {
     }
   }
 
-  // ===== Download / Cache (tour atual) =====
-
+  // ===== Download / Cache =====
   _setupDownloadTour() {
     const btn = this.ui.btnDownloadTour;
     if (!btn) return;
@@ -746,8 +722,7 @@ export default class App {
     this.toast(`Download "${tourLabel}": ${ok}/${total} (falhas ${fail})`);
   }
 
-  // ===== Hotspot resolution (multi-tour) =====
-
+  // ===== Hotspot resolution =====
   _resolveHotspotTarget(hs) {
     if (!hs) return null;
 
@@ -795,7 +770,6 @@ export default class App {
   }
 
   // ===== Navigation =====
-
   prevScene() {
     const idx = Math.max(0, this._sceneOrder.indexOf(this.currentSceneId));
     const prev = this._sceneOrder[(idx - 1 + this._sceneOrder.length) % this._sceneOrder.length];
@@ -1004,8 +978,6 @@ export default class App {
     return true;
   }
 
-  // ===== Fade/Toast/Tooltip =====
-
   _createFadeOverlay() {
     let el = document.querySelector("#sceneFade");
     if (!el) {
@@ -1103,5 +1075,7 @@ function parsePercentPair(v) {
 }
 
 function clamp(v, a, b) {
+  v = Number(v);
+  if (!Number.isFinite(v)) return a;
   return Math.max(a, Math.min(b, v));
 }
