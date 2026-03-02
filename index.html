@@ -420,7 +420,7 @@
   <div id="toast" hidden></div>
   <div id="tooltip" hidden></div>
 
-  <a-scene id="scene" embedded renderer="colorManagement: true;">
+  <a-scene id="scene" embedded renderer="colorManagement: true; antialias: true;">
     <a-entity id="pano" stereo-top-bottom="src: ; radius: 5000"></a-entity>
     <a-entity id="hotspots"></a-entity>
 
@@ -441,3 +441,4 @@
   <script type="module" src="./js/main.js"></script>
 </body>
 </html>
+
