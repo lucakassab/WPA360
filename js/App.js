@@ -48,7 +48,7 @@ export default class App {
     this._vrDebugEnabled = false;
     this._vrConsoleEl = null;
 
-    // ✅ VR widget: agora só existe DURANTE immersive-vr
+    // ✅ VR widget: agora lifecycle é 100% ligado à xrSession
     this._vrWidgetEl = null;
     this._vrWidgetHandlers = null;
 
@@ -113,27 +113,25 @@ export default class App {
     const firstScene = this._sceneOrder[0];
     await this.goToScene(firstScene, { tourId: this.currentTourId, pushHash: false });
 
-    // ✅ ENTER/EXIT VR: cria/destrói widget só em immersive-vr
-    this.sceneEl.addEventListener("enter-vr", async () => {
-      // A-Frame pode entrar em "vr-mode" sem session pronta ainda, então espera um tiquinho
-      const session = await this._waitXRSession(600);
-      const isImmersive = session?.mode === "immersive-vr";
+    // ✅ LIFECYCLE CERTO: XR session start/end (three.js)
+    this._bindXRSessionLifecycle();
 
-      if (isImmersive) {
+    // ✅ Fallback A-Frame enter/exit (se sessionstart demorar)
+    this.sceneEl.addEventListener("enter-vr", async () => {
+      // espera a session existir de verdade
+      const s = await this._waitXRSession(3000);
+      if (!s) return;
+
+      // A-Frame marca vr-mode quando é imersivo
+      if (this.sceneEl.is("vr-mode")) {
         this._ensureVrWidget();
         this._syncVrWidget();
-      } else {
-        // se não é immersive, garante que não existe
-        this._destroyVrWidget();
-      }
-
-      if (this._vrConsoleEl) {
-        this._vrConsoleEl.setAttribute("visible", (this._vrDebugEnabled && isImmersive) ? "true" : "false");
+        if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", this._vrDebugEnabled ? "true" : "false");
       }
     });
 
     this.sceneEl.addEventListener("exit-vr", () => {
-      // ✅ sai da sessão: remove do DOM
+      // saiu do modo VR do A-Frame => destrói (mesmo que sessionend falhe)
       this._destroyVrWidget();
       if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", "false");
     });
@@ -146,6 +144,52 @@ export default class App {
       const el = document.querySelector("#hsdebug");
       if (el) el.remove();
     }
+  }
+
+  // ---------------- XR lifecycle (definitivo) ----------------
+
+  _bindXRSessionLifecycle() {
+    const renderer = this.sceneEl?.renderer;
+    const xr = renderer?.xr;
+    if (!xr?.addEventListener) return;
+
+    const onStart = () => {
+      // deixa o A-Frame atualizar o estado antes de criar (vr-mode)
+      requestAnimationFrame(() => {
+        if (!this.sceneEl.is("vr-mode")) return; // ignora inline session
+
+        this._ensureVrWidget();
+        this._syncVrWidget();
+
+        if (this._vrConsoleEl) {
+          this._vrConsoleEl.setAttribute("visible", this._vrDebugEnabled ? "true" : "false");
+        }
+      });
+    };
+
+    const onEnd = () => {
+      this._destroyVrWidget();
+      if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", "false");
+    };
+
+    xr.addEventListener("sessionstart", onStart);
+    xr.addEventListener("sessionend", onEnd);
+
+    // cleanup (se você usar dispose do App no futuro)
+    this._xrUnsub = () => {
+      xr.removeEventListener("sessionstart", onStart);
+      xr.removeEventListener("sessionend", onEnd);
+    };
+  }
+
+  async _waitXRSession(timeoutMs = 3000) {
+    const start = performance.now();
+    while (performance.now() - start < timeoutMs) {
+      const s = this.sceneEl?.renderer?.xr?.getSession?.() || null;
+      if (s) return s;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return this.sceneEl?.renderer?.xr?.getSession?.() || null;
   }
 
   // ---------------- DOM UI ----------------
@@ -176,22 +220,12 @@ export default class App {
     this.cameraEl.appendChild(this._vrConsoleEl);
   }
 
-  // ---------------- VR Widget lifecycle (NEW) ----------------
-
-  async _waitXRSession(timeoutMs = 600) {
-    const start = performance.now();
-    while (performance.now() - start < timeoutMs) {
-      const s = this.sceneEl?.renderer?.xr?.getSession?.() || null;
-      if (s) return s;
-      await new Promise(r => setTimeout(r, 30));
-    }
-    return this.sceneEl?.renderer?.xr?.getSession?.() || null;
-  }
+  // ---------------- VR Widget lifecycle ----------------
 
   _ensureVrWidget() {
     if (this._vrWidgetEl) {
-      // garante visível (dentro da session)
       this._vrWidgetEl.setAttribute("visible", "true");
+      if (this._vrWidgetEl.object3D) this._vrWidgetEl.object3D.visible = true;
       return;
     }
 
@@ -200,11 +234,11 @@ export default class App {
     el.setAttribute("visible", "true");
     el.setAttribute("vr-widget", "");
 
-    // ancorado na câmera (mas só existe em immersive-vr agora)
+    // ancorado na câmera
     this.cameraEl.appendChild(el);
     this._vrWidgetEl = el;
 
-    // Handlers guardados pra remover depois
+    // handlers guardados pra remover depois
     const hPrev = () => void this.prevScene();
     const hNext = () => void this.nextScene();
     const hFov = (e) => {
@@ -351,7 +385,7 @@ export default class App {
     this._ensureHotspotAnchor();
     this._renderHotspots(scene);
 
-    // ✅ atualiza widget se existir (em VR immersive)
+    // ✅ atualiza widget (se existir)
     this._syncVrWidget();
 
     this._isTransitioning = false;
