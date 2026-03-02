@@ -48,9 +48,12 @@ export default class App {
     this._vrDebugEnabled = false;
     this._vrConsoleEl = null;
 
-    // ✅ VR widget: agora lifecycle é 100% ligado à xrSession
+    // VR widget: lifecycle ligado à sessão
     this._vrWidgetEl = null;
     this._vrWidgetHandlers = null;
+
+    // ✅ Menu DOM
+    this._menuOpen = false;
 
     this.vrConfig = {};
   }
@@ -88,7 +91,7 @@ export default class App {
     this._fov = Number.isFinite(savedFov) ? savedFov : 80;
     this._applyFov(this._fov);
 
-    this._wireDomUI();
+    this._wireDomUI(); // ✅ inclui Menu
 
     this._vrDebugEnabled = !!vrDebug;
     if (this._vrDebugEnabled) this._setupVrDebugConsole();
@@ -113,16 +116,14 @@ export default class App {
     const firstScene = this._sceneOrder[0];
     await this.goToScene(firstScene, { tourId: this.currentTourId, pushHash: false });
 
-    // ✅ LIFECYCLE CERTO: XR session start/end (three.js)
+    // lifecycle XR
     this._bindXRSessionLifecycle();
 
-    // ✅ Fallback A-Frame enter/exit (se sessionstart demorar)
+    // fallback A-Frame
     this.sceneEl.addEventListener("enter-vr", async () => {
-      // espera a session existir de verdade
       const s = await this._waitXRSession(3000);
       if (!s) return;
 
-      // A-Frame marca vr-mode quando é imersivo
       if (this.sceneEl.is("vr-mode")) {
         this._ensureVrWidget();
         this._syncVrWidget();
@@ -131,7 +132,6 @@ export default class App {
     });
 
     this.sceneEl.addEventListener("exit-vr", () => {
-      // saiu do modo VR do A-Frame => destrói (mesmo que sessionend falhe)
       this._destroyVrWidget();
       if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", "false");
     });
@@ -146,7 +146,7 @@ export default class App {
     }
   }
 
-  // ---------------- XR lifecycle (definitivo) ----------------
+  // ---------------- XR lifecycle ----------------
 
   _bindXRSessionLifecycle() {
     const renderer = this.sceneEl?.renderer;
@@ -154,16 +154,11 @@ export default class App {
     if (!xr?.addEventListener) return;
 
     const onStart = () => {
-      // deixa o A-Frame atualizar o estado antes de criar (vr-mode)
       requestAnimationFrame(() => {
-        if (!this.sceneEl.is("vr-mode")) return; // ignora inline session
-
+        if (!this.sceneEl.is("vr-mode")) return;
         this._ensureVrWidget();
         this._syncVrWidget();
-
-        if (this._vrConsoleEl) {
-          this._vrConsoleEl.setAttribute("visible", this._vrDebugEnabled ? "true" : "false");
-        }
+        if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", this._vrDebugEnabled ? "true" : "false");
       });
     };
 
@@ -175,7 +170,6 @@ export default class App {
     xr.addEventListener("sessionstart", onStart);
     xr.addEventListener("sessionend", onEnd);
 
-    // cleanup (se você usar dispose do App no futuro)
     this._xrUnsub = () => {
       xr.removeEventListener("sessionstart", onStart);
       xr.removeEventListener("sessionend", onEnd);
@@ -192,9 +186,31 @@ export default class App {
     return this.sceneEl?.renderer?.xr?.getSession?.() || null;
   }
 
-  // ---------------- DOM UI ----------------
+  // ---------------- DOM UI (✅ Menu voltou) ----------------
 
   _wireDomUI() {
+    // Menu abre/fecha topMenuBar
+    const btn = this.ui.btnTopMenu;
+    const bar = this.ui.topMenuBar;
+
+    if (bar) bar.hidden = true;
+    this._menuOpen = false;
+
+    const applyLayout = () => this._applyTopBarLayoutNoOverlap();
+    const setOpen = (open) => {
+      this._menuOpen = !!open;
+      if (!bar) return;
+      bar.hidden = !this._menuOpen;
+      if (this._menuOpen) applyLayout();
+      else bar.style.left = "10px";
+    };
+
+    if (btn && bar) {
+      btn.addEventListener("click", () => setOpen(!this._menuOpen));
+      window.addEventListener("resize", () => { if (this._menuOpen) applyLayout(); });
+    }
+
+    // controles básicos que você já tinha
     this.ui.btnPrev?.addEventListener("click", () => void this.prevScene());
     this.ui.btnNext?.addEventListener("click", () => void this.nextScene());
     this.ui.btnVR?.addEventListener("click", () => {
@@ -207,6 +223,21 @@ export default class App {
       this._applyFov(v);
       try { localStorage.setItem(LS_FOV, String(Math.round(v))); } catch {}
     });
+  }
+
+  _applyTopBarLayoutNoOverlap() {
+    const btn = this.ui.btnTopMenu;
+    const bar = this.ui.topMenuBar;
+    if (!btn || !bar) return;
+
+    const leftBase = 10;
+    const gap = 10;
+    const r = btn.getBoundingClientRect();
+    const left = Math.round(leftBase + r.width + gap);
+
+    bar.style.left = `${left}px`;
+    bar.style.right = `10px`;
+    bar.style.top = `10px`;
   }
 
   // ---------------- VR Debug console ----------------
@@ -233,12 +264,9 @@ export default class App {
     el.setAttribute("id", "vrWidget");
     el.setAttribute("visible", "true");
     el.setAttribute("vr-widget", "");
-
-    // ancorado na câmera
     this.cameraEl.appendChild(el);
     this._vrWidgetEl = el;
 
-    // handlers guardados pra remover depois
     const hPrev = () => void this.prevScene();
     const hNext = () => void this.nextScene();
     const hFov = (e) => {
@@ -385,7 +413,6 @@ export default class App {
     this._ensureHotspotAnchor();
     this._renderHotspots(scene);
 
-    // ✅ atualiza widget (se existir)
     this._syncVrWidget();
 
     this._isTransitioning = false;
@@ -453,7 +480,7 @@ export default class App {
   }
 
   _applyViewForScene(_scene, _fromHotspot) {
-    // no VR ignora (mantém teu comportamento antigo se tiver)
+    // no VR ignora
   }
 
   _applyFov(fov) {
@@ -483,7 +510,6 @@ export default class App {
         if (pack?.sceneById?.has(rawTo)) return { tourId: tid, sceneId: rawTo };
       }
     }
-
     return null;
   }
 }
@@ -492,23 +518,17 @@ function parsePercentPair(v) {
   if (v == null) return null;
 
   let x, y;
-
   if (typeof v === "string") {
     const parts = v.split(",").map(s => Number(String(s).trim()));
-    x = parts[0];
-    y = parts[1];
+    x = parts[0]; y = parts[1];
   } else if (Array.isArray(v)) {
-    x = Number(v[0]);
-    y = Number(v[1]);
+    x = Number(v[0]); y = Number(v[1]);
   } else if (typeof v === "object") {
-    x = Number(v.x);
-    y = Number(v.y);
+    x = Number(v.x); y = Number(v.y);
   }
 
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-
   x = Math.max(0, Math.min(100, x));
   y = Math.max(0, Math.min(100, y));
-
   return { x, y };
 }
