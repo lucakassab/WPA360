@@ -60,15 +60,14 @@ export function registerStereoTopBottom(AFRAME) {
           // ✅ qualidade / estabilidade
           tex.minFilter = THREE.LinearFilter;
           tex.magFilter = THREE.LinearFilter;
-          tex.generateMipmaps = false; // manter por memória/perf (8K já é gigante)
+          tex.generateMipmaps = false; // panoramas 8K já são gigantes
 
-          // ✅ melhora nitidez em ângulo (principalmente em VR)
+          // ✅ melhora nitidez em ângulo (principalmente VR)
           const aniso = getMaxAnisotropy(sceneEl);
           if (aniso && Number.isFinite(aniso)) tex.anisotropy = aniso;
 
-          // ✅ cor correta (A-Frame moderno usa colorManagement: true)
-          // Se teu A-Frame estiver antigo e não tiver SRGBColorSpace, isso não quebra.
-          try { tex.colorSpace = THREE.SRGBColorSpace; } catch {}
+          // ❌ NÃO setar tex.colorSpace aqui.
+          // Isso pode escurecer/alterar as cores no teu ShaderMaterial dependendo do pipeline do A-Frame/Three.
 
           cache.set(url, { tex, promise: null, lastUsed: performance.now() });
           trimCache();
