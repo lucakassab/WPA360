@@ -1,4 +1,3 @@
-// js/App.js
 import { loadTours } from "./tour/TourLoader.js";
 import {
   applySceneOffsets,
@@ -10,6 +9,7 @@ import HotspotRenderer from "./hotspots/HotspotRenderer.js";
 
 const LS_FOV = "tour_fov_v1";
 const LS_LINK = "tour_link_mode_v1";
+const TOUR_CACHE_NAME = "tour-full-v1";
 
 export default class App {
   constructor(refs) {
@@ -25,85 +25,136 @@ export default class App {
 
     this._events = new EventTarget();
 
+    // multi-tour store
     this._defaultTourId = null;
     this._tourOrder = [];
-    this._toursById = new Map();
-    this._scenesByTour = new Map();
+    this._toursById = new Map();       // tourId -> {title, scenes[], map_png?}
+    this._scenesByTour = new Map();    // tourId -> {sceneOrder, sceneById}
 
+    // current
     this.currentTourId = null;
     this._sceneOrder = [];
     this._sceneById = new Map();
     this.currentSceneId = null;
 
-    this._linkTours = false;
-    this._fov = 80;
+    this._mouse = { x: 0, y: 0 };
+    this._canHover = false;
 
     this.hotspotAnchorEl = null;
     this.hotspotRenderer = null;
 
     this._pendingViewToken = 0;
+
+    this._fadeEl = null;
+    this._firstPaint = true;
+
     this._isTransitioning = false;
     this._queuedNav = null;
 
-    this._vrDebugEnabled = false;
-    this._vrConsoleEl = null;
-
-    // VR widget: lifecycle ligado à sessão
-    this._vrWidgetEl = null;
-    this._vrWidgetHandlers = null;
-
-    // ✅ Menu DOM
+    this._debug = null;
     this._menuOpen = false;
 
-    this.vrConfig = {};
+    this._controlsVisible = { vr: true, install: false };
+
+    this._fov = 80;
+    this._downloadBusy = false;
+    this._downloadAbort = null;
+
+    this._linkTours = false;
+
+    // Map overlay
+    this._mapOpen = false;
+    this._mapImgLoaded = false;
+
+    // ✅ VR widget (só existe dentro da sessão imersiva)
+    this._vrWidgetEl = null;
+    this._vrWidgetHandlers = null;
   }
 
   on(type, handler) { this._events.addEventListener(type, handler); }
   emit(type, detail = {}) { this._events.dispatchEvent(new CustomEvent(type, { detail })); }
 
   setVRButtonVisible(visible) {
-    if (this.ui.btnVR) this.ui.btnVR.hidden = !visible;
+    this._controlsVisible.vr = !!visible;
+    if (this.ui.btnVR) this.ui.btnVR.hidden = !this._controlsVisible.vr;
   }
 
   setInstallButtonVisible(visible) {
-    if (this.ui.btnInstall) this.ui.btnInstall.hidden = !visible;
+    this._controlsVisible.install = !!visible;
+    if (this.ui.btnInstall) this.ui.btnInstall.hidden = !this._controlsVisible.install;
   }
 
   getCurrentScene() {
     return this._sceneById.get(this.currentSceneId) ?? null;
   }
 
-  async init({ debugHotspots = false, vrDebug = false } = {}) {
+  async init({ debugHotspots = false } = {}) {
     await new Promise((resolve) => {
       if (this.sceneEl.hasLoaded) return resolve();
       this.sceneEl.addEventListener("loaded", resolve, { once: true });
     });
 
+    this._createFadeOverlay();
+
+    // ✅ 1) carrega tours
     const data = await loadTours();
     this._defaultTourId = data.defaultTourId;
     this._tourOrder = data.tourOrder;
     this._toursById = data.toursById;
     this._scenesByTour = data.scenesByTour;
 
-    this._linkTours = localStorage.getItem(LS_LINK) === "1";
+    // prefs
+    const savedLink = localStorage.getItem(LS_LINK);
+    this._linkTours = savedLink === "1";
 
-    const savedFov = Number(localStorage.getItem(LS_FOV));
-    this._fov = Number.isFinite(savedFov) ? savedFov : 80;
-    this._applyFov(this._fov);
+    // ✅ 2) seta tour atual
+    this._setCurrentTour(this._defaultTourId, { rebuildSceneSelect: false });
 
-    this._wireDomUI(); // ✅ inclui Menu
+    // ✅ 3) monta UI/topbar (popula dropdowns aqui)
+    this._setupTopBar();
+    this._setupFov();
+    this._setupDownloadTour();
+    this._setupMapOverlay();
 
-    this._vrDebugEnabled = !!vrDebug;
-    if (this._vrDebugEnabled) this._setupVrDebugConsole();
+    this.ui.btnPrev?.addEventListener("click", () => void this.prevScene());
+    this.ui.btnNext?.addEventListener("click", () => void this.nextScene());
 
-    // tour inicial
-    this._setCurrentTour(this._defaultTourId);
+    this.ui.btnVR?.addEventListener("click", async () => {
+      if (this.sceneEl.is("vr-mode")) this.sceneEl.exitVR();
+      else this.sceneEl.enterVR();
+    });
 
-    // hotspot renderer
+    this.sceneEl.addEventListener("enter-vr", () => {
+      if (this.ui.btnVR) this.ui.btnVR.textContent = "Sair VR";
+      this.emit("vr:enter");
+      this.hideTooltip();
+      if (this._fadeEl) this._fadeEl.style.opacity = "0";
+      this._setMenuOpen(false);
+      this._setMapOpen(false);
+    });
+
+    this.sceneEl.addEventListener("exit-vr", () => {
+      if (this.ui.btnVR) this.ui.btnVR.textContent = "VR";
+      this.emit("vr:exit");
+    });
+
+    this._canHover = window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches ?? false;
+
+    window.addEventListener("mousemove", (e) => {
+      this._mouse.x = e.clientX;
+      this._mouse.y = e.clientY;
+
+      const tip = this.ui.tooltip;
+      if (tip && !tip.hidden) {
+        tip.style.left = `${this._mouse.x}px`;
+        tip.style.top = `${this._mouse.y}px`;
+      }
+    });
+
     this.hotspotRenderer = new HotspotRenderer({
-      showTooltip: () => {},
-      hideTooltip: () => {},
-      canHover: () => false,
+      showTooltip: (t) => this.showTooltip(t),
+      hideTooltip: () => this.hideTooltip(),
+      canHover: () => this._canHover,
       isVR: () => this.sceneEl.is("vr-mode"),
       onNavigate: (hs) => {
         const target = this._resolveHotspotTarget(hs);
@@ -112,28 +163,20 @@ export default class App {
       }
     });
 
-    // cena inicial
-    const firstScene = this._sceneOrder[0];
-    await this.goToScene(firstScene, { tourId: this.currentTourId, pushHash: false });
+    // hash (#tour:scene ou #scene)
+    const initial = this._getInitialFromHash();
+    if (initial) {
+      await this.goToScene(initial.sceneId, { tourId: initial.tourId, pushHash: false });
+    } else {
+      const firstScene = this._sceneOrder[0];
+      await this.goToScene(firstScene, { tourId: this.currentTourId, pushHash: false });
+    }
 
-    // lifecycle XR
-    this._bindXRSessionLifecycle();
-
-    // fallback A-Frame
-    this.sceneEl.addEventListener("enter-vr", async () => {
-      const s = await this._waitXRSession(3000);
-      if (!s) return;
-
-      if (this.sceneEl.is("vr-mode")) {
-        this._ensureVrWidget();
-        this._syncVrWidget();
-        if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", this._vrDebugEnabled ? "true" : "false");
-      }
-    });
-
-    this.sceneEl.addEventListener("exit-vr", () => {
-      this._destroyVrWidget();
-      if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", "false");
+    window.addEventListener("hashchange", () => {
+      const parsed = this._getInitialFromHash();
+      if (!parsed) return;
+      const same = parsed.tourId === this.currentTourId && parsed.sceneId === this.currentSceneId;
+      if (!same) void this.goToScene(parsed.sceneId, { tourId: parsed.tourId, pushHash: false });
     });
 
     if (debugHotspots) {
@@ -144,85 +187,115 @@ export default class App {
       const el = document.querySelector("#hsdebug");
       if (el) el.remove();
     }
+
+    this.setVRButtonVisible(this._controlsVisible.vr);
+    this.setInstallButtonVisible(this._controlsVisible.install);
+
+    this._updateMapAvailability();
+    this._updateMapMarker();
+
+    // ✅ VR widget lifecycle (sessionstart/sessionend) – sem mexer fora do VR
+    this._bindXRWidgetLifecycle();
   }
 
-  // ---------------- XR lifecycle ----------------
+  // ============================================================
+  // ✅ TOP BAR (Menu + dropdowns) — FIX DEFINITIVO
+  // ============================================================
 
-  _bindXRSessionLifecycle() {
-    const renderer = this.sceneEl?.renderer;
-    const xr = renderer?.xr;
-    if (!xr?.addEventListener) return;
-
-    const onStart = () => {
-      requestAnimationFrame(() => {
-        if (!this.sceneEl.is("vr-mode")) return;
-        this._ensureVrWidget();
-        this._syncVrWidget();
-        if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", this._vrDebugEnabled ? "true" : "false");
-      });
-    };
-
-    const onEnd = () => {
-      this._destroyVrWidget();
-      if (this._vrConsoleEl) this._vrConsoleEl.setAttribute("visible", "false");
-    };
-
-    xr.addEventListener("sessionstart", onStart);
-    xr.addEventListener("sessionend", onEnd);
-
-    this._xrUnsub = () => {
-      xr.removeEventListener("sessionstart", onStart);
-      xr.removeEventListener("sessionend", onEnd);
-    };
-  }
-
-  async _waitXRSession(timeoutMs = 3000) {
-    const start = performance.now();
-    while (performance.now() - start < timeoutMs) {
-      const s = this.sceneEl?.renderer?.xr?.getSession?.() || null;
-      if (s) return s;
-      await new Promise(r => setTimeout(r, 50));
-    }
-    return this.sceneEl?.renderer?.xr?.getSession?.() || null;
-  }
-
-  // ---------------- DOM UI (✅ Menu voltou) ----------------
-
-  _wireDomUI() {
-    // Menu abre/fecha topMenuBar
+  _setupTopBar() {
     const btn = this.ui.btnTopMenu;
     const bar = this.ui.topMenuBar;
 
-    if (bar) bar.hidden = true;
-    this._menuOpen = false;
+    this._setMenuOpen(false);
 
-    const applyLayout = () => this._applyTopBarLayoutNoOverlap();
-    const setOpen = (open) => {
-      this._menuOpen = !!open;
-      if (!bar) return;
-      bar.hidden = !this._menuOpen;
-      if (this._menuOpen) applyLayout();
-      else bar.style.left = "10px";
-    };
+    // ✅ popula tour dropdown
+    this._populateTourSelect();
 
-    if (btn && bar) {
-      btn.addEventListener("click", () => setOpen(!this._menuOpen));
-      window.addEventListener("resize", () => { if (this._menuOpen) applyLayout(); });
+    // ✅ popula scene dropdown (do tour atual)
+    this._populateSceneSelect();
+
+    // listeners
+    this.ui.topTourSelect?.addEventListener("change", () => {
+      const tid = this.ui.topTourSelect.value;
+      if (!tid || tid === this.currentTourId) return;
+
+      this._setCurrentTour(tid);
+      const start = this._getTourStartSceneId(tid);
+      if (start) void this.goToScene(start, { tourId: tid });
+    });
+
+    this.ui.topSceneSelect?.addEventListener("change", () => {
+      const id = this.ui.topSceneSelect.value;
+      if (!id || id === this.currentSceneId) return;
+      void this.goToScene(id, { tourId: this.currentTourId });
+    });
+
+    // link toggle
+    if (this.ui.linkToursToggle) {
+      this.ui.linkToursToggle.checked = this._linkTours;
+      this.ui.linkToursToggle.addEventListener("change", () => {
+        this._linkTours = !!this.ui.linkToursToggle.checked;
+        try { localStorage.setItem(LS_LINK, this._linkTours ? "1" : "0"); } catch {}
+        this.toast(this._linkTours ? "Link entre tours: ON" : "Link entre tours: OFF");
+      });
     }
 
-    // controles básicos que você já tinha
-    this.ui.btnPrev?.addEventListener("click", () => void this.prevScene());
-    this.ui.btnNext?.addEventListener("click", () => void this.nextScene());
-    this.ui.btnVR?.addEventListener("click", () => {
-      if (this.sceneEl.is("vr-mode")) this.sceneEl.exitVR();
-      else this.sceneEl.enterVR();
-    });
+    // menu show/hide
+    if (btn && bar) {
+      btn.addEventListener("click", () => {
+        this._setMenuOpen(!this._menuOpen);
 
-    this.ui.fovSlider?.addEventListener("input", () => {
-      const v = Number(this.ui.fovSlider.value);
-      this._applyFov(v);
-      try { localStorage.setItem(LS_FOV, String(Math.round(v))); } catch {}
-    });
+        // ✅ se por algum motivo abriu sem options, repopula na hora
+        if (this._menuOpen) this._ensureTopBarPopulated();
+      });
+
+      window.addEventListener("resize", () => {
+        if (this._menuOpen) this._applyTopBarLayoutNoOverlap();
+      });
+    }
+
+    // estado inicial
+    this._syncTopBarTitle();
+  }
+
+  _ensureTopBarPopulated() {
+    const tSel = this.ui.topTourSelect;
+    const sSel = this.ui.topSceneSelect;
+
+    if (tSel && tSel.options.length === 0) this._populateTourSelect();
+    if (sSel && sSel.options.length === 0) this._populateSceneSelect();
+
+    // garante selects no valor correto
+    this._syncTopBarTitle();
+  }
+
+  _populateTourSelect() {
+    const sel = this.ui.topTourSelect;
+    if (!sel) return;
+
+    sel.innerHTML = "";
+    for (const tid of this._tourOrder) {
+      const opt = document.createElement("option");
+      opt.value = tid;
+      opt.textContent = this._getTourTitle(tid);
+      sel.appendChild(opt);
+    }
+    sel.value = this.currentTourId ?? this._defaultTourId ?? "";
+  }
+
+  _populateSceneSelect() {
+    const sel = this.ui.topSceneSelect;
+    if (!sel) return;
+
+    sel.innerHTML = "";
+    for (const id of this._sceneOrder) {
+      const sc = this._sceneById.get(id);
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = sc?.name ? sc.name : id;
+      sel.appendChild(opt);
+    }
+    if (this.currentSceneId) sel.value = this.currentSceneId;
   }
 
   _applyTopBarLayoutNoOverlap() {
@@ -232,123 +305,136 @@ export default class App {
 
     const leftBase = 10;
     const gap = 10;
-    const r = btn.getBoundingClientRect();
-    const left = Math.round(leftBase + r.width + gap);
+    const btnRect = btn.getBoundingClientRect();
+    const left = Math.round(leftBase + btnRect.width + gap);
 
     bar.style.left = `${left}px`;
     bar.style.right = `10px`;
     bar.style.top = `10px`;
   }
 
-  // ---------------- VR Debug console ----------------
+  _setMenuOpen(open) {
+    this._menuOpen = !!open;
+    if (this.ui.topMenuBar) this.ui.topMenuBar.hidden = !this._menuOpen;
 
-  _setupVrDebugConsole() {
-    this._vrConsoleEl = document.createElement("a-entity");
-    this._vrConsoleEl.setAttribute("id", "vrConsole");
-    this._vrConsoleEl.setAttribute("position", "0 -0.12 -0.65");
-    this._vrConsoleEl.setAttribute("visible", "false");
-    this._vrConsoleEl.setAttribute("vr-debug-console", "");
-    this.cameraEl.appendChild(this._vrConsoleEl);
+    if (this._menuOpen) this._applyTopBarLayoutNoOverlap();
+    else if (this.ui.topMenuBar) this.ui.topMenuBar.style.left = "10px";
   }
 
-  // ---------------- VR Widget lifecycle ----------------
+  _syncTopBarTitle() {
+    const sc = this.getCurrentScene();
+    if (this.ui.titleEl) this.ui.titleEl.textContent = sc?.name ?? sc?.id ?? "—";
 
-  _ensureVrWidget() {
-    if (this._vrWidgetEl) {
-      this._vrWidgetEl.setAttribute("visible", "true");
-      if (this._vrWidgetEl.object3D) this._vrWidgetEl.object3D.visible = true;
+    if (this.ui.topTourSelect) this.ui.topTourSelect.value = this.currentTourId ?? "";
+    if (this.ui.topSceneSelect && sc?.id) this.ui.topSceneSelect.value = sc.id;
+  }
+
+  _getTourTitle(tourId) {
+    const t = this._toursById.get(tourId);
+    return t?.title ? t.title : tourId;
+  }
+
+  _getTourStartSceneId(tourId) {
+    const pack = this._scenesByTour.get(tourId);
+    return pack?.sceneOrder?.[0] ?? null;
+  }
+
+  // ============================================================
+  // ✅ Map overlay (original)
+  // ============================================================
+
+  _setupMapOverlay() {
+    const btn = this.ui.btnMap;
+    const overlay = this.ui.mapOverlay;
+    const closeBtn = this.ui.btnMapClose;
+
+    if (btn) btn.addEventListener("click", () => this.toggleMap());
+    if (closeBtn) closeBtn.addEventListener("click", () => this._setMapOpen(false));
+
+    if (overlay) {
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) this._setMapOpen(false);
+      });
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this._mapOpen) this._setMapOpen(false);
+    });
+
+    if (this.ui.mapImg) {
+      this.ui.mapImg.addEventListener("load", () => {
+        this._mapImgLoaded = true;
+        this._updateMapMarker();
+      });
+      this.ui.mapImg.addEventListener("error", () => {
+        this._mapImgLoaded = false;
+        this.toast("Falha ao carregar planta (PNG).");
+      });
+    }
+  }
+
+  toggleMap() {
+    if (!this._hasCurrentTourMap()) {
+      this.toast("Esse tour não tem planta (map_png).");
+      return;
+    }
+    this._setMapOpen(!this._mapOpen);
+  }
+
+  _setMapOpen(open) {
+    this._mapOpen = !!open;
+    if (this.ui.mapOverlay) this.ui.mapOverlay.hidden = !this._mapOpen;
+
+    if (this._mapOpen) {
+      this._ensureMapImageForTour();
+      this._updateMapMarker();
+    }
+  }
+
+  _hasCurrentTourMap() {
+    const t = this._toursById.get(this.currentTourId);
+    return !!(t?.map_png);
+  }
+
+  _ensureMapImageForTour() {
+    const t = this._toursById.get(this.currentTourId);
+    const png = (t?.map_png ?? "").toString().trim();
+    if (!png || !this.ui.mapImg) return;
+
+    if (this.ui.mapTitle) this.ui.mapTitle.textContent = `Planta Baixa — ${t?.title ?? this.currentTourId}`;
+    if (this.ui.mapImg.src && this.ui.mapImg.src.endsWith(png)) return;
+
+    this._mapImgLoaded = false;
+    this.ui.mapImg.src = png;
+  }
+
+  _updateMapAvailability() {
+    if (!this.ui.btnMap) return;
+    this.ui.btnMap.disabled = !this._hasCurrentTourMap();
+  }
+
+  _updateMapMarker() {
+    const marker = this.ui.mapMarker;
+    if (!marker) return;
+
+    const scene = this.getCurrentScene();
+    const pos = parsePercentPair(scene?.scene_map_position);
+
+    if (!this._hasCurrentTourMap() || !pos) {
+      marker.hidden = true;
       return;
     }
 
-    const el = document.createElement("a-entity");
-    el.setAttribute("id", "vrWidget");
-    el.setAttribute("visible", "true");
-    el.setAttribute("vr-widget", "");
-    this.cameraEl.appendChild(el);
-    this._vrWidgetEl = el;
-
-    const hPrev = () => void this.prevScene();
-    const hNext = () => void this.nextScene();
-    const hFov = (e) => {
-      const d = Number(e?.detail?.delta || 0);
-      this._applyFov(this._fov + d);
-      try { localStorage.setItem(LS_FOV, String(this._fov)); } catch {}
-      this._syncVrWidget();
-    };
-    const hTour = (e) => this._stepTour(Number(e?.detail?.delta || 0));
-    const hScene = (e) => this._stepScene(Number(e?.detail?.delta || 0));
-
-    el.addEventListener("vrwidget:prevscene", hPrev);
-    el.addEventListener("vrwidget:nextscene", hNext);
-    el.addEventListener("vrwidget:fovdelta", hFov);
-    el.addEventListener("vrwidget:tourstep", hTour);
-    el.addEventListener("vrwidget:scenestep", hScene);
-
-    this._vrWidgetHandlers = { hPrev, hNext, hFov, hTour, hScene };
+    marker.style.left = `${pos.x}%`;
+    marker.style.top = `${pos.y}%`;
+    marker.hidden = false;
   }
 
-  _destroyVrWidget() {
-    const el = this._vrWidgetEl;
-    if (!el) return;
+  // ============================================================
+  // ✅ Tour switching
+  // ============================================================
 
-    try {
-      const hs = this._vrWidgetHandlers;
-      if (hs) {
-        el.removeEventListener("vrwidget:prevscene", hs.hPrev);
-        el.removeEventListener("vrwidget:nextscene", hs.hNext);
-        el.removeEventListener("vrwidget:fovdelta", hs.hFov);
-        el.removeEventListener("vrwidget:tourstep", hs.hTour);
-        el.removeEventListener("vrwidget:scenestep", hs.hScene);
-      }
-    } catch {}
-
-    try { el.remove(); } catch {}
-    this._vrWidgetEl = null;
-    this._vrWidgetHandlers = null;
-  }
-
-  _syncVrWidget() {
-    const el = this._vrWidgetEl;
-    if (!el) return;
-
-    const tour = this._toursById.get(this.currentTourId);
-    const scene = this.getCurrentScene();
-
-    const hasMap = !!tour?.map_png;
-    const marker = parsePercentPair(scene?.scene_map_position);
-
-    el.emit("vrwidget:update", {
-      tourTitle: tour?.title ?? this.currentTourId ?? "—",
-      sceneTitle: scene?.name ?? scene?.id ?? "—",
-      fov: this._fov,
-      hasMap,
-      mapSrc: tour?.map_png ?? "",
-      marker: hasMap ? marker : null
-    }, false);
-  }
-
-  _stepTour(delta) {
-    const order = this._tourOrder;
-    const idx = Math.max(0, order.indexOf(this.currentTourId));
-    const next = order[(idx + delta + order.length) % order.length];
-    if (!next || next === this.currentTourId) return;
-
-    this._setCurrentTour(next);
-    const start = this._sceneOrder[0];
-    if (start) void this.goToScene(start, { tourId: next });
-  }
-
-  _stepScene(delta) {
-    const order = this._sceneOrder;
-    const idx = Math.max(0, order.indexOf(this.currentSceneId));
-    const next = order[(idx + delta + order.length) % order.length];
-    if (!next || next === this.currentSceneId) return;
-    void this.goToScene(next, { tourId: this.currentTourId });
-  }
-
-  // ---------------- Tour switching ----------------
-
-  _setCurrentTour(tourId) {
+  _setCurrentTour(tourId, { rebuildSceneSelect = true } = {}) {
     const tid = this._canonicalTourId(tourId);
     if (!tid) return false;
 
@@ -358,6 +444,12 @@ export default class App {
     this.currentTourId = tid;
     this._sceneOrder = pack.sceneOrder;
     this._sceneById = pack.sceneById;
+
+    if (rebuildSceneSelect) this._populateSceneSelect();
+    this._syncTopBarTitle();
+
+    this._updateMapAvailability();
+    if (this._mapOpen) this._ensureMapImageForTour();
 
     return true;
   }
@@ -373,7 +465,187 @@ export default class App {
     return null;
   }
 
-  // ---------------- Navigation ----------------
+  // ============================================================
+  // ✅ FOV
+  // ============================================================
+
+  _setupFov() {
+    const slider = this.ui.fovSlider;
+    const valueEl = this.ui.fovValue;
+
+    const saved = Number(localStorage.getItem(LS_FOV));
+    const initial = Number.isFinite(saved) ? saved : 80;
+
+    this.setFov(initial);
+
+    if (slider) {
+      slider.value = String(this._fov);
+      slider.addEventListener("input", () => this.setFov(Number(slider.value)));
+    }
+    if (valueEl) valueEl.textContent = String(this._fov);
+  }
+
+  setFov(fov) {
+    const v = Math.max(30, Math.min(140, Number(fov) || 80));
+    this._fov = Math.round(v);
+
+    if (this.ui.fovValue) this.ui.fovValue.textContent = String(this._fov);
+    if (this.ui.fovSlider) this.ui.fovSlider.value = String(this._fov);
+
+    try { localStorage.setItem(LS_FOV, String(this._fov)); } catch {}
+
+    if (this.cameraEl) {
+      this.cameraEl.setAttribute("camera", "fov", this._fov);
+      const cam = this.cameraEl.getObject3D("camera");
+      if (cam) { cam.fov = this._fov; cam.updateProjectionMatrix?.(); }
+    }
+  }
+
+  // ============================================================
+  // ✅ Download / cache (original)
+  // ============================================================
+
+  _setupDownloadTour() {
+    const btn = this.ui.btnDownloadTour;
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      if (this._downloadBusy) return;
+      void this._downloadCurrentTourAll();
+    });
+  }
+
+  _getPanoUrlsForTour(tourId) {
+    const pack = this._scenesByTour.get(tourId);
+    const out = [];
+    for (const id of (pack?.sceneOrder ?? [])) {
+      const sc = pack.sceneById.get(id);
+      if (sc?.pano) out.push(new URL(sc.pano, window.location.href).toString());
+    }
+    return Array.from(new Set(out));
+  }
+
+  async _downloadCurrentTourAll() {
+    const btn = this.ui.btnDownloadTour;
+    if (!btn) return;
+
+    const panoComp = this.panoEl?.components?.["stereo-top-bottom"];
+    const urls = this._getPanoUrlsForTour(this.currentTourId);
+    if (!urls.length) { this.toast("Nenhuma imagem pra baixar."); return; }
+
+    this._downloadBusy = true;
+    btn.disabled = true;
+
+    const total = urls.length;
+    let done = 0, ok = 0, fail = 0;
+
+    const controller = new AbortController();
+    this._downloadAbort = controller;
+
+    const tourLabel = this._getTourTitle(this.currentTourId);
+    const updateLabel = () => { btn.textContent = `Baixando ${done}/${total}`; };
+    updateLabel();
+
+    let cacheStore = null;
+    if ("caches" in window) {
+      try { cacheStore = await caches.open(TOUR_CACHE_NAME); } catch { cacheStore = null; }
+    }
+
+    const worker = async (url) => {
+      if (controller.signal.aborted) return;
+      try {
+        if (cacheStore) {
+          const hit = await cacheStore.match(url);
+          if (hit) { ok++; done++; updateLabel(); return; }
+        }
+
+        const res = await fetch(url, { cache: "force-cache", signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        if (cacheStore) await cacheStore.put(url, res.clone());
+        try { await panoComp?.preload?.(url); } catch {}
+
+        ok++;
+      } catch {
+        fail++;
+      } finally {
+        done++;
+        updateLabel();
+      }
+    };
+
+    const CONCURRENCY = 3;
+    const queue = [...urls];
+    const runners = Array.from({ length: CONCURRENCY }, async () => {
+      while (queue.length && !controller.signal.aborted) {
+        await worker(queue.shift());
+      }
+    });
+
+    await Promise.all(runners);
+
+    btn.textContent = "Baixar Tour Completo";
+    btn.disabled = false;
+    this._downloadBusy = false;
+    this._downloadAbort = null;
+
+    this.toast(`Download "${tourLabel}": ${ok}/${total} (falhas ${fail})`);
+  }
+
+  // ============================================================
+  // ✅ Hotspot resolution (multi-tour)
+  // ============================================================
+
+  _resolveHotspotTarget(hs) {
+    if (!hs) return null;
+
+    const rawTo = (hs.to ?? "").toString().trim();
+    const rawTour = (hs.toTour ?? "").toString().trim();
+
+    if (rawTour && rawTo) {
+      const tid = this._canonicalTourId(rawTour);
+      if (tid && this._scenesByTour.get(tid)?.sceneById?.has(rawTo)) {
+        return { tourId: tid, sceneId: rawTo };
+      }
+    }
+
+    if (rawTo) {
+      const m = rawTo.match(/^([^:\/]+)[:\/](.+)$/);
+      if (m) {
+        const tid = this._canonicalTourId(m[1]);
+        const sid = m[2];
+        if (tid && this._scenesByTour.get(tid)?.sceneById?.has(sid)) {
+          return { tourId: tid, sceneId: sid };
+        }
+      }
+    }
+
+    if (rawTo) {
+      const tid = this._canonicalTourId(rawTo);
+      if (tid) {
+        const start = this._getTourStartSceneId(tid);
+        if (start) return { tourId: tid, sceneId: start };
+      }
+    }
+
+    if (rawTo && this._sceneById.has(rawTo)) {
+      return { tourId: this.currentTourId, sceneId: rawTo };
+    }
+
+    if (!this._linkTours || !rawTo) return null;
+
+    const matches = [];
+    for (const tid of this._tourOrder) {
+      const pack = this._scenesByTour.get(tid);
+      if (pack?.sceneById?.has(rawTo)) matches.push(tid);
+    }
+    if (!matches.length) return null;
+
+    return { tourId: matches[0], sceneId: rawTo };
+  }
+
+  // ============================================================
+  // ✅ Navigation
+  // ============================================================
 
   prevScene() {
     const idx = Math.max(0, this._sceneOrder.indexOf(this.currentSceneId));
@@ -388,7 +660,7 @@ export default class App {
   }
 
   async goToScene(sceneId, opts = {}) {
-    const { fromHotspot = null } = opts;
+    const { pushHash = true, fromHotspot = null } = opts;
     const tourId = this._canonicalTourId(opts.tourId) ?? this.currentTourId ?? this._defaultTourId;
 
     if (this._isTransitioning) {
@@ -404,7 +676,28 @@ export default class App {
     this._isTransitioning = true;
     this._queuedNav = null;
 
+    const inVR = this.sceneEl.is("vr-mode");
+    const panoComp = this.panoEl?.components?.["stereo-top-bottom"];
+
+    this.hideTooltip();
+    this._setHotspotsVisible(false);
+
+    const alreadyCached = panoComp?.isCached?.(scene.pano) ?? false;
+    try { await (panoComp?.preload?.(scene.pano) ?? Promise.resolve(null)); } catch {}
+
+    if (!inVR) {
+      const fadeOutMs = alreadyCached ? 90 : 170;
+      if (this._firstPaint) this._setFade(1);
+      else await this._fadeTo(1, fadeOutMs);
+    }
+
     this.currentSceneId = sceneId;
+
+    // ✅ mantém topbar em sincronia
+    this._syncTopBarTitle();
+    if (this.ui.topSceneSelect) this.ui.topSceneSelect.value = sceneId;
+
+    if (pushHash) history.replaceState(null, "", `#${this.currentTourId}:${sceneId}`);
 
     await this._setPanoAndWait(scene.pano);
 
@@ -412,8 +705,20 @@ export default class App {
 
     this._ensureHotspotAnchor();
     this._renderHotspots(scene);
+    this._setHotspotsVisible(true);
 
-    this._syncVrWidget();
+    if (!inVR) {
+      const fadeInMs = alreadyCached ? 120 : 220;
+      await this._fadeTo(0, this._firstPaint ? 220 : fadeInMs);
+    }
+
+    this._firstPaint = false;
+    this._preloadNeighbors(scene);
+
+    this._updateMapMarker();
+
+    // ✅ update VR widget, se existir
+    this._syncVrWidgetIfExists();
 
     this._isTransitioning = false;
 
@@ -422,6 +727,11 @@ export default class App {
       this._queuedNav = null;
       await this.goToScene(q.sceneId, q.opts);
     }
+  }
+
+  _setHotspotsVisible(v) {
+    if (!this.hotspotsEl) return;
+    this.hotspotsEl.setAttribute("visible", v ? "true" : "false");
   }
 
   async _setPanoAndWait(src) {
@@ -433,6 +743,21 @@ export default class App {
       const onLoad = (e) => { if (e?.detail?.src === src) resolve(); };
       this.panoEl.addEventListener("stereo-loaded", onLoad, { once: true });
     });
+  }
+
+  _preloadNeighbors(scene) {
+    const comp = this.panoEl?.components?.["stereo-top-bottom"];
+    if (!comp?.preload) return;
+
+    const targets = new Set();
+    for (const hs of (scene.hotspots ?? [])) {
+      const target = this._resolveHotspotTarget(hs);
+      if (!target) continue;
+      const pack = this._scenesByTour.get(target.tourId);
+      const sc = pack?.sceneById?.get(target.sceneId);
+      if (sc?.pano) targets.add(sc.pano);
+    }
+    for (const pano of targets) comp.preload(pano);
   }
 
   _ensureHotspotAnchor() {
@@ -451,8 +776,7 @@ export default class App {
   }
 
   _renderHotspots(scene) {
-    if (!this.hotspotRenderer) return;
-    while (this.hotspotsEl.firstChild) this.hotspotsEl.removeChild(this.hotspotsEl.firstChild);
+    this.hotspotRenderer.clear(this.hotspotsEl);
 
     const sceneStyle = scene.hotspotStyle ?? {};
 
@@ -479,56 +803,228 @@ export default class App {
     }
   }
 
-  _applyViewForScene(_scene, _fromHotspot) {
-    // no VR ignora
+  _applyViewForScene(scene, fromHotspot) {
+    if (this.sceneEl.is("vr-mode")) return;
+
+    const yaw =
+      (fromHotspot?.toYaw ?? fromHotspot?.cameraYaw ?? null) ??
+      (scene?.yaw ?? scene?.cameraYaw ?? null);
+
+    const pitch =
+      (fromHotspot?.toPitch ?? fromHotspot?.cameraPitch ?? null) ??
+      (scene?.pitch ?? scene?.cameraPitch ?? null);
+
+    if (yaw === null && pitch === null) return;
+
+    const token = ++this._pendingViewToken;
+    const maxTries = 30;
+    let tries = 0;
+
+    const attempt = () => {
+      if (token !== this._pendingViewToken) return;
+      if (this.sceneEl.is("vr-mode")) return;
+
+      const ok = this._setCameraYawPitchOnce({
+        yaw: yaw !== null ? Number(yaw) : null,
+        pitch: pitch !== null ? Number(pitch) : null
+      });
+
+      tries++;
+      if (ok) return;
+      if (tries >= maxTries) return;
+
+      requestAnimationFrame(attempt);
+    };
+
+    requestAnimationFrame(attempt);
   }
 
-  _applyFov(fov) {
-    const v = Math.max(50, Math.min(110, Number(fov) || 80));
-    this._fov = Math.round(v);
+  _setCameraYawPitchOnce({ yaw = null, pitch = null }) {
+    const AFRAME = window.AFRAME;
+    if (!AFRAME) return false;
 
-    if (this.ui.fovSlider) this.ui.fovSlider.value = String(this._fov);
-    if (this.ui.fovValue) this.ui.fovValue.textContent = String(this._fov);
+    const THREE = AFRAME.THREE;
+    const lc = this.cameraEl?.components?.["look-controls"];
+    if (!lc?.yawObject || !lc?.pitchObject) return false;
 
-    if (this.cameraEl) {
-      this.cameraEl.setAttribute("camera", "fov", this._fov);
-      const cam = this.cameraEl.getObject3D("camera");
-      if (cam) { cam.fov = this._fov; cam.updateProjectionMatrix?.(); }
+    const startYaw = THREE.MathUtils.radToDeg(lc.yawObject.rotation.y);
+    const startPitch = THREE.MathUtils.radToDeg(lc.pitchObject.rotation.x);
+
+    const targetYaw = (yaw === null || Number.isNaN(yaw)) ? startYaw : yaw;
+    const targetPitch = (pitch === null || Number.isNaN(pitch)) ? startPitch : pitch;
+
+    const endYaw = startYaw + shortestDeltaDeg(startYaw, targetYaw);
+
+    lc.yawObject.rotation.y = THREE.MathUtils.degToRad(endYaw);
+    lc.pitchObject.rotation.x = THREE.MathUtils.degToRad(targetPitch);
+
+    return true;
+  }
+
+  _getInitialFromHash() {
+    const h = (location.hash || "").replace("#", "").trim();
+    if (!h) return null;
+
+    const m = h.match(/^([^:\/]+)[:\/](.+)$/);
+    if (m) {
+      const tid = this._canonicalTourId(m[1]);
+      const sid = m[2];
+      if (tid && this._scenesByTour.get(tid)?.sceneById?.has(sid)) return { tourId: tid, sceneId: sid };
     }
-  }
 
-  _resolveHotspotTarget(hs) {
-    if (!hs) return null;
-    const rawTo = (hs.to ?? "").toString().trim();
-    if (!rawTo) return null;
-
-    if (this._sceneById.has(rawTo)) return { tourId: this.currentTourId, sceneId: rawTo };
+    const sid = h;
+    if (this._sceneById.has(sid)) return { tourId: this.currentTourId, sceneId: sid };
 
     if (this._linkTours) {
       for (const tid of this._tourOrder) {
         const pack = this._scenesByTour.get(tid);
-        if (pack?.sceneById?.has(rawTo)) return { tourId: tid, sceneId: rawTo };
+        if (pack?.sceneById?.has(sid)) return { tourId: tid, sceneId: sid };
       }
     }
+
+    if (this._scenesByTour.get(this._defaultTourId)?.sceneById?.has(sid)) {
+      return { tourId: this._defaultTourId, sceneId: sid };
+    }
+
     return null;
   }
+
+  _createFadeOverlay() {
+    let el = document.querySelector("#sceneFade");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "sceneFade";
+      el.style.position = "fixed";
+      el.style.left = "0";
+      el.style.top = "0";
+      el.style.right = "0";
+      el.style.bottom = "0";
+      el.style.background = "#000";
+      el.style.opacity = "1";
+      el.style.pointerEvents = "none";
+      el.style.zIndex = "1200";
+      el.style.transition = "opacity 200ms ease";
+      document.body.appendChild(el);
+    }
+    this._fadeEl = el;
+  }
+
+  _setFade(alpha) {
+    if (!this._fadeEl) return;
+    this._fadeEl.style.transition = "none";
+    this._fadeEl.style.opacity = String(alpha);
+    void this._fadeEl.offsetHeight;
+    this._fadeEl.style.transition = "opacity 200ms ease";
+  }
+
+  _fadeTo(alpha, durationMs) {
+    if (!this._fadeEl) return Promise.resolve();
+    this._fadeEl.style.transition = `opacity ${durationMs}ms ease`;
+    this._fadeEl.style.opacity = String(alpha);
+
+    return new Promise((resolve) => {
+      const onEnd = () => resolve();
+      this._fadeEl.addEventListener("transitionend", onEnd, { once: true });
+      setTimeout(resolve, durationMs + 40);
+    });
+  }
+
+  showTooltip(text) {
+    if (!this._canHover) return;
+    if (this.sceneEl.is("vr-mode")) return;
+    const el = this.ui.tooltip;
+    if (!el) return;
+    el.textContent = text || "";
+    el.style.left = `${this._mouse.x}px`;
+    el.style.top = `${this._mouse.y}px`;
+    el.hidden = !text;
+  }
+
+  hideTooltip() {
+    const el = this.ui.tooltip;
+    if (!el) return;
+    el.hidden = true;
+  }
+
+  toast(msg, ms = 1800) {
+    const el = this.ui.toast;
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => (el.hidden = true), ms);
+  }
+
+  // ============================================================
+  // ✅ VR Widget lifecycle hooks (só se existir / só em VR)
+  // ============================================================
+
+  _bindXRWidgetLifecycle() {
+    const xr = this.sceneEl?.renderer?.xr;
+    if (!xr?.addEventListener) return;
+
+    const onStart = () => {
+      requestAnimationFrame(() => {
+        if (!this.sceneEl.is("vr-mode")) return;
+        // widget já pode existir por outros fluxos; aqui só sync
+        this._syncVrWidgetIfExists();
+      });
+    };
+
+    const onEnd = () => {
+      // nada obrigatório aqui (widget é gerenciado no App mais acima)
+    };
+
+    xr.addEventListener("sessionstart", onStart);
+    xr.addEventListener("sessionend", onEnd);
+  }
+
+  _syncVrWidgetIfExists() {
+    const el = this._vrWidgetEl || this.cameraEl?.querySelector?.("#vrWidget");
+    if (!el) return;
+
+    const tour = this._toursById.get(this.currentTourId);
+    const scene = this.getCurrentScene();
+
+    const hasMap = !!tour?.map_png;
+    const marker = parsePercentPair(scene?.scene_map_position);
+
+    el.emit("vrwidget:update", {
+      tourTitle: tour?.title ?? this.currentTourId ?? "—",
+      sceneTitle: scene?.name ?? scene?.id ?? "—",
+      fov: this._fov,
+      hasMap,
+      mapSrc: tour?.map_png ?? "",
+      marker: hasMap ? marker : null
+    }, false);
+  }
+}
+
+function shortestDeltaDeg(from, to) {
+  return ((to - from + 540) % 360) - 180;
 }
 
 function parsePercentPair(v) {
   if (v == null) return null;
 
   let x, y;
+
   if (typeof v === "string") {
     const parts = v.split(",").map(s => Number(String(s).trim()));
-    x = parts[0]; y = parts[1];
+    x = parts[0];
+    y = parts[1];
   } else if (Array.isArray(v)) {
-    x = Number(v[0]); y = Number(v[1]);
+    x = Number(v[0]);
+    y = Number(v[1]);
   } else if (typeof v === "object") {
-    x = Number(v.x); y = Number(v.y);
+    x = Number(v.x);
+    y = Number(v.y);
   }
 
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
   x = Math.max(0, Math.min(100, x));
   y = Math.max(0, Math.min(100, y));
+
   return { x, y };
 }
