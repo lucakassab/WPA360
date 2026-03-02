@@ -8,19 +8,23 @@ export function registerVrDebugConsole(AFRAME) {
       width: { type: "number", default: 1.15 },
       height: { type: "number", default: 0.55 },
 
-      // ✅ 600% (6x do original 0.055)
-      fontSize: { type: "number", default: 0.33 }
+      // ✅ fonte MUITO maior de verdade (só afeta o TEXTO)
+      // se ainda achar pequeno, sobe pra 1.6 ou 2.0
+      fontSize: { type: "number", default: 1.2 }
     },
 
     init() {
       this.lines = [];
       this._orig = null;
 
-      // painel
+      // painel (NÃO mexi em tamanho/escala aqui)
       const bg = document.createElement("a-plane");
       bg.setAttribute("width", this.data.width);
       bg.setAttribute("height", this.data.height);
-      bg.setAttribute("material", "color:#000; opacity:0.75; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+      bg.setAttribute(
+        "material",
+        "color:#000; opacity:0.75; transparent:true; shader:flat; depthTest:false; depthWrite:false"
+      );
       bg.setAttribute("position", "0 0 0");
       this.el.appendChild(bg);
 
@@ -32,26 +36,43 @@ export function registerVrDebugConsole(AFRAME) {
         "align:left",
         "baseline:top",
         "anchor:left",
+        // manter igual ao que tu tava usando (não é background)
         `width:${this.data.width * 1.0}`,
         `wrapCount:${Math.floor(this.data.width * 42)}`
       ].join(";"));
 
-      text.setAttribute("position", `${(-this.data.width / 2) + 0.03} ${(this.data.height / 2) - 0.04} 0.01`);
+      text.setAttribute(
+        "position",
+        `${(-this.data.width / 2) + 0.03} ${(this.data.height / 2) - 0.04} 0.01`
+      );
 
-      // ✅ aqui é “font-size” do teu sistema (escala do texto). Não mexi no background.
+      // ✅ aplica fonte AGORA
       text.setAttribute("scale", `${this.data.fontSize} ${this.data.fontSize} ${this.data.fontSize}`);
-      this.el.appendChild(text);
 
+      // ✅ e garante depois que o mesh do texto existir (A-Frame às vezes cria depois)
+      const applyScaleHard = () => {
+        if (!text.object3D) return;
+        text.object3D.scale.set(this.data.fontSize, this.data.fontSize, this.data.fontSize);
+      };
+      text.addEventListener("object3dset", applyScaleHard);
+      this.el.addEventListener("loaded", applyScaleHard);
+
+      this.el.appendChild(text);
       this._textEl = text;
 
       // botão copiar
       this._makeCopyButton();
 
-      // hooks
       this._hookConsole();
       this._hookErrors();
-
       this._append("vr_debug: ON");
+    },
+
+    update() {
+      // se mudar fontSize via atributo, reaplica
+      if (this._textEl?.object3D) {
+        this._textEl.object3D.scale.set(this.data.fontSize, this.data.fontSize, this.data.fontSize);
+      }
     },
 
     remove() {
@@ -100,23 +121,17 @@ export function registerVrDebugConsole(AFRAME) {
       label.setAttribute("scale", "0.14 0.14 0.14");
       btn.appendChild(label);
 
-      const doCopy = async () => {
+      btn.addEventListener("click", async (e) => {
+        e?.stopPropagation?.();
         try {
-          const content = this.getLogText();
-          await navigator.clipboard.writeText(content);
+          await navigator.clipboard.writeText(this.getLogText());
           this._append("OK: log copiado pro clipboard");
         } catch {
           this._append("ERR: clipboard falhou (permissão?)");
         }
-      };
-
-      btn.addEventListener("click", (e) => {
-        e?.stopPropagation?.();
-        doCopy();
       });
 
       this.el.appendChild(btn);
-      this._btnCopy = btn;
     },
 
     _hookConsole() {
