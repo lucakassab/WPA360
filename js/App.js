@@ -9,6 +9,7 @@ import HotspotRenderer from "./hotspots/HotspotRenderer.js";
 
 const LS_FOV = "tour_fov_v1";
 const LS_LINK = "tour_link_mode_v1";
+const LS_MINIMAP = "tour_minimap_v1";
 const TOUR_CACHE_NAME = "tour-full-v1";
 
 export default class App {
@@ -28,8 +29,8 @@ export default class App {
     // multi-tour store
     this._defaultTourId = null;
     this._tourOrder = [];
-    this._toursById = new Map();       // tourId -> {title, scenes[], map_png?}
-    this._scenesByTour = new Map();    // tourId -> {sceneOrder, sceneById}
+    this._toursById = new Map();
+    this._scenesByTour = new Map();
 
     // current
     this.currentTourId = null;
@@ -66,7 +67,10 @@ export default class App {
     this._mapOpen = false;
     this._mapImgLoaded = false;
 
-    // zoom/pan do mapa (aplica no WRAP)
+    // ✅ MiniMap state
+    this._miniMap = false;
+
+    // zoom/pan do mapa
     this._mapZoom = 1;
     this._mapZoomMin = 1;
     this._mapZoomMax = 6;
@@ -103,8 +107,8 @@ export default class App {
     this._toursById = data.toursById;
     this._scenesByTour = data.scenesByTour;
 
-    const savedLink = localStorage.getItem(LS_LINK);
-    this._linkTours = savedLink === "1";
+    this._linkTours = localStorage.getItem(LS_LINK) === "1";
+    this._miniMap = localStorage.getItem(LS_MINIMAP) === "1";
 
     this._setCurrentTour(this._defaultTourId, { rebuildSceneSelect: false });
 
@@ -127,7 +131,7 @@ export default class App {
       this.hideTooltip();
       if (this._fadeEl) this._fadeEl.style.opacity = "0";
       this._setMenuOpen(false);
-      this._setMapOpen(false, { updateHash: true }); // fecha e tira |Map
+      this._setMapOpen(false, { updateHash: true });
     });
 
     this.sceneEl.addEventListener("exit-vr", () => {
@@ -171,28 +175,23 @@ export default class App {
       await this.goToScene(firstScene, { tourId: this.currentTourId, pushHash: false });
     }
 
-    // garante hash consistente com estado atual (inclui |Map se aberto)
     this._syncHashWithState();
 
-    // hashchange: respeita Tour:Scene e flag Map
     window.addEventListener("hashchange", () => {
       const parsed = this._getInitialFromHash();
       if (!parsed?.tourId || !parsed?.sceneId) return;
 
       const sameScene = parsed.tourId === this.currentTourId && parsed.sceneId === this.currentSceneId;
 
-      // primeiro resolve cena (se mudou)
       if (!sameScene) {
         void this.goToScene(parsed.sceneId, { tourId: parsed.tourId, pushHash: false })
           .then(() => {
-            // depois aplica estado do mapa
             this._setMapOpen(!!parsed.mapOpen, { updateHash: false });
             this._syncHashWithState();
           });
         return;
       }
 
-      // cena igual: só toggle do mapa
       this._setMapOpen(!!parsed.mapOpen, { updateHash: false });
       this._syncHashWithState();
     });
@@ -234,18 +233,11 @@ export default class App {
     const raw = (location.hash || "").replace("#", "").trim();
     if (!raw) return null;
 
-    // aceita:
-    //  - Tour:Scene|Map
-    //  - Tour:Scene
-    //  - Scene|Map  (fallback se alguém colar assim e tiver linkTours)
-    //  - Scene
     const parts = raw.split("|").map(s => s.trim()).filter(Boolean);
     const mapOpen = parts.some(p => p.toLowerCase() === "map");
-
     const base = parts.find(p => p.toLowerCase() !== "map") || "";
     if (!base) return null;
 
-    // Tour:Scene
     const m = base.match(/^([^:\/]+)[:\/](.+)$/);
     if (m) {
       const tid = this._canonicalTourId(m[1]);
@@ -255,11 +247,9 @@ export default class App {
       }
     }
 
-    // só SceneId (tenta no tour atual)
     const sid = base;
     if (this._sceneById.has(sid)) return { tourId: this.currentTourId, sceneId: sid, mapOpen };
 
-    // linkTours: procura em todos
     if (this._linkTours) {
       for (const tid of this._tourOrder) {
         const pack = this._scenesByTour.get(tid);
@@ -267,7 +257,6 @@ export default class App {
       }
     }
 
-    // fallback: default tour
     if (this._scenesByTour.get(this._defaultTourId)?.sceneById?.has(sid)) {
       return { tourId: this._defaultTourId, sceneId: sid, mapOpen };
     }
@@ -275,7 +264,7 @@ export default class App {
     return null;
   }
 
-  // ===== Map Overlay =====
+  // ===== Map Overlay / MiniMap =====
 
   _setupMapOverlay() {
     const btn = this.ui.btnMap;
@@ -286,8 +275,16 @@ export default class App {
 
     if (closeBtn) closeBtn.addEventListener("click", () => this._setMapOpen(false));
 
+    // ✅ MiniMap toggle
+    this.ui.btnMiniMap?.addEventListener("click", () => {
+      if (!this._mapOpen) return;
+      this._setMiniMap(!this._miniMap, { persist: true });
+    });
+
     if (overlay) {
       overlay.addEventListener("click", (e) => {
+        // no MiniMap a overlay é click-through, então isso praticamente não dispara,
+        // mas manter aqui é ok pro modo full.
         if (e.target === overlay) this._setMapOpen(false);
       });
     }
@@ -307,7 +304,7 @@ export default class App {
       });
     }
 
-    // botões de zoom (se existirem no HTML)
+    // zoom buttons + wheel
     const btnIn = document.querySelector("#btnMapZoomIn");
     const btnOut = document.querySelector("#btnMapZoomOut");
     const btnReset = document.querySelector("#btnMapZoomReset");
@@ -334,7 +331,6 @@ export default class App {
       if (body) { body.scrollLeft = 0; body.scrollTop = 0; }
     });
 
-    // zoom com wheel (âncora no cursor)
     if (body && wrap) {
       body.addEventListener("wheel", (e) => {
         if (!this._mapOpen) return;
@@ -351,6 +347,9 @@ export default class App {
         this._setMapZoom(this._mapZoom * factor, { anchorX: cx, anchorY: cy, body, wrap });
       }, { passive: false });
     }
+
+    // aplica UI inicial do minimap (se salvo)
+    this._applyMiniMapUI();
   }
 
   toggleMap() {
@@ -369,9 +368,27 @@ export default class App {
       this._ensureMapImageForTour();
       this._resetMapZoom();
       this._updateMapMarker();
+      this._applyMiniMapUI();
     }
 
     if (updateHash) this._syncHashWithState();
+  }
+
+  _setMiniMap(on, { persist = true } = {}) {
+    this._miniMap = !!on;
+    if (persist) {
+      try { localStorage.setItem(LS_MINIMAP, this._miniMap ? "1" : "0"); } catch {}
+    }
+    this._applyMiniMapUI();
+  }
+
+  _applyMiniMapUI() {
+    const overlay = this.ui.mapOverlay;
+    if (overlay) overlay.classList.toggle("minimap", this._miniMap);
+
+    if (this.ui.btnMiniMap) {
+      this.ui.btnMiniMap.textContent = this._miniMap ? "Expandir" : "MiniMap";
+    }
   }
 
   _hasCurrentTourMap() {
@@ -385,7 +402,6 @@ export default class App {
     if (!png || !this.ui.mapImg) return;
 
     if (this.ui.mapTitle) this.ui.mapTitle.textContent = `Planta Baixa — ${t?.title ?? this.currentTourId}`;
-
     if (this.ui.mapImg.src && this.ui.mapImg.src.endsWith(png)) return;
 
     this._mapImgLoaded = false;
@@ -433,7 +449,7 @@ export default class App {
       const newScrollTop  = anchorY * ratio - (anchorY - body.scrollTop);
 
       body.scrollLeft = newScrollLeft;
-      body.scrollTop = newScrollTop;
+      body.scrollTop  = newScrollTop;
     }
   }
 
@@ -617,7 +633,7 @@ export default class App {
     }
   }
 
-  // ===== Download / Cache (tour atual) =====
+  // ===== Download / Cache =====
 
   _setupDownloadTour() {
     const btn = this.ui.btnDownloadTour;
@@ -705,7 +721,7 @@ export default class App {
     this.toast(`Download "${tourLabel}": ${ok}/${total} (falhas ${fail})`);
   }
 
-  // ===== Hotspot resolution (multi-tour) =====
+  // ===== Hotspot target resolve =====
 
   _resolveHotspotTarget(hs) {
     if (!hs) return null;
@@ -745,14 +761,12 @@ export default class App {
 
     if (!this._linkTours || !rawTo) return null;
 
-    const matches = [];
     for (const tid of this._tourOrder) {
       const pack = this._scenesByTour.get(tid);
-      if (pack?.sceneById?.has(rawTo)) matches.push(tid);
+      if (pack?.sceneById?.has(rawTo)) return { tourId: tid, sceneId: rawTo };
     }
-    if (!matches.length) return null;
 
-    return { tourId: matches[0], sceneId: rawTo };
+    return null;
   }
 
   // ===== Navigation =====
@@ -804,7 +818,7 @@ export default class App {
     this.currentSceneId = sceneId;
     this._syncTopBarTitle();
 
-    if (pushHash) this._syncHashWithState(); // ✅ inclui |Map se estiver aberto
+    if (pushHash) this._syncHashWithState();
 
     await this._setPanoAndWait(scene.pano);
 
