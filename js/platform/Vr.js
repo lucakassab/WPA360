@@ -145,6 +145,39 @@ export default class VR {
     this._unsubs.push(() => this.app.sceneEl?.removeEventListener("enter-vr", onEnter));
   }
 
+  _forceDisableFoveation() {
+    try {
+      const renderer = this.app.sceneEl?.renderer;
+      const session = renderer?.xr?.getSession?.();
+      if (!renderer || !session) return;
+  
+      // 1) three.js helper (quando disponível)
+      try { renderer.xr.setFoveation?.(0); } catch {}
+  
+      // 2) WebXR layer (Meta/Oculus Browser costuma suportar)
+      const rs = session.renderState;
+  
+      // baseLayer (XRWebGLLayer)
+      const base = rs?.baseLayer;
+      if (base && base.fixedFoveation != null) {
+        base.fixedFoveation = 0; // 0 = mínimo/Off :contentReference[oaicite:6]{index=6}
+      }
+  
+      // layers API (XRProjectionLayer)
+      const layers = rs?.layers;
+      if (Array.isArray(layers)) {
+        for (const layer of layers) {
+          if (layer && layer.fixedFoveation != null) layer.fixedFoveation = 0; :contentReference[oaicite:7]{index=7}
+        }
+      }
+  
+      console.log("[VR] FFR forced OFF (fixedFoveation=0)");
+    } catch (e) {
+      console.warn("[VR] failed to force foveation off", e);
+    }
+  }
+
+  
   _startPolling() {
     if (this._running) return;
     const session = this._session;
