@@ -18,7 +18,6 @@ export function registerStereoTopBottom(AFRAME) {
 
   function trimCache() {
     if (cache.size <= MAX_CACHE) return;
-
     const entries = Array.from(cache.entries())
       .filter(([, v]) => v?.tex)
       .sort((a, b) => (a[1].lastUsed ?? 0) - (b[1].lastUsed ?? 0));
@@ -34,9 +33,7 @@ export function registerStereoTopBottom(AFRAME) {
     try {
       const r = sceneEl?.renderer;
       return r?.capabilities?.getMaxAnisotropy?.() ?? 0;
-    } catch {
-      return 0;
-    }
+    } catch { return 0; }
   }
 
   function loadTextureCached(url, sceneEl) {
@@ -93,9 +90,7 @@ export function registerStereoTopBottom(AFRAME) {
       segmentsHeight: { type: "int", default: 32 },
       flipX: { type: "boolean", default: true },
 
-      // ✅ corrige olho invertido (teu caso): true = troca left/right
-      // padrão comum em top/bottom: top=left, bottom=right :contentReference[oaicite:1]{index=1}
-      // como tu tá vendo invertido, deixei true por default.
+      // ✅ teu caso: olhos invertidos -> default true
       swapEyes: { type: "boolean", default: true }
     },
 
@@ -112,6 +107,11 @@ export function registerStereoTopBottom(AFRAME) {
         try { return await loadTextureCached(url, this.el.sceneEl); } catch { return null; }
       };
       this.isCached = (src) => isCached(src);
+
+      // helpers pra eye detect
+      this._tmpInv = new THREE.Matrix4();
+      this._tmpPos = new THREE.Vector3();
+      this._tmpPos2 = new THREE.Vector3();
 
       if (this.data.src) this._setSrcInternal(this.data.src);
     },
@@ -177,10 +177,7 @@ export function registerStereoTopBottom(AFRAME) {
 
             if (uFlipX > 0.5) uv.x = 1.0 - uv.x;
 
-            // top/bottom: sempre metade vertical
             uv.y = uv.y * 0.5;
-
-            // VR: escolhe metade por olho
             if (uStereo > 0.5) {
               uv.y += 0.5 * uEye;
             }
@@ -218,18 +215,40 @@ export function registerStereoTopBottom(AFRAME) {
 
         const baseCam = sceneEl.camera;
         const xrCam = renderer.xr?.getCamera?.(baseCam);
-        const left = xrCam?.cameras?.[0];
-        const right = xrCam?.cameras?.[1];
 
-        // olho padrão: left=0, right=1
-        let eye = 0.0;
-        if (left && camera === left) eye = 0.0;
-        else if (right && camera === right) eye = 1.0;
+        // fallback
+        let eyeIdx = 0.0;
 
-        // ✅ swap (corrige inversão)
-        if (this.data.swapEyes) eye = 1.0 - eye;
+        // ✅ robusto: decide left/right pelo offset X no espaço do baseCam
+        const cams = xrCam?.cameras;
+        if (Array.isArray(cams) && cams.length >= 2 && baseCam) {
+          // inv(baseCamWorld)
+          this._tmpInv.copy(baseCam.matrixWorld).invert();
 
-        this.material.uniforms.uEye.value = eye;
+          const c0 = cams[0];
+          const c1 = cams[1];
+
+          this._tmpPos.setFromMatrixPosition(c0.matrixWorld).applyMatrix4(this._tmpInv);
+          this._tmpPos2.setFromMatrixPosition(c1.matrixWorld).applyMatrix4(this._tmpInv);
+
+          const c0IsLeft = this._tmpPos.x < this._tmpPos2.x;
+
+          const leftCam = c0IsLeft ? c0 : c1;
+          const rightCam = c0IsLeft ? c1 : c0;
+
+          if (camera === leftCam) eyeIdx = 0.0;
+          else if (camera === rightCam) eyeIdx = 1.0;
+          else {
+            // se o camera não bate por referência, usa o x dele também
+            const p = this._tmpPos.setFromMatrixPosition(camera.matrixWorld).applyMatrix4(this._tmpInv);
+            eyeIdx = (p.x < 0) ? 0.0 : 1.0;
+          }
+        }
+
+        // ✅ aplica swap (corrige inversão dos teus assets)
+        if (this.data.swapEyes) eyeIdx = 1.0 - eyeIdx;
+
+        this.material.uniforms.uEye.value = eyeIdx;
       };
     },
 
