@@ -7,7 +7,7 @@ export function registerVrDebugConsole(AFRAME) {
       maxLines: { type: "int", default: 14 },
 
       // ✅ painel menor (não invade lateral)
-      width: { type: "number", default: 1.10 },
+      width: { type: "number", default: 0.60 },
       height: { type: "number", default: 0.55 },
 
       // ✅ fonte MUITO maior (isso aqui é o que manda de verdade)
