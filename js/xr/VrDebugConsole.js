@@ -7,8 +7,9 @@ export function registerVrDebugConsole(AFRAME) {
       maxLines: { type: "int", default: 18 },
       width: { type: "number", default: 1.15 },
       height: { type: "number", default: 0.55 },
-      // tua fonte (já tava tunada)
-      fontSize: { type: "number", default: 0.8 }
+
+      // ✅ 600% (6x do original 0.055)
+      fontSize: { type: "number", default: 0.33 }
     },
 
     init() {
@@ -31,24 +32,19 @@ export function registerVrDebugConsole(AFRAME) {
         "align:left",
         "baseline:top",
         "anchor:left",
-        `width:${this.data.width * 1.0}`,          // menor = letra não “encolhe”
+        `width:${this.data.width * 1.0}`,
         `wrapCount:${Math.floor(this.data.width * 42)}`
       ].join(";"));
 
-      text.setAttribute(
-        "position",
-        `${(-this.data.width / 2) + 0.03} ${(this.data.height / 2) - 0.04} 0.01`
-      );
+      text.setAttribute("position", `${(-this.data.width / 2) + 0.03} ${(this.data.height / 2) - 0.04} 0.01`);
 
-      text.setAttribute(
-        "scale",
-        `${this.data.fontSize} ${this.data.fontSize} ${this.data.fontSize}`
-      );
-
+      // ✅ aqui é “font-size” do teu sistema (escala do texto). Não mexi no background.
+      text.setAttribute("scale", `${this.data.fontSize} ${this.data.fontSize} ${this.data.fontSize}`);
       this.el.appendChild(text);
+
       this._textEl = text;
 
-      // ✅ Botão "Copy Log to Clipboard"
+      // botão copiar
       this._makeCopyButton();
 
       // hooks
@@ -63,12 +59,10 @@ export function registerVrDebugConsole(AFRAME) {
       this._unhookErrors();
     },
 
-    // --- API pública (usada pelo VR.js) ---
     getLogText() {
       return this.lines.join("\n");
     },
 
-    // --- internals ---
     _append(msg) {
       const s = String(msg ?? "");
       const stamped = `[${new Date().toLocaleTimeString()}] ${s}`;
@@ -87,7 +81,7 @@ export function registerVrDebugConsole(AFRAME) {
       const h = 0.12;
 
       const btn = document.createElement("a-plane");
-      btn.classList.add("clickable"); // ✅ importante pro raycaster pegar
+      btn.classList.add("clickable");
       btn.setAttribute("width", w);
       btn.setAttribute("height", h);
       btn.setAttribute("position", `0 ${(-this.data.height / 2) + 0.10} 0.012`);
@@ -111,7 +105,7 @@ export function registerVrDebugConsole(AFRAME) {
           const content = this.getLogText();
           await navigator.clipboard.writeText(content);
           this._append("OK: log copiado pro clipboard");
-        } catch (e) {
+        } catch {
           this._append("ERR: clipboard falhou (permissão?)");
         }
       };
@@ -128,12 +122,7 @@ export function registerVrDebugConsole(AFRAME) {
     _hookConsole() {
       if (this._orig) return;
 
-      this._orig = {
-        log: console.log,
-        warn: console.warn,
-        error: console.error
-      };
-
+      this._orig = { log: console.log, warn: console.warn, error: console.error };
       console.log = (...a) => { this._orig.log(...a); this._append(a.join(" ")); };
       console.warn = (...a) => { this._orig.warn(...a); this._append("WARN: " + a.join(" ")); };
       console.error = (...a) => { this._orig.error(...a); this._append("ERR: " + a.join(" ")); };
