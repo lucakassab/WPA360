@@ -8,7 +8,7 @@
         {
           "id": "Apartamento_Col_1_Studio",
           "name": "Apartamento_Col_1_Studio",
-          "pano": "./assets/Panoramas/Coluna_1/APARTAMENTO_COLUNA_01_Studio.jpg",
+          "pano": "./assets/panoramas/Coluna_1/APARTAMENTO_COLUNA_01_Studio.jpg",
           "scene_map_position": "70,66",
           "yawOffset": 0,
           "pitchOffset": 0,
