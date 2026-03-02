@@ -1,3 +1,4 @@
+// js/App.js
 import { loadTours } from "./tour/TourLoader.js";
 import {
   applySceneOffsets,
@@ -28,8 +29,8 @@ export default class App {
     // multi-tour store
     this._defaultTourId = null;
     this._tourOrder = [];
-    this._toursById = new Map();       // tourId -> {title, scenes[], map_png?}
-    this._scenesByTour = new Map();    // tourId -> {sceneOrder, sceneById}
+    this._toursById = new Map();
+    this._scenesByTour = new Map();
 
     // current
     this.currentTourId = null;
@@ -66,9 +67,14 @@ export default class App {
     this._mapOpen = false;
     this._mapImgLoaded = false;
 
-    // ✅ VR widget (só existe dentro da sessão imersiva)
+    // ✅ VR stuff
+    this._vrDebugEnabled = false;
+    this._vrConsoleEl = null;
+
     this._vrWidgetEl = null;
     this._vrWidgetHandlers = null;
+
+    this._xrUnsub = null;
   }
 
   on(type, handler) { this._events.addEventListener(type, handler); }
@@ -88,7 +94,7 @@ export default class App {
     return this._sceneById.get(this.currentSceneId) ?? null;
   }
 
-  async init({ debugHotspots = false } = {}) {
+  async init({ debugHotspots = false, vrDebug = false } = {}) {
     await new Promise((resolve) => {
       if (this.sceneEl.hasLoaded) return resolve();
       this.sceneEl.addEventListener("loaded", resolve, { once: true });
@@ -96,7 +102,10 @@ export default class App {
 
     this._createFadeOverlay();
 
-    // ✅ 1) carrega tours
+    // ✅ guarda flag do VR debug
+    this._vrDebugEnabled = !!vrDebug;
+
+    // carrega tours
     const data = await loadTours();
     this._defaultTourId = data.defaultTourId;
     this._tourOrder = data.tourOrder;
@@ -107,10 +116,10 @@ export default class App {
     const savedLink = localStorage.getItem(LS_LINK);
     this._linkTours = savedLink === "1";
 
-    // ✅ 2) seta tour atual
+    // seta tour atual
     this._setCurrentTour(this._defaultTourId, { rebuildSceneSelect: false });
 
-    // ✅ 3) monta UI/topbar (popula dropdowns aqui)
+    // UI/topbar
     this._setupTopBar();
     this._setupFov();
     this._setupDownloadTour();
@@ -124,18 +133,25 @@ export default class App {
       else this.sceneEl.enterVR();
     });
 
-    this.sceneEl.addEventListener("enter-vr", () => {
+    this.sceneEl.addEventListener("enter-vr", async () => {
       if (this.ui.btnVR) this.ui.btnVR.textContent = "Sair VR";
       this.emit("vr:enter");
       this.hideTooltip();
       if (this._fadeEl) this._fadeEl.style.opacity = "0";
       this._setMenuOpen(false);
       this._setMapOpen(false);
+
+      // ✅ fallback: se sessionstart demorar, garante criação
+      await this._ensureVrUiIfImmersive();
     });
 
     this.sceneEl.addEventListener("exit-vr", () => {
       if (this.ui.btnVR) this.ui.btnVR.textContent = "VR";
       this.emit("vr:exit");
+
+      // ✅ destrói tudo que é só VR
+      this._destroyVrWidget();
+      this._destroyVrConsole();
     });
 
     this._canHover = window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches ?? false;
@@ -163,7 +179,7 @@ export default class App {
       }
     });
 
-    // hash (#tour:scene ou #scene)
+    // hash
     const initial = this._getInitialFromHash();
     if (initial) {
       await this.goToScene(initial.sceneId, { tourId: initial.tourId, pushHash: false });
@@ -194,12 +210,181 @@ export default class App {
     this._updateMapAvailability();
     this._updateMapMarker();
 
-    // ✅ VR widget lifecycle (sessionstart/sessionend) – sem mexer fora do VR
-    this._bindXRWidgetLifecycle();
+    // ✅ fluxo definitivo: sessionstart/sessionend (three.js)
+    this._bindXRSessionLifecycle();
   }
 
   // ============================================================
-  // ✅ TOP BAR (Menu + dropdowns) — FIX DEFINITIVO
+  // ✅ XR lifecycle: cria/destrói widget + console no VR imersivo
+  // ============================================================
+
+  _bindXRSessionLifecycle() {
+    const xr = this.sceneEl?.renderer?.xr;
+    if (!xr?.addEventListener) return;
+
+    const onStart = async () => {
+      // espera 1 frame pro A-Frame marcar vr-mode
+      requestAnimationFrame(async () => {
+        await this._ensureVrUiIfImmersive();
+      });
+    };
+
+    const onEnd = () => {
+      this._destroyVrWidget();
+      this._destroyVrConsole();
+    };
+
+    xr.addEventListener("sessionstart", onStart);
+    xr.addEventListener("sessionend", onEnd);
+
+    this._xrUnsub = () => {
+      xr.removeEventListener("sessionstart", onStart);
+      xr.removeEventListener("sessionend", onEnd);
+    };
+  }
+
+  async _ensureVrUiIfImmersive() {
+    // só cria se A-Frame estiver em vr-mode (isso é o “imersivo” na prática)
+    if (!this.sceneEl.is("vr-mode")) return;
+
+    // garante session existe (evita criar cedo demais)
+    const session = await this._waitXRSession(2000);
+    if (!session) return;
+
+    // ✅ widget
+    this._ensureVrWidget();
+    this._syncVrWidgetIfExists();
+
+    // ✅ console (só se vrDebug true)
+    if (this._vrDebugEnabled) this._ensureVrConsole();
+  }
+
+  async _waitXRSession(timeoutMs = 2000) {
+    const start = performance.now();
+    while (performance.now() - start < timeoutMs) {
+      const s = this.sceneEl?.renderer?.xr?.getSession?.() || null;
+      if (s) return s;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return this.sceneEl?.renderer?.xr?.getSession?.() || null;
+  }
+
+  _ensureVrConsole() {
+    if (this._vrConsoleEl) {
+      this._vrConsoleEl.setAttribute("visible", "true");
+      if (this._vrConsoleEl.object3D) this._vrConsoleEl.object3D.visible = true;
+      return;
+    }
+
+    const el = document.createElement("a-entity");
+    el.setAttribute("id", "vrConsole");
+    el.setAttribute("position", "0 -0.12 -0.65");
+    el.setAttribute("visible", "true");
+    el.setAttribute("vr-debug-console", "");
+    this.cameraEl.appendChild(el);
+    this._vrConsoleEl = el;
+  }
+
+  _destroyVrConsole() {
+    if (!this._vrConsoleEl) return;
+    try { this._vrConsoleEl.remove(); } catch {}
+    this._vrConsoleEl = null;
+  }
+
+  _ensureVrWidget() {
+    if (this._vrWidgetEl) {
+      this._vrWidgetEl.setAttribute("visible", "true");
+      if (this._vrWidgetEl.object3D) this._vrWidgetEl.object3D.visible = true;
+      return;
+    }
+
+    const el = document.createElement("a-entity");
+    el.setAttribute("id", "vrWidget");
+    el.setAttribute("visible", "true");
+    el.setAttribute("vr-widget", "");
+    this.cameraEl.appendChild(el);
+    this._vrWidgetEl = el;
+
+    const hPrev = () => void this.prevScene();
+    const hNext = () => void this.nextScene();
+    const hFov = (e) => {
+      const d = Number(e?.detail?.delta || 0);
+      this.setFov(this._fov + d);
+      this._syncVrWidgetIfExists();
+    };
+    const hTour = (e) => this._stepTour(Number(e?.detail?.delta || 0));
+    const hScene = (e) => this._stepScene(Number(e?.detail?.delta || 0));
+
+    el.addEventListener("vrwidget:prevscene", hPrev);
+    el.addEventListener("vrwidget:nextscene", hNext);
+    el.addEventListener("vrwidget:fovdelta", hFov);
+    el.addEventListener("vrwidget:tourstep", hTour);
+    el.addEventListener("vrwidget:scenestep", hScene);
+
+    this._vrWidgetHandlers = { hPrev, hNext, hFov, hTour, hScene };
+  }
+
+  _destroyVrWidget() {
+    const el = this._vrWidgetEl;
+    if (!el) return;
+
+    try {
+      const hs = this._vrWidgetHandlers;
+      if (hs) {
+        el.removeEventListener("vrwidget:prevscene", hs.hPrev);
+        el.removeEventListener("vrwidget:nextscene", hs.hNext);
+        el.removeEventListener("vrwidget:fovdelta", hs.hFov);
+        el.removeEventListener("vrwidget:tourstep", hs.hTour);
+        el.removeEventListener("vrwidget:scenestep", hs.hScene);
+      }
+    } catch {}
+
+    try { el.remove(); } catch {}
+    this._vrWidgetEl = null;
+    this._vrWidgetHandlers = null;
+  }
+
+  _syncVrWidgetIfExists() {
+    const el = this._vrWidgetEl;
+    if (!el) return;
+
+    const tour = this._toursById.get(this.currentTourId);
+    const scene = this.getCurrentScene();
+
+    const hasMap = !!tour?.map_png;
+    const marker = parsePercentPair(scene?.scene_map_position);
+
+    el.emit("vrwidget:update", {
+      tourTitle: tour?.title ?? this.currentTourId ?? "—",
+      sceneTitle: scene?.name ?? scene?.id ?? "—",
+      fov: this._fov,
+      hasMap,
+      mapSrc: tour?.map_png ?? "",
+      marker: hasMap ? marker : null
+    }, false);
+  }
+
+  _stepTour(delta) {
+    const order = this._tourOrder;
+    const idx = Math.max(0, order.indexOf(this.currentTourId));
+    const next = order[(idx + delta + order.length) % order.length];
+    if (!next || next === this.currentTourId) return;
+
+    this._setCurrentTour(next);
+    const start = this._getTourStartSceneId(next);
+    if (start) void this.goToScene(start, { tourId: next });
+  }
+
+  _stepScene(delta) {
+    const order = this._sceneOrder;
+    const idx = Math.max(0, order.indexOf(this.currentSceneId));
+    const next = order[(idx + delta + order.length) % order.length];
+    if (!next || next === this.currentSceneId) return;
+    void this.goToScene(next, { tourId: this.currentTourId });
+  }
+
+  // ============================================================
+  // ✅ TOP BAR (Menu + dropdowns)
   // ============================================================
 
   _setupTopBar() {
@@ -208,13 +393,9 @@ export default class App {
 
     this._setMenuOpen(false);
 
-    // ✅ popula tour dropdown
     this._populateTourSelect();
-
-    // ✅ popula scene dropdown (do tour atual)
     this._populateSceneSelect();
 
-    // listeners
     this.ui.topTourSelect?.addEventListener("change", () => {
       const tid = this.ui.topTourSelect.value;
       if (!tid || tid === this.currentTourId) return;
@@ -230,7 +411,6 @@ export default class App {
       void this.goToScene(id, { tourId: this.currentTourId });
     });
 
-    // link toggle
     if (this.ui.linkToursToggle) {
       this.ui.linkToursToggle.checked = this._linkTours;
       this.ui.linkToursToggle.addEventListener("change", () => {
@@ -240,12 +420,9 @@ export default class App {
       });
     }
 
-    // menu show/hide
     if (btn && bar) {
       btn.addEventListener("click", () => {
         this._setMenuOpen(!this._menuOpen);
-
-        // ✅ se por algum motivo abriu sem options, repopula na hora
         if (this._menuOpen) this._ensureTopBarPopulated();
       });
 
@@ -254,7 +431,6 @@ export default class App {
       });
     }
 
-    // estado inicial
     this._syncTopBarTitle();
   }
 
@@ -265,7 +441,6 @@ export default class App {
     if (tSel && tSel.options.length === 0) this._populateTourSelect();
     if (sSel && sSel.options.length === 0) this._populateSceneSelect();
 
-    // garante selects no valor correto
     this._syncTopBarTitle();
   }
 
@@ -324,7 +499,6 @@ export default class App {
   _syncTopBarTitle() {
     const sc = this.getCurrentScene();
     if (this.ui.titleEl) this.ui.titleEl.textContent = sc?.name ?? sc?.id ?? "—";
-
     if (this.ui.topTourSelect) this.ui.topTourSelect.value = this.currentTourId ?? "";
     if (this.ui.topSceneSelect && sc?.id) this.ui.topSceneSelect.value = sc.id;
   }
@@ -340,7 +514,7 @@ export default class App {
   }
 
   // ============================================================
-  // ✅ Map overlay (original)
+  // Map overlay
   // ============================================================
 
   _setupMapOverlay() {
@@ -431,7 +605,7 @@ export default class App {
   }
 
   // ============================================================
-  // ✅ Tour switching
+  // Tour switching
   // ============================================================
 
   _setCurrentTour(tourId, { rebuildSceneSelect = true } = {}) {
@@ -466,7 +640,7 @@ export default class App {
   }
 
   // ============================================================
-  // ✅ FOV
+  // FOV
   // ============================================================
 
   _setupFov() {
@@ -499,10 +673,13 @@ export default class App {
       const cam = this.cameraEl.getObject3D("camera");
       if (cam) { cam.fov = this._fov; cam.updateProjectionMatrix?.(); }
     }
+
+    // ✅ se widget existir, atualiza
+    this._syncVrWidgetIfExists();
   }
 
   // ============================================================
-  // ✅ Download / cache (original)
+  // Download / cache
   // ============================================================
 
   _setupDownloadTour() {
@@ -592,7 +769,7 @@ export default class App {
   }
 
   // ============================================================
-  // ✅ Hotspot resolution (multi-tour)
+  // Hotspot resolution
   // ============================================================
 
   _resolveHotspotTarget(hs) {
@@ -633,18 +810,16 @@ export default class App {
 
     if (!this._linkTours || !rawTo) return null;
 
-    const matches = [];
     for (const tid of this._tourOrder) {
       const pack = this._scenesByTour.get(tid);
-      if (pack?.sceneById?.has(rawTo)) matches.push(tid);
+      if (pack?.sceneById?.has(rawTo)) return { tourId: tid, sceneId: rawTo };
     }
-    if (!matches.length) return null;
 
-    return { tourId: matches[0], sceneId: rawTo };
+    return null;
   }
 
   // ============================================================
-  // ✅ Navigation
+  // Navigation
   // ============================================================
 
   prevScene() {
@@ -692,10 +867,7 @@ export default class App {
     }
 
     this.currentSceneId = sceneId;
-
-    // ✅ mantém topbar em sincronia
     this._syncTopBarTitle();
-    if (this.ui.topSceneSelect) this.ui.topSceneSelect.value = sceneId;
 
     if (pushHash) history.replaceState(null, "", `#${this.currentTourId}:${sceneId}`);
 
@@ -717,7 +889,7 @@ export default class App {
 
     this._updateMapMarker();
 
-    // ✅ update VR widget, se existir
+    // ✅ VR widget update
     this._syncVrWidgetIfExists();
 
     this._isTransitioning = false;
@@ -953,50 +1125,6 @@ export default class App {
     el.hidden = false;
     clearTimeout(this._toastT);
     this._toastT = setTimeout(() => (el.hidden = true), ms);
-  }
-
-  // ============================================================
-  // ✅ VR Widget lifecycle hooks (só se existir / só em VR)
-  // ============================================================
-
-  _bindXRWidgetLifecycle() {
-    const xr = this.sceneEl?.renderer?.xr;
-    if (!xr?.addEventListener) return;
-
-    const onStart = () => {
-      requestAnimationFrame(() => {
-        if (!this.sceneEl.is("vr-mode")) return;
-        // widget já pode existir por outros fluxos; aqui só sync
-        this._syncVrWidgetIfExists();
-      });
-    };
-
-    const onEnd = () => {
-      // nada obrigatório aqui (widget é gerenciado no App mais acima)
-    };
-
-    xr.addEventListener("sessionstart", onStart);
-    xr.addEventListener("sessionend", onEnd);
-  }
-
-  _syncVrWidgetIfExists() {
-    const el = this._vrWidgetEl || this.cameraEl?.querySelector?.("#vrWidget");
-    if (!el) return;
-
-    const tour = this._toursById.get(this.currentTourId);
-    const scene = this.getCurrentScene();
-
-    const hasMap = !!tour?.map_png;
-    const marker = parsePercentPair(scene?.scene_map_position);
-
-    el.emit("vrwidget:update", {
-      tourTitle: tour?.title ?? this.currentTourId ?? "—",
-      sceneTitle: scene?.name ?? scene?.id ?? "—",
-      fov: this._fov,
-      hasMap,
-      mapSrc: tour?.map_png ?? "",
-      marker: hasMap ? marker : null
-    }, false);
   }
 }
 
