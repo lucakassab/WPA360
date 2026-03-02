@@ -1,3 +1,5 @@
+// js/platform/VR.js
+
 export default class VR {
   init(app) {
     this.app = app;
@@ -26,6 +28,26 @@ export default class VR {
 
     app.leftHandEl.setAttribute("line", "opacity: 0.7");
     app.rightHandEl.setAttribute("line", "opacity: 0.7");
+
+    // ✅ boost de qualidade no WebXR (Quest 3)
+    this._applyVrQualityBoost();
+  }
+
+  _applyVrQualityBoost() {
+    const sceneEl = this.app.sceneEl;
+    const renderer = sceneEl?.renderer;
+    if (!renderer?.xr) return;
+
+    try {
+      // 0 = sem foveation (mais nítido), 1 = mais foveation (mais performance)
+      renderer.xr.setFoveation?.(0);
+    } catch {}
+
+    try {
+      // Ajuste fino: 1.2~1.4 costuma ficar bonito no Quest 3.
+      // Se pesar demais, baixa pra 1.1.
+      renderer.xr.setFramebufferScaleFactor?.(1.25);
+    } catch {}
   }
 
   dispose() {
@@ -41,5 +63,7 @@ export default class VR {
     this.app.rightHandEl.removeAttribute("raycaster");
     this.app.leftHandEl.removeAttribute("line");
     this.app.rightHandEl.removeAttribute("line");
+
+    // (opcional) poderia restaurar foveation/scale aqui, mas como só afeta VR, tá ok.
   }
 }
