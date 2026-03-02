@@ -11,7 +11,7 @@ export function registerVrDebugConsole(AFRAME) {
       height: { type: "number", default: 0.55 },
 
       // ✅ fonte MUITO maior (isso aqui é o que manda de verdade)
-      fontScale: { type: "number", default: 0.34 },
+      fontScale: { type: "number", default: 0.40 },
 
       // ✅ texto com largura menor pra não “encolher” automaticamente
       textWidth: { type: "number", default: 1.05 },
