@@ -7,7 +7,7 @@ export function registerVrDebugConsole(AFRAME) {
       maxLines: { type: "int", default: 18 },
       width: { type: "number", default: 1.15 },
       height: { type: "number", default: 0.55 },
-      // 🔥 250% maior (2.5x)
+      // tua fonte (já tava tunada)
       fontSize: { type: "number", default: 0.1375 }
     },
 
@@ -31,8 +31,8 @@ export function registerVrDebugConsole(AFRAME) {
         "align:left",
         "baseline:top",
         "anchor:left",
-        `width:${this.data.width * 1.8}`,
-        `wrapCount:${Math.floor(this.data.width * 30)}`
+        `width:${this.data.width * 1.0}`,          // menor = letra não “encolhe”
+        `wrapCount:${Math.floor(this.data.width * 42)}`
       ].join(";"));
 
       text.setAttribute(
@@ -48,6 +48,10 @@ export function registerVrDebugConsole(AFRAME) {
       this.el.appendChild(text);
       this._textEl = text;
 
+      // ✅ Botão "Copy Log to Clipboard"
+      this._makeCopyButton();
+
+      // hooks
       this._hookConsole();
       this._hookErrors();
 
@@ -59,6 +63,12 @@ export function registerVrDebugConsole(AFRAME) {
       this._unhookErrors();
     },
 
+    // --- API pública (usada pelo VR.js) ---
+    getLogText() {
+      return this.lines.join("\n");
+    },
+
+    // --- internals ---
     _append(msg) {
       const s = String(msg ?? "");
       const stamped = `[${new Date().toLocaleTimeString()}] ${s}`;
@@ -70,6 +80,49 @@ export function registerVrDebugConsole(AFRAME) {
     _render() {
       if (!this._textEl) return;
       this._textEl.setAttribute("text", "value", this.lines.join("\n"));
+    },
+
+    _makeCopyButton() {
+      const w = Math.min(0.70, this.data.width - 0.10);
+      const h = 0.12;
+
+      const btn = document.createElement("a-plane");
+      btn.classList.add("clickable"); // ✅ importante pro raycaster pegar
+      btn.setAttribute("width", w);
+      btn.setAttribute("height", h);
+      btn.setAttribute("position", `0 ${(-this.data.height / 2) + 0.10} 0.012`);
+      btn.setAttribute("material", "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+
+      const label = document.createElement("a-entity");
+      label.setAttribute("text", [
+        "value:Copy Log to Clipboard",
+        "color:#fff",
+        "align:center",
+        "baseline:center",
+        "anchor:center",
+        "width:1.8"
+      ].join(";"));
+      label.setAttribute("position", "0 0 0.01");
+      label.setAttribute("scale", "0.14 0.14 0.14");
+      btn.appendChild(label);
+
+      const doCopy = async () => {
+        try {
+          const content = this.getLogText();
+          await navigator.clipboard.writeText(content);
+          this._append("OK: log copiado pro clipboard");
+        } catch (e) {
+          this._append("ERR: clipboard falhou (permissão?)");
+        }
+      };
+
+      btn.addEventListener("click", (e) => {
+        e?.stopPropagation?.();
+        doCopy();
+      });
+
+      this.el.appendChild(btn);
+      this._btnCopy = btn;
     },
 
     _hookConsole() {
