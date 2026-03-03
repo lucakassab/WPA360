@@ -18,7 +18,7 @@ export function registerVrWidget(AFRAME) {
     },
 
     init() {
-      const baseDist = this.data.distance * 1.30;
+      const baseDist = this.data.distance * 2.20;
 
       this.RO = { BG: 900, PANEL: 1000, BTN: 1000, TXT: 1100, MARK: 1200 };
       this.Z  = { BG: 0.00, BTN: 0.02, TXT: 0.06, PANEL: 0.03, MARK: 0.095 };
