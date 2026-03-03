@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v6";
 const SHELL_CACHE = `shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `runtime-${CACHE_VERSION}`;
 
@@ -18,8 +18,8 @@ const APP_SHELL = [
   "./js/platform/VR.js",
 
   "./js/xr/StereoTopBottom.js",
-  "./js/xr/vr_widget.js",        // ✅ NOVO
-
+  "./js/xr/vr_widget.js",
+  "./js/xr/vr_widget_view.js",
   "./js/tour/TourLoader.js",
   "./js/tour/tours.json",
   "./js/tour/HotspotPlacement.js",
