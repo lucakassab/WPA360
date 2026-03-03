@@ -10,7 +10,6 @@ export function registerVrWidget(AFRAME) {
       mapHeight: { type: "number", default: 0.46 },
       uiScale: { type: "number", default: 1.0 },
 
-      // Texto: escala estável (não gigante pra não invadir layout)
       titleScale: { type: "number", default: 0.26 },
       textScale: { type: "number", default: 0.18 },
       btnTextScale: { type: "number", default: 0.18 }
@@ -33,7 +32,7 @@ export function registerVrWidget(AFRAME) {
         mapVisible: false,
         mapZoom: 1.0,
 
-        dropdown: null // "tour" | "scene" | null
+        dropdown: null
       };
 
       this._buildUI();
@@ -49,7 +48,7 @@ export function registerVrWidget(AFRAME) {
       const w = this.data.width;
       const h = this.data.height;
 
-      // Layers (Z): espaçados pra evitar z-fighting
+      // Layers (Z)
       this.Z = {
         BG: 0.00,
         BTN: 0.05,
@@ -60,7 +59,7 @@ export function registerVrWidget(AFRAME) {
         MAP_TXT: 0.17
       };
 
-      // Grid config (linhas fixas e espaçamento)
+      // Grid basics
       this.L = {
         padX: 0.06,
         topY: h / 2,
@@ -85,7 +84,8 @@ export function registerVrWidget(AFRAME) {
       const yTitle = this.L.topY - 0.09;
       const yRow1 = yTitle - this.L.rowGap;
       const yRow2 = yRow1 - this.L.rowGap;
-      const yPanelTop = yRow2 - 0.04;
+      const yRow2b = yRow2 - 0.105; // mini-linha do FOV text
+      const yPanelTop = yRow2b - 0.02;
 
       // Title
       this.titleEl = this._makeText({
@@ -99,11 +99,10 @@ export function registerVrWidget(AFRAME) {
         scale: this.data.titleScale
       });
 
-      // === Row 1: Tour / Scene dropdown triggers + values ===
+      // === Row 1: Tour/Scene triggers + values (fixos, sem overlap) ===
       const leftX = (-w / 2) + this.L.padX;
       const rightX = (w / 2) - this.L.padX;
 
-      // Botões fixos nas bordas
       this.btnTourDrop = this._makeButton({
         label: "Tour",
         x: leftX + 0.14,
@@ -122,7 +121,6 @@ export function registerVrWidget(AFRAME) {
         h: this.L.rowH
       });
 
-      // Textos de valor (ficam no miolo, sem invadir botões)
       this.tourValueText = this._makeText({
         value: "—",
         x: leftX + 0.48,
@@ -148,37 +146,62 @@ export function registerVrWidget(AFRAME) {
       this._onClick(this.btnTourDrop, () => this._toggleDropdown("tour"));
       this._onClick(this.btnSceneDrop, () => this._toggleDropdown("scene"));
 
-      // === Row 2: Prev / Next / Map / FOV - / FOV + / FOV text ===
-      this.btnPrev = this._makeButton({ label: "Prev", x: leftX + 0.12, y: yRow2, z: this.Z.BTN, w: 0.22, h: this.L.rowH });
-      this.btnNext = this._makeButton({ label: "Next", x: leftX + 0.36, y: yRow2, z: this.Z.BTN, w: 0.22, h: this.L.rowH });
-      this.btnMap  = this._makeButton({ label: "Map",  x: leftX + 0.60, y: yRow2, z: this.Z.BTN, w: 0.20, h: this.L.rowH });
+      // === Row 2: layout automático (SEM OVERLAP) ===
+      // itens com larguras desejadas
+      const row2Items = [
+        { key: "prev", label: "Prev", w: 0.22, onClick: () => this._emit("vrwidget:prevscene", {}) },
+        { key: "next", label: "Next", w: 0.22, onClick: () => this._emit("vrwidget:nextscene", {}) },
+        { key: "map",  label: "Map",  w: 0.20, onClick: () => this._toggleMapVisible() },
+        { key: "fovm", label: "FOV-", w: 0.18, onClick: () => this._emit("vrwidget:fovdelta", { delta: -5 }) },
+        { key: "fovp", label: "FOV+", w: 0.18, onClick: () => this._emit("vrwidget:fovdelta", { delta: +5 }) }
+      ];
 
-      this.btnFovMinus = this._makeButton({ label: "FOV-", x: rightX - 0.58, y: yRow2, z: this.Z.BTN, w: 0.18, h: this.L.rowH });
-      this.btnFovPlus  = this._makeButton({ label: "FOV+", x: rightX - 0.38, y: yRow2, z: this.Z.BTN, w: 0.18, h: this.L.rowH });
-
-      this.fovText = this._makeText({
-        value: "FOV 80",
-        x: rightX - 0.14,
-        y: yRow2,
-        z: this.Z.TXT,
-        width: 1.8,
-        wrapCount: 12,
-        align: "left",
-        scale: this.data.textScale
+      const placements = layoutRow(row2Items.map(i => i.w), {
+        left: (-w / 2) + this.L.padX,
+        right: (w / 2) - this.L.padX,
+        minGap: 0.02
       });
 
-      this._onClick(this.btnPrev, () => this._emit("vrwidget:prevscene", {}));
-      this._onClick(this.btnNext, () => this._emit("vrwidget:nextscene", {}));
-      this._onClick(this.btnFovMinus, () => this._emit("vrwidget:fovdelta", { delta: -5 }));
-      this._onClick(this.btnFovPlus,  () => this._emit("vrwidget:fovdelta", { delta: +5 }));
-      this._onClick(this.btnMap, () => this._toggleMapVisible());
+      // cria botões já posicionados
+      for (let i = 0; i < row2Items.length; i++) {
+        const it = row2Items[i];
+        const p = placements[i];
+
+        const btn = this._makeButton({
+          label: it.label,
+          x: p.x,
+          y: yRow2,
+          z: this.Z.BTN,
+          w: p.w,
+          h: this.L.rowH
+        });
+
+        this._onClick(btn, it.onClick);
+
+        if (it.key === "prev") this.btnPrev = btn;
+        if (it.key === "next") this.btnNext = btn;
+        if (it.key === "map")  this.btnMap = btn;
+        if (it.key === "fovm") this.btnFovMinus = btn;
+        if (it.key === "fovp") this.btnFovPlus = btn;
+      }
+
+      // FOV text em mini-linha abaixo (não briga com botões nunca)
+      this.fovText = this._makeText({
+        value: "FOV 80",
+        x: (w / 2) - this.L.padX - 0.22,
+        y: yRow2b,
+        z: this.Z.TXT,
+        width: 2.0,
+        wrapCount: 14,
+        align: "right",
+        scale: this.data.textScale
+      });
 
       // ==================== Dropdown Panel ====================
       this.dropdownPanel = document.createElement("a-entity");
       this.dropdownPanel.setAttribute("visible", "false");
       this.dropdownPanel.setAttribute("position", `0 ${yPanelTop} ${this.Z.PANEL}`);
       this.el.appendChild(this.dropdownPanel);
-
       this._buildDropdownPanel();
 
       // ==================== Map Panel ====================
@@ -191,13 +214,11 @@ export function registerVrWidget(AFRAME) {
     },
 
     _buildDropdownPanel() {
-      // clear
       while (this.dropdownPanel.firstChild) this.dropdownPanel.removeChild(this.dropdownPanel.firstChild);
 
       const w = this.data.width - 0.10;
       const h = 0.52;
 
-      // background
       this.ddBg = document.createElement("a-plane");
       this.ddBg.setAttribute("width", w);
       this.ddBg.setAttribute("height", h);
@@ -206,7 +227,6 @@ export function registerVrWidget(AFRAME) {
       this.ddBg.setAttribute("render-on-top", "");
       this.dropdownPanel.appendChild(this.ddBg);
 
-      // title
       this.dropdownTitle = this._makeText({
         value: "Select",
         x: (-w/2) + 0.12,
@@ -219,12 +239,10 @@ export function registerVrWidget(AFRAME) {
         parent: this.dropdownPanel
       });
 
-      // list container
       this.dropdownList = document.createElement("a-entity");
       this.dropdownList.setAttribute("position", `0 -0.14 ${this.Z.PANEL_TXT}`);
       this.dropdownPanel.appendChild(this.dropdownList);
 
-      // close
       const btnClose = this._makeButton({
         label: "Close",
         x: (w/2) - 0.16,
@@ -260,8 +278,8 @@ export function registerVrWidget(AFRAME) {
       this.markerEl.setAttribute("render-on-top", "");
       this.mapGroup.appendChild(this.markerEl);
 
-      // zoom buttons (embaixo do mapa)
       const yBtns = -mapH - 0.10;
+
       this.btnZoomOut = this._makeButton({ label: "Zoom-", x: -0.22, y: yBtns, z: this.Z.MAP_TXT, w: 0.22, h: 0.11, parent: this.mapGroup });
       this.btnZoomIn  = this._makeButton({ label: "Zoom+", x: +0.02, y: yBtns, z: this.Z.MAP_TXT, w: 0.22, h: 0.11, parent: this.mapGroup });
       this.btnZoomReset = this._makeButton({ label: "Reset", x: +0.28, y: yBtns, z: this.Z.MAP_TXT, w: 0.18, h: 0.11, parent: this.mapGroup });
@@ -289,7 +307,6 @@ export function registerVrWidget(AFRAME) {
       if (d.mapSrc != null) this.state.mapSrc = String(d.mapSrc || "");
       if (d.marker != null) this.state.marker = d.marker;
 
-      // ✅ truncar pra não invadir (VR wrap é zoado)
       const tourLabel = truncateOneLine(this.state.tourTitle || "—", 28);
       const sceneLabel = truncateOneLine(this.state.sceneTitle || "—", 28);
 
@@ -298,10 +315,8 @@ export function registerVrWidget(AFRAME) {
       this.sceneValueText?.setAttribute("text", "value", sceneLabel);
       this.fovText?.setAttribute("text", "value", `FOV ${this.state.fov}`);
 
-      // map button visual
       if (this.btnMap) this.btnMap.setAttribute("material", "color", this.state.hasMap ? "#111" : "#330");
 
-      // map texture
       if (this.mapPlane && this.state.mapSrc) {
         this.mapPlane.setAttribute(
           "material",
@@ -309,22 +324,16 @@ export function registerVrWidget(AFRAME) {
         );
       }
 
-      // marker
       this._applyMarker(this.state.hasMap ? this.state.marker : null);
 
-      // se não tem map, fecha map
       if (!this.state.hasMap) this._setMapVisible(false);
-
-      // se dropdown tá aberto, rerender
       if (this.state.dropdown) this._renderDropdownList();
     },
 
     // ============================ DROPDOWNS ============================
 
     _toggleDropdown(kind) {
-      // abrir dropdown fecha map pra evitar sobreposição
       if (this.state.mapVisible) this._setMapVisible(false);
-
       if (this.state.dropdown === kind) this._setDropdown(null);
       else this._setDropdown(kind);
     },
@@ -344,7 +353,6 @@ export function registerVrWidget(AFRAME) {
       const items = (kind === "tour") ? this.state.tourList : this.state.sceneList;
       this.dropdownTitle?.setAttribute("text", "value", kind === "tour" ? "Select Tour" : "Select Scene");
 
-      // Layout 2 colunas x 6 linhas (12 itens)
       const panelW = this.data.width - 0.18;
       const colW = (panelW - 0.06) / 2;
       const colX = [-colW/2 - 0.03, colW/2 + 0.03];
@@ -394,10 +402,7 @@ export function registerVrWidget(AFRAME) {
 
     _toggleMapVisible() {
       if (!this.state.hasMap) return;
-
-      // abrir map fecha dropdown pra evitar sobreposição
       if (this.state.dropdown) this._setDropdown(null);
-
       this._setMapVisible(!this.state.mapVisible);
     },
 
@@ -424,7 +429,6 @@ export function registerVrWidget(AFRAME) {
       const mapW = (this.data.width - 0.10);
       const mapH = this.data.mapHeight;
 
-      // mapPlane tá centrado em y=-mapH/2, então marker também referencia esse centro
       const cx = 0;
       const cy = -mapH/2;
 
@@ -482,7 +486,7 @@ export function registerVrWidget(AFRAME) {
         "side:double",
         "opacity:1"
       ].join(";"));
-      txt.setAttribute("position", `0 0 ${this.Z.TXT}`); // bem à frente do plano
+      txt.setAttribute("position", `0 0 ${this.Z.TXT}`);
       txt.setAttribute("scale", `${this.data.btnTextScale} ${this.data.btnTextScale} ${this.data.btnTextScale}`);
       txt.setAttribute("render-on-top", "");
       btn.appendChild(txt);
@@ -504,7 +508,6 @@ export function registerVrWidget(AFRAME) {
       btn.addEventListener("click", (e) => {
         e?.stopPropagation?.();
 
-        // debounce: evita toggle duplo (down/up)
         const now = performance.now();
         if (now - (btn.__lastClickTs || 0) < 250) return;
         btn.__lastClickTs = now;
@@ -522,5 +525,52 @@ export function registerVrWidget(AFRAME) {
     const str = String(s || "");
     if (str.length <= max) return str;
     return str.slice(0, Math.max(0, max - 1)) + "…";
+  }
+
+  // ✅ layout dinâmico: distribui itens na linha sem overlap
+  function layoutRow(widths, { left, right, minGap = 0.02 }) {
+    const avail = Math.max(0.1, right - left);
+    const n = widths.length;
+    const sumW = widths.reduce((a, b) => a + b, 0);
+
+    // tenta usar gap mínimo
+    const need = sumW + minGap * (n - 1);
+
+    let scale = 1.0;
+    let gap = minGap;
+
+    if (need > avail) {
+      // encolhe tudo proporcionalmente
+      scale = avail / need;
+      // mantém gap mínimo proporcional também (não zera)
+      gap = minGap * scale;
+    } else {
+      // distribui gap extra automaticamente
+      const extra = avail - sumW;
+      gap = (n > 1) ? (extra / (n - 1)) : 0;
+      gap = Math.max(minGap, gap);
+      // se gap ficou maior que o necessário, ok
+      // (se isso empurrar pra fora, o cálculo abaixo mantém dentro)
+    }
+
+    const out = [];
+    let x = left;
+    for (let i = 0; i < n; i++) {
+      const w = widths[i] * scale;
+      const cx = x + w / 2;
+      out.push({ x: cx, w });
+      x += w + gap;
+    }
+
+    // clamp final pra garantir dentro do range
+    // (se o gap mínimo estourou, ajusta levemente shift)
+    const last = out[out.length - 1];
+    const end = last.x + last.w / 2;
+    const over = end - right;
+    if (over > 0.0001) {
+      for (const p of out) p.x -= over;
+    }
+
+    return out;
   }
 }
