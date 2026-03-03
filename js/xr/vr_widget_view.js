@@ -14,7 +14,7 @@ export function ensureVrWidgetView(AFRAME) {
         opacity: { type: "number", default: 1.0 },
         forceColor: { type: "string", default: "" },
 
-        // ✅ NOVO: NÃO aplicar em descendentes (evita sobrescrever texto filho)
+        // ✅ NÃO aplicar em descendentes (evita sobrescrever texto filho)
         applyDescendants: { type: "boolean", default: false }
       },
 
@@ -24,7 +24,6 @@ export function ensureVrWidgetView(AFRAME) {
         this.el.addEventListener("object3dset", this._apply);
         this.el.addEventListener("loaded", this._apply);
 
-        // quando text/material nasce depois, reaplica em mudanças
         this.el.addEventListener("componentchanged", (e) => {
           const n = e?.detail?.name;
           if (n === "text" || n === "material" || n === "geometry") this._apply();
@@ -52,9 +51,7 @@ export function ensureVrWidgetView(AFRAME) {
         obj.traverse((child) => {
           if (!child || !child.isMesh) return;
 
-          // ✅ filtro CRÍTICO:
-          // só aplica em mesh do PRÓPRIO elemento
-          // (ou em descendentes se applyDescendants=true)
+          // ✅ só aplica no mesh do próprio elemento
           const sameEl = child.el === this.el;
           if (!d.applyDescendants && !sameEl) return;
 
@@ -85,6 +82,8 @@ export function ensureVrWidgetView(AFRAME) {
       }
     });
   }
+
+  const THREE = AFRAME.THREE;
 
   function escapeText(s) {
     return String(s || "").replace(/;/g, ",").replace(/\n/g, " ");
@@ -131,6 +130,34 @@ export function ensureVrWidgetView(AFRAME) {
     return out;
   }
 
+  // ✅ offset em "metros no mundo" -> converte pra local dividindo pela escala real
+  function setChildZWorld(parentEl, childEl, desiredWorldZ) {
+    const worldZ = clampNum(desiredWorldZ, 0.001, 0.03); // 1mm..3cm (suficiente)
+
+    // garante que exista object3D
+    if (!parentEl?.object3D || !childEl?.object3D || !THREE) {
+      childEl?.setAttribute?.("position", `0 0 ${worldZ}`);
+      return;
+    }
+
+    const apply = () => {
+      try {
+        parentEl.object3D.updateWorldMatrix(true, false);
+
+        const s = new THREE.Vector3(1, 1, 1);
+        parentEl.object3D.getWorldScale(s);
+
+        const localZ = worldZ / (s.z || 1);
+        childEl.object3D.position.set(0, 0, localZ);
+      } catch {}
+    };
+
+    // aplica agora e reaplica uns frames (A-Frame cria mesh depois)
+    apply();
+    requestAnimationFrame(apply);
+    requestAnimationFrame(apply);
+  }
+
   function makePlane({ parent, w, h, x, y, z, color, opacity, order }) {
     const p = document.createElement("a-plane");
     p.setAttribute("width", w);
@@ -140,13 +167,10 @@ export function ensureVrWidgetView(AFRAME) {
       "material",
       `color:${color}; opacity:${opacity}; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double`
     );
-
-    // plane não precisa aplicar em descendentes
     p.setAttribute(
       "vr-ui-fix",
       `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:${opacity}; applyDescendants:false`
     );
-
     parent.appendChild(p);
     return p;
   }
@@ -167,7 +191,6 @@ export function ensureVrWidgetView(AFRAME) {
     t.setAttribute("position", `${x} ${y} ${z}`);
     t.setAttribute("scale", `${scale} ${scale} ${scale}`);
 
-    // texto: só no próprio mesh
     t.setAttribute(
       "vr-ui-fix",
       `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff; applyDescendants:false`
@@ -185,15 +208,11 @@ export function ensureVrWidgetView(AFRAME) {
     orderPlane,
     orderText,
     textScale,
-    textZ
+    textZ // ✅ AGORA = world meters (ex: 0.012)
   }) {
     const planeOrder = Number(orderPlane) || 1000;
     let txtOrder = Number(orderText) || (planeOrder + 50);
     if (txtOrder <= planeOrder) txtOrder = planeOrder + 50;
-
-    let tz = Number(textZ);
-    if (!Number.isFinite(tz)) tz = 0.015;
-    tz = Math.max(0.015, tz); // ✅ mais pra frente ainda pra matar z-fighting
 
     const btn = document.createElement("a-plane");
     btn.classList.add("clickable");
@@ -204,8 +223,6 @@ export function ensureVrWidgetView(AFRAME) {
       "material",
       "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
     );
-
-    // ✅ CRÍTICO: applyDescendants:false pra não mexer no texto filho
     btn.setAttribute(
       "vr-ui-fix",
       `order:${planeOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:0.95; applyDescendants:false`
@@ -221,22 +238,24 @@ export function ensureVrWidgetView(AFRAME) {
       "align:center",
       "anchor:center",
       "baseline:center",
-      "width:2.2",
-      "wrapCount:20",
+      "width:2.6",
+      "wrapCount:26",
       "side:double"
     ].join(";"));
 
-    // ✅ centro perfeito + na frente
-    txt.setAttribute("position", `0 0 ${tz}`);
+    // posição inicial neutra
+    txt.setAttribute("position", "0 0 0");
     txt.setAttribute("scale", `${textScale} ${textScale} ${textScale}`);
 
-    // texto sempre com ordem maior
     txt.setAttribute(
       "vr-ui-fix",
       `order:${txtOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff; applyDescendants:false`
     );
 
     btn.appendChild(txt);
+
+    // ✅ offset previsível em metros no mundo (não amplifica com uiScale)
+    setChildZWorld(btn, txt, Number(textZ) || 0.012);
 
     // hover
     const hi = () => btn.setAttribute("material", "color", "#2a2a2a");
@@ -245,6 +264,12 @@ export function ensureVrWidgetView(AFRAME) {
     btn.addEventListener("raycaster-intersected-cleared", lo);
 
     return btn;
+  }
+
+  function clampNum(v, a, b) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return a;
+    return Math.max(a, Math.min(b, n));
   }
 
   return { makePlane, makeText, makeButton, layoutRow, truncateOneLine };
