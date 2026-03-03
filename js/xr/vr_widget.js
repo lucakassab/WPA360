@@ -18,12 +18,12 @@ export function registerVrWidget(AFRAME) {
     },
 
     init() {
-      const baseDist = this.data.distance * 2.20;
+      const baseDist = this.data.distance * 1.30;
 
       this.RO = { BG: 900, PANEL: 1000, BTN: 1000, TXT: 1100, MARK: 1200 };
       this.Z  = { BG: 0.00, BTN: 0.02, TXT: 0.06, PANEL: 0.03, MARK: 0.095 };
 
-      // ✅ OFFSET “COLADO” EM METROS NO MUNDO
+      // offset “colado” em metros no mundo
       this.TEXT_Z_WORLD = 0.012;
 
       this.state = {
@@ -50,7 +50,6 @@ export function registerVrWidget(AFRAME) {
 
       this._build();
 
-      // handshake
       queueMicrotask(() => {
         this.el.emit("vrwidget:requestsync", { reason: "init" }, false);
       });
@@ -89,6 +88,8 @@ export function registerVrWidget(AFRAME) {
         width: 3.2,
         wrapCount: 28,
         align: "center",
+        anchor: "center",
+        baseline: "center",
         scale: this.data.titleScale,
         order: this.RO.TXT
       });
@@ -125,6 +126,8 @@ export function registerVrWidget(AFRAME) {
         width: 2.4,
         wrapCount: 26,
         align: "left",
+        anchor: "center",
+        baseline: "center",
         scale: this.data.textScale,
         order: this.RO.TXT
       });
@@ -136,6 +139,8 @@ export function registerVrWidget(AFRAME) {
         width: 2.4,
         wrapCount: 26,
         align: "right",
+        anchor: "center",
+        baseline: "center",
         scale: this.data.textScale,
         order: this.RO.TXT
       });
@@ -181,6 +186,8 @@ export function registerVrWidget(AFRAME) {
         width: 2.0,
         wrapCount: 14,
         align: "right",
+        anchor: "center",
+        baseline: "center",
         scale: this.data.textScale,
         order: this.RO.TXT
       });
@@ -203,24 +210,18 @@ export function registerVrWidget(AFRAME) {
         order: this.RO.PANEL
       });
 
+      // ✅ título contido no painel
       this.dropdownTitle = V.makeText({
         parent: this.dropdownPanel,
         value: "Select",
-        // ✅ padding dentro do painel
         x: (-ddW / 2) + 0.08,
-        // ✅ como baseline top, esse y é topo da barra
         y: -0.03,
         z: this.Z.TXT,
-      
-        // ✅ largura menor que o painel pra não vazar
         width: 2.4,
         wrapCount: 22,
-      
-        // ✅ agora é alinhado/ancorado à esquerda
         align: "left",
         anchor: "left",
         baseline: "top",
-      
         scale: this.data.textScale,
         order: this.RO.TXT
       });
@@ -248,6 +249,8 @@ export function registerVrWidget(AFRAME) {
         width: 2.6,
         wrapCount: 24,
         align: "center",
+        anchor: "center",
+        baseline: "center",
         scale: this.data.textScale,
         order: this.RO.TXT
       });
@@ -350,7 +353,6 @@ export function registerVrWidget(AFRAME) {
       if (!kind) return;
 
       const items = (kind === "tour") ? this.state.tourList : this.state.sceneList;
-
       this.dropdownTitle?.setAttribute("text", "value", kind === "tour" ? "Select Tour" : "Select Scene");
 
       const empty = !items || items.length === 0;
@@ -396,8 +398,15 @@ export function registerVrWidget(AFRAME) {
         if (isSel) btn.setAttribute("material", "color", "#1f3a52");
 
         this._bindClick(btn, () => {
-          if (kind === "tour") this.el.emit("vrwidget:selecttour", { tourId: it.id }, false);
-          else this.el.emit("vrwidget:selectscene", { sceneId: it.id }, false);
+          // ✅ AQUI: manda o tourId junto pra App usar o contexto correto
+          if (kind === "tour") {
+            this.el.emit("vrwidget:selecttour", { tourId: String(it.id) }, false);
+          } else {
+            this.el.emit("vrwidget:selectscene", {
+              tourId: String(this.state.currentTourId || ""),
+              sceneId: String(it.id)
+            }, false);
+          }
           this._setDropdown(null);
         });
       }
