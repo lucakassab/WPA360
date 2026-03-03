@@ -193,7 +193,7 @@ export function ensureVrWidgetView(AFRAME) {
 
     let tz = Number(textZ);
     if (!Number.isFinite(tz)) tz = 0.06;
-    tz = Math.max(0.04, tz); // ✅ mais pra frente ainda pra matar z-fighting
+    tz = Math.max(0.02, tz); // ✅ mais pra frente ainda pra matar z-fighting
 
     const btn = document.createElement("a-plane");
     btn.classList.add("clickable");
