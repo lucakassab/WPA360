@@ -206,10 +206,21 @@ export function registerVrWidget(AFRAME) {
       this.dropdownTitle = V.makeText({
         parent: this.dropdownPanel,
         value: "Select",
-        x: (-ddW/2) + 0.12, y: -0.06, z: this.Z.TXT,
-        width: 2.8,
-        wrapCount: 24,
+        // ✅ padding dentro do painel
+        x: (-ddW / 2) + 0.08,
+        // ✅ como baseline top, esse y é topo da barra
+        y: -0.03,
+        z: this.Z.TXT,
+      
+        // ✅ largura menor que o painel pra não vazar
+        width: 2.4,
+        wrapCount: 22,
+      
+        // ✅ agora é alinhado/ancorado à esquerda
         align: "left",
+        anchor: "left",
+        baseline: "top",
+      
         scale: this.data.textScale,
         order: this.RO.TXT
       });
