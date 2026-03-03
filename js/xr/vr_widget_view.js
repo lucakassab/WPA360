@@ -12,20 +12,30 @@ export function ensureVrWidgetView(AFRAME) {
         depthWrite: { type: "boolean", default: false },
         transparent: { type: "boolean", default: true },
         opacity: { type: "number", default: 1.0 },
-        forceColor: { type: "string", default: "" }
+        forceColor: { type: "string", default: "" },
+
+        // ✅ NOVO: NÃO aplicar em descendentes (evita sobrescrever texto filho)
+        applyDescendants: { type: "boolean", default: false }
       },
 
       init() {
         this._apply = this._apply.bind(this);
+
         this.el.addEventListener("object3dset", this._apply);
         this.el.addEventListener("loaded", this._apply);
 
-        // texto/mesh às vezes nasce depois -> reaplica algumas vezes
+        // quando text/material nasce depois, reaplica em mudanças
+        this.el.addEventListener("componentchanged", (e) => {
+          const n = e?.detail?.name;
+          if (n === "text" || n === "material" || n === "geometry") this._apply();
+        });
+
+        // reaplica alguns frames pra pegar mesh tardio
         let n = 0;
         const tick = () => {
           this._apply();
           n++;
-          if (n < 6) requestAnimationFrame(tick);
+          if (n < 8) requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
       },
@@ -42,6 +52,12 @@ export function ensureVrWidgetView(AFRAME) {
         obj.traverse((child) => {
           if (!child || !child.isMesh) return;
 
+          // ✅ filtro CRÍTICO:
+          // só aplica em mesh do PRÓPRIO elemento
+          // (ou em descendentes se applyDescendants=true)
+          const sameEl = child.el === this.el;
+          if (!d.applyDescendants && !sameEl) return;
+
           child.renderOrder = d.order;
 
           const mats = Array.isArray(child.material) ? child.material : [child.material];
@@ -54,15 +70,13 @@ export function ensureVrWidgetView(AFRAME) {
             m.transparent = d.transparent;
             m.opacity = d.opacity;
 
-            // ✅ mata tone mapping (texto “cinza/lavado” em XR)
+            // ✅ mata tone mapping (texto “lavado/cinza” em XR)
             m.toneMapped = d.toneMapped;
 
-            // força cor quando fizer sentido (texto)
             if (force && m.color) {
               try { m.color.set(force); } catch {}
             }
 
-            // alpha mais estável
             if (m.alphaTest != null) m.alphaTest = 0.01;
 
             m.needsUpdate = true;
@@ -126,10 +140,13 @@ export function ensureVrWidgetView(AFRAME) {
       "material",
       `color:${color}; opacity:${opacity}; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double`
     );
+
+    // plane não precisa aplicar em descendentes
     p.setAttribute(
       "vr-ui-fix",
-      `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:${opacity}`
+      `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:${opacity}; applyDescendants:false`
     );
+
     parent.appendChild(p);
     return p;
   }
@@ -150,9 +167,10 @@ export function ensureVrWidgetView(AFRAME) {
     t.setAttribute("position", `${x} ${y} ${z}`);
     t.setAttribute("scale", `${scale} ${scale} ${scale}`);
 
+    // texto: só no próprio mesh
     t.setAttribute(
       "vr-ui-fix",
-      `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff`
+      `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff; applyDescendants:false`
     );
 
     parent.appendChild(t);
@@ -169,15 +187,13 @@ export function ensureVrWidgetView(AFRAME) {
     textScale,
     textZ
   }) {
-    // ✅ garante texto sempre NA FRENTE
     const planeOrder = Number(orderPlane) || 1000;
     let txtOrder = Number(orderText) || (planeOrder + 50);
     if (txtOrder <= planeOrder) txtOrder = planeOrder + 50;
 
-    // ✅ Z mínimo seguro pro texto ficar “na cara” do plano
     let tz = Number(textZ);
     if (!Number.isFinite(tz)) tz = 0.06;
-    tz = Math.max(0.035, tz);
+    tz = Math.max(0.04, tz); // ✅ mais pra frente ainda pra matar z-fighting
 
     const btn = document.createElement("a-plane");
     btn.classList.add("clickable");
@@ -188,10 +204,13 @@ export function ensureVrWidgetView(AFRAME) {
       "material",
       "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
     );
+
+    // ✅ CRÍTICO: applyDescendants:false pra não mexer no texto filho
     btn.setAttribute(
       "vr-ui-fix",
-      `order:${planeOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:0.95`
+      `order:${planeOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:0.95; applyDescendants:false`
     );
+
     parent.appendChild(btn);
 
     const txt = document.createElement("a-entity");
@@ -199,7 +218,6 @@ export function ensureVrWidgetView(AFRAME) {
       `value:${escapeText(label || "—")}`,
       "color:#ffffff",
       "opacity:1",
-      // ✅ centralização correta
       "align:center",
       "anchor:center",
       "baseline:center",
@@ -208,13 +226,16 @@ export function ensureVrWidgetView(AFRAME) {
       "side:double"
     ].join(";"));
 
-    // ✅ centro do botão + na frente do plano
+    // ✅ centro perfeito + na frente
     txt.setAttribute("position", `0 0 ${tz}`);
     txt.setAttribute("scale", `${textScale} ${textScale} ${textScale}`);
+
+    // texto sempre com ordem maior
     txt.setAttribute(
       "vr-ui-fix",
-      `order:${txtOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff`
+      `order:${txtOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff; applyDescendants:false`
     );
+
     btn.appendChild(txt);
 
     // hover
