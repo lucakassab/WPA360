@@ -6,10 +6,7 @@ export function registerVrWidget(AFRAME) {
     schema: {
       width: { type: "number", default: 1.32 },
       height: { type: "number", default: 0.88 },
-
-      // ✅ +30% mais longe
-      distance: { type: "number", default: 0.85 },
-
+      distance: { type: "number", default: 0.85 }, // base
       mapHeight: { type: "number", default: 0.46 },
       uiScale: { type: "number", default: 1.0 },
 
@@ -49,26 +46,28 @@ export function registerVrWidget(AFRAME) {
       const w = this.data.width;
       const h = this.data.height;
 
-      // ✅ Distância base (afasta 30%)
-      const baseDist = this.data.distance * 1.30;
+      // ✅ +30% mais longe
+      const baseDist = this.data.distance * 2.0;
 
-      // Layers (Z) RELATIVOS AO ROOT (não ao mundo)
-      // Regra: valores pequenos, mas separados o suficiente pra não z-fighting.
-      this.Z = {
-        BG: 0.00,
-        BTN: 0.02,
-        TXT: 0.06,
-
-        // ✅ Painéis flutuantes: um pouco mais perto que botões/texto,
-        // mas NÃO exagerado pra não "pular" pra cara
-        PANEL: 0.035,
-        PANEL_TXT: 0.075,
-
-        MAP: 0.030,
-        MAP_TXT: 0.070
+      // ✅ Render order por camada (mata texto escuro)
+      this.RO = {
+        BG: 900,
+        PANEL: 1000,
+        BTN: 1000,
+        TXT: 1100,
+        MARK: 1200
       };
 
-      // Grid basics
+      // Z local (pequeno, só pra separar geometria)
+      this.Z = {
+        BG: 0.00,
+        PANEL: 0.02,
+        BTN: 0.025,
+        TXT: 0.060,
+        TXT_FRONT: 0.090, // texto sempre mais à frente do botão
+        MARK: 0.095
+      };
+
       this.L = {
         padX: 0.06,
         topY: h / 2,
@@ -76,7 +75,6 @@ export function registerVrWidget(AFRAME) {
         rowH: 0.11
       };
 
-      // ✅ Root mais longe
       this.el.setAttribute("position", `0 -0.10 -${baseDist}`);
       this.el.setAttribute("visible", "true");
       this.el.object3D.scale.set(this.data.uiScale, this.data.uiScale, this.data.uiScale);
@@ -85,16 +83,19 @@ export function registerVrWidget(AFRAME) {
       this.bg = document.createElement("a-plane");
       this.bg.setAttribute("width", w);
       this.bg.setAttribute("height", h);
-      this.bg.setAttribute("material", "color:#000; opacity:0.78; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+      this.bg.setAttribute(
+        "material",
+        "color:#000; opacity:0.78; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
+      );
       this.bg.setAttribute("position", `0 0 ${this.Z.BG}`);
-      this.bg.setAttribute("render-on-top", "");
+      this.bg.setAttribute("render-on-top", `order:${this.RO.BG}; depthTest:false; depthWrite:false`);
       this.el.appendChild(this.bg);
 
-      // Row Y positions
+      // rows
       const yTitle = this.L.topY - 0.09;
       const yRow1 = yTitle - this.L.rowGap;
       const yRow2 = yRow1 - this.L.rowGap;
-      const yRow2b = yRow2 - 0.105; // mini linha do FOV
+      const yRow2b = yRow2 - 0.105;
       const yPanelTop = yRow2b - 0.02;
 
       // Title
@@ -109,7 +110,7 @@ export function registerVrWidget(AFRAME) {
         scale: this.data.titleScale
       });
 
-      // === Row 1 ===
+      // Row 1
       const leftX = (-w / 2) + this.L.padX;
       const rightX = (w / 2) - this.L.padX;
 
@@ -156,7 +157,7 @@ export function registerVrWidget(AFRAME) {
       this._onClick(this.btnTourDrop, () => this._toggleDropdown("tour"));
       this._onClick(this.btnSceneDrop, () => this._toggleDropdown("scene"));
 
-      // === Row 2 (layout automático) ===
+      // Row 2 (layout automático)
       const row2Items = [
         { key: "prev", label: "Prev", w: 0.22, onClick: () => this._emit("vrwidget:prevscene", {}) },
         { key: "next", label: "Next", w: 0.22, onClick: () => this._emit("vrwidget:nextscene", {}) },
@@ -185,7 +186,6 @@ export function registerVrWidget(AFRAME) {
         });
 
         this._onClick(btn, it.onClick);
-
         if (it.key === "map") this.btnMap = btn;
       }
 
@@ -200,17 +200,14 @@ export function registerVrWidget(AFRAME) {
         scale: this.data.textScale
       });
 
-      // ==================== Dropdown Panel ====================
+      // Dropdown panel (mesma profundidade do widget, não mais perto)
       this.dropdownPanel = document.createElement("a-entity");
-
-      // ✅ dropdown NÃO pode ficar mais perto que o root (só relative Z pequeno)
-      // e também não pode ficar “na frente” demais dos botões.
       this.dropdownPanel.setAttribute("visible", "false");
       this.dropdownPanel.setAttribute("position", `0 ${yPanelTop} ${this.Z.PANEL}`);
       this.el.appendChild(this.dropdownPanel);
       this._buildDropdownPanel();
 
-      // ==================== Map Panel ====================
+      // Map panel
       this._buildMapPanel(yPanelTop);
 
       this._setDropdown(null);
@@ -227,16 +224,19 @@ export function registerVrWidget(AFRAME) {
       this.ddBg = document.createElement("a-plane");
       this.ddBg.setAttribute("width", w);
       this.ddBg.setAttribute("height", h);
-      this.ddBg.setAttribute("material", "color:#050505; opacity:0.92; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+      this.ddBg.setAttribute(
+        "material",
+        "color:#050505; opacity:0.92; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
+      );
       this.ddBg.setAttribute("position", `0 ${-h/2} ${this.Z.BG}`);
-      this.ddBg.setAttribute("render-on-top", "");
+      this.ddBg.setAttribute("render-on-top", `order:${this.RO.PANEL}; depthTest:false; depthWrite:false`);
       this.dropdownPanel.appendChild(this.ddBg);
 
       this.dropdownTitle = this._makeText({
         value: "Select",
         x: (-w/2) + 0.12,
         y: -0.06,
-        z: this.Z.PANEL_TXT,
+        z: this.Z.TXT,
         width: 2.8,
         wrapCount: 24,
         align: "left",
@@ -245,16 +245,14 @@ export function registerVrWidget(AFRAME) {
       });
 
       this.dropdownList = document.createElement("a-entity");
-
-      // ✅ lista fica no mesmo “plano” do dropdown, não mais pra frente
-      this.dropdownList.setAttribute("position", `0 -0.14 ${this.Z.PANEL_TXT}`);
+      this.dropdownList.setAttribute("position", `0 -0.14 ${this.Z.TXT}`);
       this.dropdownPanel.appendChild(this.dropdownList);
 
       const btnClose = this._makeButton({
         label: "Close",
         x: (w/2) - 0.16,
         y: -0.06,
-        z: this.Z.PANEL_TXT,
+        z: this.Z.BTN,
         w: 0.18,
         h: 0.10,
         parent: this.dropdownPanel
@@ -267,31 +265,34 @@ export function registerVrWidget(AFRAME) {
       const mapH = this.data.mapHeight;
 
       this.mapGroup = document.createElement("a-entity");
-
-      // ✅ map no MESMO offset base do dropdown, sem vir pra cara
-      this.mapGroup.setAttribute("position", `0 ${yPanelTop - 0.02} ${this.Z.MAP}`);
+      this.mapGroup.setAttribute("position", `0 ${yPanelTop - 0.02} ${this.Z.PANEL}`);
       this.el.appendChild(this.mapGroup);
 
       this.mapPlane = document.createElement("a-plane");
       this.mapPlane.setAttribute("width", w);
       this.mapPlane.setAttribute("height", mapH);
-      this.mapPlane.setAttribute("material", "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+      this.mapPlane.setAttribute(
+        "material",
+        "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
+      );
       this.mapPlane.setAttribute("position", `0 ${-mapH/2} ${this.Z.BG}`);
-      this.mapPlane.setAttribute("render-on-top", "");
+      this.mapPlane.setAttribute("render-on-top", `order:${this.RO.PANEL}; depthTest:false; depthWrite:false`);
       this.mapGroup.appendChild(this.mapPlane);
 
       this.markerEl = document.createElement("a-circle");
       this.markerEl.setAttribute("radius", 0.020);
-      this.markerEl.setAttribute("material", "color:#ff3b30; shader:flat; depthTest:false; depthWrite:false");
-      this.markerEl.setAttribute("position", `0 ${-mapH/2} ${this.Z.MAP_TXT}`);
-      this.markerEl.setAttribute("render-on-top", "");
+      this.markerEl.setAttribute(
+        "material",
+        "color:#ff3b30; shader:flat; depthTest:false; depthWrite:false; side:double"
+      );
+      this.markerEl.setAttribute("position", `0 ${-mapH/2} ${this.Z.MARK}`);
+      this.markerEl.setAttribute("render-on-top", `order:${this.RO.MARK}; depthTest:false; depthWrite:false`);
       this.mapGroup.appendChild(this.markerEl);
 
       const yBtns = -mapH - 0.10;
-
-      this.btnZoomOut = this._makeButton({ label: "Zoom-", x: -0.22, y: yBtns, z: this.Z.MAP_TXT, w: 0.22, h: 0.11, parent: this.mapGroup });
-      this.btnZoomIn  = this._makeButton({ label: "Zoom+", x: +0.02, y: yBtns, z: this.Z.MAP_TXT, w: 0.22, h: 0.11, parent: this.mapGroup });
-      this.btnZoomReset = this._makeButton({ label: "Reset", x: +0.28, y: yBtns, z: this.Z.MAP_TXT, w: 0.18, h: 0.11, parent: this.mapGroup });
+      this.btnZoomOut = this._makeButton({ label: "Zoom-", x: -0.22, y: yBtns, z: this.Z.BTN, w: 0.22, h: 0.11, parent: this.mapGroup });
+      this.btnZoomIn  = this._makeButton({ label: "Zoom+", x: +0.02, y: yBtns, z: this.Z.BTN, w: 0.22, h: 0.11, parent: this.mapGroup });
+      this.btnZoomReset = this._makeButton({ label: "Reset", x: +0.28, y: yBtns, z: this.Z.BTN, w: 0.18, h: 0.11, parent: this.mapGroup });
 
       this._onClick(this.btnZoomOut, () => this._setMapZoom(this.state.mapZoom / 1.15));
       this._onClick(this.btnZoomIn,  () => this._setMapZoom(this.state.mapZoom * 1.15));
@@ -323,7 +324,7 @@ export function registerVrWidget(AFRAME) {
       if (this.mapPlane && this.state.mapSrc) {
         this.mapPlane.setAttribute(
           "material",
-          `src:${this.state.mapSrc}; shader:flat; transparent:true; opacity:1.0; depthTest:false; depthWrite:false`
+          `src:${this.state.mapSrc}; shader:flat; transparent:true; opacity:1.0; depthTest:false; depthWrite:false; side:double`
         );
       }
 
@@ -379,7 +380,7 @@ export function registerVrWidget(AFRAME) {
           label,
           x,
           y,
-          z: this.Z.PANEL_TXT,
+          z: this.Z.BTN,
           w: colW,
           h: rowH,
           parent: this.dropdownList
@@ -434,7 +435,7 @@ export function registerVrWidget(AFRAME) {
       const x = cx + ((pos.x / 100) - 0.5) * mapW * this.state.mapZoom;
       const y = cy + (0.5 - (pos.y / 100)) * mapH * this.state.mapZoom;
 
-      this.markerEl.setAttribute("position", `${x} ${y} ${this.Z.MAP_TXT}`);
+      this.markerEl.setAttribute("position", `${x} ${y} ${this.Z.MARK}`);
       this.markerEl.setAttribute("visible", "true");
     },
 
@@ -447,17 +448,17 @@ export function registerVrWidget(AFRAME) {
       t.setAttribute("text", [
         `value:${escapeText(value)}`,
         "color:#fff",
+        "opacity:1",
         `align:${align || "left"}`,
         "baseline:center",
         "anchor:center",
         `width:${width || 2.0}`,
         `wrapCount:${wrapCount || 24}`,
-        "side:double",
-        "opacity:1"
+        "side:double"
       ].join(";"));
-      t.setAttribute("position", `${x || 0} ${y || 0} ${z || 0.10}`);
+      t.setAttribute("position", `${x || 0} ${y || 0} ${z || this.Z.TXT}`);
       t.setAttribute("scale", `${scale} ${scale} ${scale}`);
-      t.setAttribute("render-on-top", "");
+      t.setAttribute("render-on-top", `order:${this.RO.TXT}; depthTest:false; depthWrite:false`);
       (parent || this.el).appendChild(t);
       return t;
     },
@@ -468,24 +469,29 @@ export function registerVrWidget(AFRAME) {
       btn.setAttribute("width", w);
       btn.setAttribute("height", h);
       btn.setAttribute("position", `${x} ${y} ${z}`);
-      btn.setAttribute("material", "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false");
-      btn.setAttribute("render-on-top", "");
+      btn.setAttribute(
+        "material",
+        "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
+      );
+      btn.setAttribute("render-on-top", `order:${this.RO.BTN}; depthTest:false; depthWrite:false`);
 
       const txt = document.createElement("a-entity");
       txt.setAttribute("text", [
         `value:${escapeText(label || "—")}`,
         "color:#fff",
+        "opacity:1",
         "align:center",
         "baseline:center",
         "anchor:center",
         "width:2.2",
         "wrapCount:20",
-        "side:double",
-        "opacity:1"
+        "side:double"
       ].join(";"));
-      txt.setAttribute("position", `0 0 ${this.Z.TXT}`);
+
+      // ✅ texto sempre na frente do plano do botão
+      txt.setAttribute("position", `0 0 ${this.Z.TXT_FRONT}`);
       txt.setAttribute("scale", `${this.data.btnTextScale} ${this.data.btnTextScale} ${this.data.btnTextScale}`);
-      txt.setAttribute("render-on-top", "");
+      txt.setAttribute("render-on-top", `order:${this.RO.TXT}; depthTest:false; depthWrite:false`);
       btn.appendChild(txt);
 
       const hi = () => btn.setAttribute("material", "color", "#2a2a2a");
@@ -500,14 +506,11 @@ export function registerVrWidget(AFRAME) {
     _onClick(btn, fn) {
       if (!btn) return;
       btn.__lastClickTs = 0;
-
       btn.addEventListener("click", (e) => {
         e?.stopPropagation?.();
-
         const now = performance.now();
         if (now - (btn.__lastClickTs || 0) < 250) return;
         btn.__lastClickTs = now;
-
         fn?.();
       });
     }
@@ -557,7 +560,6 @@ export function registerVrWidget(AFRAME) {
     if (over > 0.0001) {
       for (const p of out) p.x -= over;
     }
-
     return out;
   }
 }
