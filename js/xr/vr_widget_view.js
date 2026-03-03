@@ -2,7 +2,6 @@
 export function ensureVrWidgetView(AFRAME) {
   if (!AFRAME) throw new Error("AFRAME não carregou.");
 
-  // registra 1x
   if (!AFRAME.components["vr-ui-fix"]) {
     AFRAME.registerComponent("vr-ui-fix", {
       schema: {
@@ -13,8 +12,6 @@ export function ensureVrWidgetView(AFRAME) {
         transparent: { type: "boolean", default: true },
         opacity: { type: "number", default: 1.0 },
         forceColor: { type: "string", default: "" },
-
-        // ✅ NÃO aplicar em descendentes (evita sobrescrever texto filho)
         applyDescendants: { type: "boolean", default: false }
       },
 
@@ -29,7 +26,6 @@ export function ensureVrWidgetView(AFRAME) {
           if (n === "text" || n === "material" || n === "geometry") this._apply();
         });
 
-        // reaplica alguns frames pra pegar mesh tardio
         let n = 0;
         const tick = () => {
           this._apply();
@@ -51,7 +47,6 @@ export function ensureVrWidgetView(AFRAME) {
         obj.traverse((child) => {
           if (!child || !child.isMesh) return;
 
-          // ✅ só aplica no mesh do próprio elemento
           const sameEl = child.el === this.el;
           if (!d.applyDescendants && !sameEl) return;
 
@@ -67,7 +62,6 @@ export function ensureVrWidgetView(AFRAME) {
             m.transparent = d.transparent;
             m.opacity = d.opacity;
 
-            // ✅ mata tone mapping (texto “lavado/cinza” em XR)
             m.toneMapped = d.toneMapped;
 
             if (force && m.color) {
@@ -130,11 +124,15 @@ export function ensureVrWidgetView(AFRAME) {
     return out;
   }
 
-  // ✅ offset em "metros no mundo" -> converte pra local dividindo pela escala real
-  function setChildZWorld(parentEl, childEl, desiredWorldZ) {
-    const worldZ = clampNum(desiredWorldZ, 0.001, 0.03); // 1mm..3cm (suficiente)
+  function clampNum(v, a, b) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return a;
+    return Math.max(a, Math.min(b, n));
+  }
 
-    // garante que exista object3D
+  function setChildZWorld(parentEl, childEl, desiredWorldZ) {
+    const worldZ = clampNum(desiredWorldZ, 0.001, 0.03);
+
     if (!parentEl?.object3D || !childEl?.object3D || !THREE) {
       childEl?.setAttribute?.("position", `0 0 ${worldZ}`);
       return;
@@ -152,7 +150,6 @@ export function ensureVrWidgetView(AFRAME) {
       } catch {}
     };
 
-    // aplica agora e reaplica uns frames (A-Frame cria mesh depois)
     apply();
     requestAnimationFrame(apply);
     requestAnimationFrame(apply);
@@ -175,27 +172,38 @@ export function ensureVrWidgetView(AFRAME) {
     return p;
   }
 
-  function makeText({ parent, value, x, y, z, width, wrapCount, align, scale, order }) {
+  // ✅ agora dá pra escolher anchor/baseline
+  function makeText({
+    parent,
+    value,
+    x, y, z,
+    width,
+    wrapCount,
+    align,
+    anchor,
+    baseline,
+    scale,
+    order
+  }) {
     const t = document.createElement("a-entity");
     t.setAttribute("text", [
       `value:${escapeText(value)}`,
       "color:#ffffff",
       "opacity:1",
       `align:${align || "center"}`,
-      "baseline:center",
-      "anchor:center",
+      `anchor:${anchor || "center"}`,
+      `baseline:${baseline || "center"}`,
       `width:${width || 2.0}`,
       `wrapCount:${wrapCount || 24}`,
       "side:double"
     ].join(";"));
+
     t.setAttribute("position", `${x} ${y} ${z}`);
     t.setAttribute("scale", `${scale} ${scale} ${scale}`);
-
     t.setAttribute(
       "vr-ui-fix",
       `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff; applyDescendants:false`
     );
-
     parent.appendChild(t);
     return t;
   }
@@ -208,7 +216,7 @@ export function ensureVrWidgetView(AFRAME) {
     orderPlane,
     orderText,
     textScale,
-    textZ // ✅ AGORA = world meters (ex: 0.012)
+    textZ
   }) {
     const planeOrder = Number(orderPlane) || 1000;
     let txtOrder = Number(orderText) || (planeOrder + 50);
@@ -227,7 +235,6 @@ export function ensureVrWidgetView(AFRAME) {
       "vr-ui-fix",
       `order:${planeOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:0.95; applyDescendants:false`
     );
-
     parent.appendChild(btn);
 
     const txt = document.createElement("a-entity");
@@ -243,33 +250,22 @@ export function ensureVrWidgetView(AFRAME) {
       "side:double"
     ].join(";"));
 
-    // posição inicial neutra
     txt.setAttribute("position", "0 0 0");
     txt.setAttribute("scale", `${textScale} ${textScale} ${textScale}`);
-
     txt.setAttribute(
       "vr-ui-fix",
       `order:${txtOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff; applyDescendants:false`
     );
-
     btn.appendChild(txt);
 
-    // ✅ offset previsível em metros no mundo (não amplifica com uiScale)
     setChildZWorld(btn, txt, Number(textZ) || 0.012);
 
-    // hover
     const hi = () => btn.setAttribute("material", "color", "#2a2a2a");
     const lo = () => btn.setAttribute("material", "color", "#111");
     btn.addEventListener("raycaster-intersected", hi);
     btn.addEventListener("raycaster-intersected-cleared", lo);
 
     return btn;
-  }
-
-  function clampNum(v, a, b) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return a;
-    return Math.max(a, Math.min(b, n));
   }
 
   return { makePlane, makeText, makeButton, layoutRow, truncateOneLine };
