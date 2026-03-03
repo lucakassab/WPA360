@@ -1,4 +1,5 @@
 // js/App.js
+import AppUI from "./AppUI.js";
 import { loadTours } from "./tour/TourLoader.js";
 import {
   applySceneOffsets,
@@ -10,7 +11,6 @@ import HotspotRenderer from "./hotspots/HotspotRenderer.js";
 
 const LS_FOV = "tour_fov_v1";
 const LS_LINK = "tour_link_mode_v1";
-const TOUR_CACHE_NAME = "tour-full-v1";
 
 export default class App {
   constructor(refs) {
@@ -26,7 +26,7 @@ export default class App {
 
     this._events = new EventTarget();
 
-    // multi-tour store
+    // tours
     this._defaultTourId = null;
     this._tourOrder = [];
     this._toursById = new Map();
@@ -38,78 +38,71 @@ export default class App {
     this._sceneById = new Map();
     this.currentSceneId = null;
 
-    this._mouse = { x: 0, y: 0 };
-    this._canHover = false;
-
-    this.hotspotAnchorEl = null;
-    this.hotspotRenderer = null;
-
-    this._pendingViewToken = 0;
-
-    this._fadeEl = null;
     this._firstPaint = true;
-
     this._isTransitioning = false;
     this._queuedNav = null;
 
-    this._debug = null;
-    this._menuOpen = false;
-
-    this._controlsVisible = { vr: true, install: false };
-
-    this._fov = 80;
-    this._downloadBusy = false;
-    this._downloadAbort = null;
-
     this._linkTours = false;
+    this._fov = 80;
 
-    // Map overlay
-    this._mapOpen = false;
-    this._mapImgLoaded = false;
+    this._pendingViewToken = 0;
+    this.hotspotAnchorEl = null;
+    this.hotspotRenderer = null;
 
-    // ✅ VR stuff
+    // VR
     this._vrDebugEnabled = false;
     this._vrConsoleEl = null;
-
     this._vrWidgetEl = null;
     this._vrWidgetHandlers = null;
 
-    this._xrUnsub = null;
-
-    // ✅ thumbstick toggle handlers
     this._vrConsoleInputBound = false;
     this._onRightThumbstickDown = null;
+
+    // UI manager
+    this.uiManager = new AppUI(this, this.ui);
+
+    // misc
+    this._canHover = false;
   }
 
+  // ---------------- events ----------------
   on(type, handler) { this._events.addEventListener(type, handler); }
   emit(type, detail = {}) { this._events.dispatchEvent(new CustomEvent(type, { detail })); }
 
-  setVRButtonVisible(visible) {
-    this._controlsVisible.vr = !!visible;
-    if (this.ui.btnVR) this.ui.btnVR.hidden = !this._controlsVisible.vr;
+  // ---------------- getters / setters p/ UI ----------------
+  getTourOrder() { return [...this._tourOrder]; }
+  getSceneOrder() { return [...this._sceneOrder]; }
+  getTourTitle(tourId) {
+    const t = this._toursById.get(tourId);
+    return t?.title ? t.title : tourId;
+  }
+  getCurrentTour() { return this._toursById.get(this.currentTourId) ?? null; }
+  getCurrentScene() { return this._sceneById.get(this.currentSceneId) ?? null; }
+  getLinkTours() { return !!this._linkTours; }
+  setLinkTours(v) {
+    this._linkTours = !!v;
+    try { localStorage.setItem(LS_LINK, this._linkTours ? "1" : "0"); } catch {}
+    this.emit("link:changed", { value: this._linkTours });
   }
 
-  setInstallButtonVisible(visible) {
-    this._controlsVisible.install = !!visible;
-    if (this.ui.btnInstall) this.ui.btnInstall.hidden = !this._controlsVisible.install;
-  }
+  // ---------------- UI passthroughs (mantém API) ----------------
+  toast(msg, ms) { this.uiManager.toast(msg, ms); }
+  showTooltip(text) { this.uiManager.showTooltip(text); }
+  hideTooltip() { this.uiManager.hideTooltip(); }
 
-  getCurrentScene() {
-    return this._sceneById.get(this.currentSceneId) ?? null;
-  }
+  setVRButtonVisible(visible) { this.uiManager.setVRButtonVisible(visible); }
+  setInstallButtonVisible(visible) { this.uiManager.setInstallButtonVisible(visible); }
 
+  // ---------------- init ----------------
   async init({ debugHotspots = false, vrDebug = false } = {}) {
     await new Promise((resolve) => {
       if (this.sceneEl.hasLoaded) return resolve();
       this.sceneEl.addEventListener("loaded", resolve, { once: true });
     });
 
-    this._createFadeOverlay();
-
-    // ✅ guarda flag do VR debug
     this._vrDebugEnabled = !!vrDebug;
 
-    // carrega tours
+    // load tours
     const data = await loadTours();
     this._defaultTourId = data.defaultTourId;
     this._tourOrder = data.tourOrder;
@@ -117,60 +110,23 @@ export default class App {
     this._scenesByTour = data.scenesByTour;
 
     // prefs
-    const savedLink = localStorage.getItem(LS_LINK);
-    this._linkTours = savedLink === "1";
+    this._linkTours = localStorage.getItem(LS_LINK) === "1";
 
-    // seta tour atual
-    this._setCurrentTour(this._defaultTourId, { rebuildSceneSelect: false });
+    // set current tour
+    this._setCurrentTour(this._defaultTourId, { emit: false });
 
-    // UI/topbar
-    this._setupTopBar();
-    this._setupFov();
-    this._setupDownloadTour();
-    this._setupMapOverlay();
+    // init UI (dropdowns, menu, map, download, fov, fade, tooltip, etc.)
+    this.uiManager.init();
 
-    this.ui.btnPrev?.addEventListener("click", () => void this.prevScene());
-    this.ui.btnNext?.addEventListener("click", () => void this.nextScene());
+    // FOV from storage AFTER UI init (pra UI receber via evento)
+    const savedFov = Number(localStorage.getItem(LS_FOV));
+    const initialFov = Number.isFinite(savedFov) ? savedFov : 80;
+    this.setFov(initialFov, { emit: true });
 
-    this.ui.btnVR?.addEventListener("click", async () => {
-      if (this.sceneEl.is("vr-mode")) this.sceneEl.exitVR();
-      else this.sceneEl.enterVR();
-    });
-
-    this.sceneEl.addEventListener("enter-vr", async () => {
-      if (this.ui.btnVR) this.ui.btnVR.textContent = "Sair VR";
-      this.emit("vr:enter");
-      this.hideTooltip();
-      if (this._fadeEl) this._fadeEl.style.opacity = "0";
-      this._setMenuOpen(false);
-      this._setMapOpen(false);
-
-      // ✅ fallback: se sessionstart demorar, garante criação
-      await this._ensureVrUiIfImmersive();
-    });
-
-    this.sceneEl.addEventListener("exit-vr", () => {
-      if (this.ui.btnVR) this.ui.btnVR.textContent = "VR";
-      this.emit("vr:exit");
-
-      // ✅ destrói tudo que é só VR
-      this._destroyVrWidget();
-      this._destroyVrConsole(); // inclui unbind do thumbstick
-    });
-
+    // hover support
     this._canHover = window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches ?? false;
 
-    window.addEventListener("mousemove", (e) => {
-      this._mouse.x = e.clientX;
-      this._mouse.y = e.clientY;
-
-      const tip = this.ui.tooltip;
-      if (tip && !tip.hidden) {
-        tip.style.left = `${this._mouse.x}px`;
-        tip.style.top = `${this._mouse.y}px`;
-      }
-    });
-
+    // hotspot renderer
     this.hotspotRenderer = new HotspotRenderer({
       showTooltip: (t) => this.showTooltip(t),
       hideTooltip: () => this.hideTooltip(),
@@ -183,7 +139,7 @@ export default class App {
       }
     });
 
-    // hash
+    // initial scene from hash
     const initial = this._getInitialFromHash();
     if (initial) {
       await this.goToScene(initial.sceneId, { tourId: initial.tourId, pushHash: false });
@@ -192,6 +148,7 @@ export default class App {
       await this.goToScene(firstScene, { tourId: this.currentTourId, pushHash: false });
     }
 
+    // hash change
     window.addEventListener("hashchange", () => {
       const parsed = this._getInitialFromHash();
       if (!parsed) return;
@@ -199,6 +156,22 @@ export default class App {
       if (!same) void this.goToScene(parsed.sceneId, { tourId: parsed.tourId, pushHash: false });
     });
 
+    // VR enter/exit -> emit + ensure VR UI
+    this.sceneEl.addEventListener("enter-vr", async () => {
+      this.emit("vr:enter");
+      await this._ensureVrUiIfImmersive();
+    });
+
+    this.sceneEl.addEventListener("exit-vr", () => {
+      this.emit("vr:exit");
+      this._destroyVrWidget();
+      this._destroyVrConsole();
+    });
+
+    // XR session lifecycle (mais confiável)
+    this._bindXRSessionLifecycle();
+
+    // hotspot debug
     if (debugHotspots) {
       const mod = await import("./tour/HotspotDebug.js");
       this._debug = new mod.default(this);
@@ -207,472 +180,33 @@ export default class App {
       const el = document.querySelector("#hsdebug");
       if (el) el.remove();
     }
-
-    this.setVRButtonVisible(this._controlsVisible.vr);
-    this.setInstallButtonVisible(this._controlsVisible.install);
-
-    this._updateMapAvailability();
-    this._updateMapMarker();
-
-    // ✅ fluxo definitivo: sessionstart/sessionend (three.js)
-    this._bindXRSessionLifecycle();
   }
 
-  // ============================================================
-  // ✅ XR lifecycle: cria/destrói widget + console no VR imersivo
-  // ============================================================
+  // ---------------- core: fov ----------------
+  setFov(fov, { emit = true } = {}) {
+    const v = Math.max(30, Math.min(140, Number(fov) || 80));
+    this._fov = Math.round(v);
 
-  _bindXRSessionLifecycle() {
-    const xr = this.sceneEl?.renderer?.xr;
-    if (!xr?.addEventListener) return;
+    try { localStorage.setItem(LS_FOV, String(this._fov)); } catch {}
 
-    const onStart = async () => {
-      requestAnimationFrame(async () => {
-        await this._ensureVrUiIfImmersive();
-      });
-    };
+    // camera
+    if (this.cameraEl) {
+      this.cameraEl.setAttribute("camera", "fov", this._fov);
+      const cam = this.cameraEl.getObject3D("camera");
+      if (cam) { cam.fov = this._fov; cam.updateProjectionMatrix?.(); }
+    }
 
-    const onEnd = () => {
-      this._destroyVrWidget();
-      this._destroyVrConsole();
-    };
-
-    xr.addEventListener("sessionstart", onStart);
-    xr.addEventListener("sessionend", onEnd);
-
-    this._xrUnsub = () => {
-      xr.removeEventListener("sessionstart", onStart);
-      xr.removeEventListener("sessionend", onEnd);
-    };
-  }
-
-  async _ensureVrUiIfImmersive() {
-    if (!this.sceneEl.is("vr-mode")) return;
-
-    const session = await this._waitXRSession(2000);
-    if (!session) return;
-
-    this._ensureVrWidget();
+    if (emit) this.emit("fov:changed", { fov: this._fov });
     this._syncVrWidgetIfExists();
-
-    if (this._vrDebugEnabled) this._ensureVrConsole();
   }
 
-  async _waitXRSession(timeoutMs = 2000) {
-    const start = performance.now();
-    while (performance.now() - start < timeoutMs) {
-      const s = this.sceneEl?.renderer?.xr?.getSession?.() || null;
-      if (s) return s;
-      await new Promise(r => setTimeout(r, 50));
-    }
-    return this.sceneEl?.renderer?.xr?.getSession?.() || null;
+  // ---------------- core: tour switching ----------------
+  setCurrentTour(tourId) {
+    const ok = this._setCurrentTour(tourId, { emit: true });
+    return ok;
   }
 
-  // ============================================================
-  // ✅ VR CONSOLE + THUMBSTICK TOGGLE
-  // ============================================================
-
-  _ensureVrConsole() {
-    if (this._vrConsoleEl) {
-      this._vrConsoleEl.setAttribute("visible", "true");
-      if (this._vrConsoleEl.object3D) this._vrConsoleEl.object3D.visible = true;
-      this._bindVrConsoleInputs();
-      return;
-    }
-
-    const el = document.createElement("a-entity");
-    el.setAttribute("id", "vrConsole");
-    el.setAttribute("position", "0 -0.12 -0.65");
-    el.setAttribute("visible", "true");
-    el.setAttribute("vr-debug-console", "");
-    this.cameraEl.appendChild(el);
-    this._vrConsoleEl = el;
-
-    this._bindVrConsoleInputs();
-  }
-
-  _toggleVrConsoleVisible() {
-    if (!this._vrConsoleEl) return;
-
-    const aVisible = this._vrConsoleEl.getAttribute("visible");
-    const oVisible = this._vrConsoleEl.object3D?.visible;
-
-    const isVisible = (aVisible !== false && aVisible !== "false") && (oVisible !== false);
-
-    const next = !isVisible;
-    this._vrConsoleEl.setAttribute("visible", next ? "true" : "false");
-    if (this._vrConsoleEl.object3D) this._vrConsoleEl.object3D.visible = next;
-
-    // feedback no console (quando visível)
-    try { console.log(`vr_console: ${next ? "SHOW" : "HIDE"}`); } catch {}
-  }
-
-  _bindVrConsoleInputs() {
-    if (this._vrConsoleInputBound) return;
-    if (!this._vrDebugEnabled) return;
-
-    const right = this.rightHandEl;
-    if (!right) return;
-
-    // Thumbstick DOWN (right controller) -> toggle console
-    this._onRightThumbstickDown = () => {
-      // só reage em VR de verdade
-      if (!this.sceneEl.is("vr-mode")) return;
-      this._toggleVrConsoleVisible();
-    };
-
-    // evento padrão do A-Frame/oculus-touch-controls
-    right.addEventListener("thumbstickdown", this._onRightThumbstickDown);
-
-    // fallback extra (algumas builds expõem como "stickdown")
-    right.addEventListener("stickdown", this._onRightThumbstickDown);
-
-    this._vrConsoleInputBound = true;
-  }
-
-  _unbindVrConsoleInputs() {
-    if (!this._vrConsoleInputBound) return;
-
-    const right = this.rightHandEl;
-    if (right && this._onRightThumbstickDown) {
-      right.removeEventListener("thumbstickdown", this._onRightThumbstickDown);
-      right.removeEventListener("stickdown", this._onRightThumbstickDown);
-    }
-
-    this._onRightThumbstickDown = null;
-    this._vrConsoleInputBound = false;
-  }
-
-  _destroyVrConsole() {
-    this._unbindVrConsoleInputs();
-
-    if (!this._vrConsoleEl) return;
-    try { this._vrConsoleEl.remove(); } catch {}
-    this._vrConsoleEl = null;
-  }
-
-  // ============================================================
-  // ✅ VR WIDGET (já existente)
-  // ============================================================
-
-  _ensureVrWidget() {
-    if (this._vrWidgetEl) {
-      this._vrWidgetEl.setAttribute("visible", "true");
-      if (this._vrWidgetEl.object3D) this._vrWidgetEl.object3D.visible = true;
-      return;
-    }
-
-    const el = document.createElement("a-entity");
-    el.setAttribute("id", "vrWidget");
-    el.setAttribute("visible", "true");
-    el.setAttribute("vr-widget", "");
-    this.cameraEl.appendChild(el);
-    this._vrWidgetEl = el;
-
-    const hPrev = () => void this.prevScene();
-    const hNext = () => void this.nextScene();
-    const hFov = (e) => {
-      const d = Number(e?.detail?.delta || 0);
-      this.setFov(this._fov + d);
-      this._syncVrWidgetIfExists();
-    };
-    const hTour = (e) => this._stepTour(Number(e?.detail?.delta || 0));
-    const hScene = (e) => this._stepScene(Number(e?.detail?.delta || 0));
-
-    el.addEventListener("vrwidget:prevscene", hPrev);
-    el.addEventListener("vrwidget:nextscene", hNext);
-    el.addEventListener("vrwidget:fovdelta", hFov);
-    el.addEventListener("vrwidget:tourstep", hTour);
-    el.addEventListener("vrwidget:scenestep", hScene);
-
-    this._vrWidgetHandlers = { hPrev, hNext, hFov, hTour, hScene };
-  }
-
-  _destroyVrWidget() {
-    const el = this._vrWidgetEl;
-    if (!el) return;
-
-    try {
-      const hs = this._vrWidgetHandlers;
-      if (hs) {
-        el.removeEventListener("vrwidget:prevscene", hs.hPrev);
-        el.removeEventListener("vrwidget:nextscene", hs.hNext);
-        el.removeEventListener("vrwidget:fovdelta", hs.hFov);
-        el.removeEventListener("vrwidget:tourstep", hs.hTour);
-        el.removeEventListener("vrwidget:scenestep", hs.hScene);
-      }
-    } catch {}
-
-    try { el.remove(); } catch {}
-    this._vrWidgetEl = null;
-    this._vrWidgetHandlers = null;
-  }
-
-  _syncVrWidgetIfExists() {
-    const el = this._vrWidgetEl;
-    if (!el) return;
-
-    const tour = this._toursById.get(this.currentTourId);
-    const scene = this.getCurrentScene();
-
-    const hasMap = !!tour?.map_png;
-    const marker = parsePercentPair(scene?.scene_map_position);
-
-    el.emit("vrwidget:update", {
-      tourTitle: tour?.title ?? this.currentTourId ?? "—",
-      sceneTitle: scene?.name ?? scene?.id ?? "—",
-      fov: this._fov,
-      hasMap,
-      mapSrc: tour?.map_png ?? "",
-      marker: hasMap ? marker : null
-    }, false);
-  }
-
-  _stepTour(delta) {
-    const order = this._tourOrder;
-    const idx = Math.max(0, order.indexOf(this.currentTourId));
-    const next = order[(idx + delta + order.length) % order.length];
-    if (!next || next === this.currentTourId) return;
-
-    this._setCurrentTour(next);
-    const start = this._getTourStartSceneId(next);
-    if (start) void this.goToScene(start, { tourId: next });
-  }
-
-  _stepScene(delta) {
-    const order = this._sceneOrder;
-    const idx = Math.max(0, order.indexOf(this.currentSceneId));
-    const next = order[(idx + delta + order.length) % order.length];
-    if (!next || next === this.currentSceneId) return;
-    void this.goToScene(next, { tourId: this.currentTourId });
-  }
-
-  // ============================================================
-  // Top bar
-  // ============================================================
-
-  _setupTopBar() {
-    const btn = this.ui.btnTopMenu;
-    const bar = this.ui.topMenuBar;
-
-    this._setMenuOpen(false);
-
-    this._populateTourSelect();
-    this._populateSceneSelect();
-
-    this.ui.topTourSelect?.addEventListener("change", () => {
-      const tid = this.ui.topTourSelect.value;
-      if (!tid || tid === this.currentTourId) return;
-
-      this._setCurrentTour(tid);
-      const start = this._getTourStartSceneId(tid);
-      if (start) void this.goToScene(start, { tourId: tid });
-    });
-
-    this.ui.topSceneSelect?.addEventListener("change", () => {
-      const id = this.ui.topSceneSelect.value;
-      if (!id || id === this.currentSceneId) return;
-      void this.goToScene(id, { tourId: this.currentTourId });
-    });
-
-    if (this.ui.linkToursToggle) {
-      this.ui.linkToursToggle.checked = this._linkTours;
-      this.ui.linkToursToggle.addEventListener("change", () => {
-        this._linkTours = !!this.ui.linkToursToggle.checked;
-        try { localStorage.setItem(LS_LINK, this._linkTours ? "1" : "0"); } catch {}
-        this.toast(this._linkTours ? "Link entre tours: ON" : "Link entre tours: OFF");
-      });
-    }
-
-    if (btn && bar) {
-      btn.addEventListener("click", () => {
-        this._setMenuOpen(!this._menuOpen);
-        if (this._menuOpen) this._ensureTopBarPopulated();
-      });
-
-      window.addEventListener("resize", () => {
-        if (this._menuOpen) this._applyTopBarLayoutNoOverlap();
-      });
-    }
-
-    this._syncTopBarTitle();
-  }
-
-  _ensureTopBarPopulated() {
-    const tSel = this.ui.topTourSelect;
-    const sSel = this.ui.topSceneSelect;
-
-    if (tSel && tSel.options.length === 0) this._populateTourSelect();
-    if (sSel && sSel.options.length === 0) this._populateSceneSelect();
-
-    this._syncTopBarTitle();
-  }
-
-  _populateTourSelect() {
-    const sel = this.ui.topTourSelect;
-    if (!sel) return;
-
-    sel.innerHTML = "";
-    for (const tid of this._tourOrder) {
-      const opt = document.createElement("option");
-      opt.value = tid;
-      opt.textContent = this._getTourTitle(tid);
-      sel.appendChild(opt);
-    }
-    sel.value = this.currentTourId ?? this._defaultTourId ?? "";
-  }
-
-  _populateSceneSelect() {
-    const sel = this.ui.topSceneSelect;
-    if (!sel) return;
-
-    sel.innerHTML = "";
-    for (const id of this._sceneOrder) {
-      const sc = this._sceneById.get(id);
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = sc?.name ? sc.name : id;
-      sel.appendChild(opt);
-    }
-    if (this.currentSceneId) sel.value = this.currentSceneId;
-  }
-
-  _applyTopBarLayoutNoOverlap() {
-    const btn = this.ui.btnTopMenu;
-    const bar = this.ui.topMenuBar;
-    if (!btn || !bar) return;
-
-    const leftBase = 10;
-    const gap = 10;
-    const btnRect = btn.getBoundingClientRect();
-    const left = Math.round(leftBase + btnRect.width + gap);
-
-    bar.style.left = `${left}px`;
-    bar.style.right = `10px`;
-    bar.style.top = `10px`;
-  }
-
-  _setMenuOpen(open) {
-    this._menuOpen = !!open;
-    if (this.ui.topMenuBar) this.ui.topMenuBar.hidden = !this._menuOpen;
-
-    if (this._menuOpen) this._applyTopBarLayoutNoOverlap();
-    else if (this.ui.topMenuBar) this.ui.topMenuBar.style.left = "10px";
-  }
-
-  _syncTopBarTitle() {
-    const sc = this.getCurrentScene();
-    if (this.ui.titleEl) this.ui.titleEl.textContent = sc?.name ?? sc?.id ?? "—";
-    if (this.ui.topTourSelect) this.ui.topTourSelect.value = this.currentTourId ?? "";
-    if (this.ui.topSceneSelect && sc?.id) this.ui.topSceneSelect.value = sc.id;
-  }
-
-  _getTourTitle(tourId) {
-    const t = this._toursById.get(tourId);
-    return t?.title ? t.title : tourId;
-  }
-
-  _getTourStartSceneId(tourId) {
-    const pack = this._scenesByTour.get(tourId);
-    return pack?.sceneOrder?.[0] ?? null;
-  }
-
-  // ============================================================
-  // Map overlay
-  // ============================================================
-
-  _setupMapOverlay() {
-    const btn = this.ui.btnMap;
-    const overlay = this.ui.mapOverlay;
-    const closeBtn = this.ui.btnMapClose;
-
-    if (btn) btn.addEventListener("click", () => this.toggleMap());
-    if (closeBtn) closeBtn.addEventListener("click", () => this._setMapOpen(false));
-
-    if (overlay) {
-      overlay.addEventListener("click", (e) => {
-        if (e.target === overlay) this._setMapOpen(false);
-      });
-    }
-
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && this._mapOpen) this._setMapOpen(false);
-    });
-
-    if (this.ui.mapImg) {
-      this.ui.mapImg.addEventListener("load", () => {
-        this._mapImgLoaded = true;
-        this._updateMapMarker();
-      });
-      this.ui.mapImg.addEventListener("error", () => {
-        this._mapImgLoaded = false;
-        this.toast("Falha ao carregar planta (PNG).");
-      });
-    }
-  }
-
-  toggleMap() {
-    if (!this._hasCurrentTourMap()) {
-      this.toast("Esse tour não tem planta (map_png).");
-      return;
-    }
-    this._setMapOpen(!this._mapOpen);
-  }
-
-  _setMapOpen(open) {
-    this._mapOpen = !!open;
-    if (this.ui.mapOverlay) this.ui.mapOverlay.hidden = !this._mapOpen;
-
-    if (this._mapOpen) {
-      this._ensureMapImageForTour();
-      this._updateMapMarker();
-    }
-  }
-
-  _hasCurrentTourMap() {
-    const t = this._toursById.get(this.currentTourId);
-    return !!(t?.map_png);
-  }
-
-  _ensureMapImageForTour() {
-    const t = this._toursById.get(this.currentTourId);
-    const png = (t?.map_png ?? "").toString().trim();
-    if (!png || !this.ui.mapImg) return;
-
-    if (this.ui.mapTitle) this.ui.mapTitle.textContent = `Planta Baixa — ${t?.title ?? this.currentTourId}`;
-    if (this.ui.mapImg.src && this.ui.mapImg.src.endsWith(png)) return;
-
-    this._mapImgLoaded = false;
-    this.ui.mapImg.src = png;
-  }
-
-  _updateMapAvailability() {
-    if (!this.ui.btnMap) return;
-    this.ui.btnMap.disabled = !this._hasCurrentTourMap();
-  }
-
-  _updateMapMarker() {
-    const marker = this.ui.mapMarker;
-    if (!marker) return;
-
-    const scene = this.getCurrentScene();
-    const pos = parsePercentPair(scene?.scene_map_position);
-
-    if (!this._hasCurrentTourMap() || !pos) {
-      marker.hidden = true;
-      return;
-    }
-
-    marker.style.left = `${pos.x}%`;
-    marker.style.top = `${pos.y}%`;
-    marker.hidden = false;
-  }
-
-  // ============================================================
-  // Tour switching
-  // ============================================================
-
-  _setCurrentTour(tourId, { rebuildSceneSelect = true } = {}) {
+  _setCurrentTour(tourId, { emit = true } = {}) {
     const tid = this._canonicalTourId(tourId);
     if (!tid) return false;
 
@@ -683,12 +217,8 @@ export default class App {
     this._sceneOrder = pack.sceneOrder;
     this._sceneById = pack.sceneById;
 
-    if (rebuildSceneSelect) this._populateSceneSelect();
-    this._syncTopBarTitle();
-
-    this._updateMapAvailability();
-    if (this._mapOpen) this._ensureMapImageForTour();
-
+    if (emit) this.emit("tour:changed", { tourId: tid, tour: this._toursById.get(tid) });
+    this._syncVrWidgetIfExists();
     return true;
   }
 
@@ -703,188 +233,12 @@ export default class App {
     return null;
   }
 
-  // ============================================================
-  // FOV
-  // ============================================================
-
-  _setupFov() {
-    const slider = this.ui.fovSlider;
-    const valueEl = this.ui.fovValue;
-
-    const saved = Number(localStorage.getItem(LS_FOV));
-    const initial = Number.isFinite(saved) ? saved : 80;
-
-    this.setFov(initial);
-
-    if (slider) {
-      slider.value = String(this._fov);
-      slider.addEventListener("input", () => this.setFov(Number(slider.value)));
-    }
-    if (valueEl) valueEl.textContent = String(this._fov);
-  }
-
-  setFov(fov) {
-    const v = Math.max(30, Math.min(140, Number(fov) || 80));
-    this._fov = Math.round(v);
-
-    if (this.ui.fovValue) this.ui.fovValue.textContent = String(this._fov);
-    if (this.ui.fovSlider) this.ui.fovSlider.value = String(this._fov);
-
-    try { localStorage.setItem(LS_FOV, String(this._fov)); } catch {}
-
-    if (this.cameraEl) {
-      this.cameraEl.setAttribute("camera", "fov", this._fov);
-      const cam = this.cameraEl.getObject3D("camera");
-      if (cam) { cam.fov = this._fov; cam.updateProjectionMatrix?.(); }
-    }
-
-    this._syncVrWidgetIfExists();
-  }
-
-  // ============================================================
-  // Download / cache
-  // ============================================================
-
-  _setupDownloadTour() {
-    const btn = this.ui.btnDownloadTour;
-    if (!btn) return;
-    btn.addEventListener("click", () => {
-      if (this._downloadBusy) return;
-      void this._downloadCurrentTourAll();
-    });
-  }
-
-  _getPanoUrlsForTour(tourId) {
+  _getTourStartSceneId(tourId) {
     const pack = this._scenesByTour.get(tourId);
-    const out = [];
-    for (const id of (pack?.sceneOrder ?? [])) {
-      const sc = pack.sceneById.get(id);
-      if (sc?.pano) out.push(new URL(sc.pano, window.location.href).toString());
-    }
-    return Array.from(new Set(out));
+    return pack?.sceneOrder?.[0] ?? null;
   }
 
-  async _downloadCurrentTourAll() {
-    const btn = this.ui.btnDownloadTour;
-    if (!btn) return;
-
-    const panoComp = this.panoEl?.components?.["stereo-top-bottom"];
-    const urls = this._getPanoUrlsForTour(this.currentTourId);
-    if (!urls.length) { this.toast("Nenhuma imagem pra baixar."); return; }
-
-    this._downloadBusy = true;
-    btn.disabled = true;
-
-    const total = urls.length;
-    let done = 0, ok = 0, fail = 0;
-
-    const controller = new AbortController();
-    this._downloadAbort = controller;
-
-    const tourLabel = this._getTourTitle(this.currentTourId);
-    const updateLabel = () => { btn.textContent = `Baixando ${done}/${total}`; };
-    updateLabel();
-
-    let cacheStore = null;
-    if ("caches" in window) {
-      try { cacheStore = await caches.open(TOUR_CACHE_NAME); } catch { cacheStore = null; }
-    }
-
-    const worker = async (url) => {
-      if (controller.signal.aborted) return;
-      try {
-        if (cacheStore) {
-          const hit = await cacheStore.match(url);
-          if (hit) { ok++; done++; updateLabel(); return; }
-        }
-
-        const res = await fetch(url, { cache: "force-cache", signal: controller.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        if (cacheStore) await cacheStore.put(url, res.clone());
-        try { await panoComp?.preload?.(url); } catch {}
-
-        ok++;
-      } catch {
-        fail++;
-      } finally {
-        done++;
-        updateLabel();
-      }
-    };
-
-    const CONCURRENCY = 3;
-    const queue = [...urls];
-    const runners = Array.from({ length: CONCURRENCY }, async () => {
-      while (queue.length && !controller.signal.aborted) {
-        await worker(queue.shift());
-      }
-    });
-
-    await Promise.all(runners);
-
-    btn.textContent = "Baixar Tour Completo";
-    btn.disabled = false;
-    this._downloadBusy = false;
-    this._downloadAbort = null;
-
-    this.toast(`Download "${tourLabel}": ${ok}/${total} (falhas ${fail})`);
-  }
-
-  // ============================================================
-  // Hotspot resolution
-  // ============================================================
-
-  _resolveHotspotTarget(hs) {
-    if (!hs) return null;
-
-    const rawTo = (hs.to ?? "").toString().trim();
-    const rawTour = (hs.toTour ?? "").toString().trim();
-
-    if (rawTour && rawTo) {
-      const tid = this._canonicalTourId(rawTour);
-      if (tid && this._scenesByTour.get(tid)?.sceneById?.has(rawTo)) {
-        return { tourId: tid, sceneId: rawTo };
-      }
-    }
-
-    if (rawTo) {
-      const m = rawTo.match(/^([^:\/]+)[:\/](.+)$/);
-      if (m) {
-        const tid = this._canonicalTourId(m[1]);
-        const sid = m[2];
-        if (tid && this._scenesByTour.get(tid)?.sceneById?.has(sid)) {
-          return { tourId: tid, sceneId: sid };
-        }
-      }
-    }
-
-    if (rawTo) {
-      const tid = this._canonicalTourId(rawTo);
-      if (tid) {
-        const start = this._getTourStartSceneId(tid);
-        if (start) return { tourId: tid, sceneId: start };
-      }
-    }
-
-    if (rawTo && this._sceneById.has(rawTo)) {
-      return { tourId: this.currentTourId, sceneId: rawTo };
-    }
-
-    if (!this._linkTours || !rawTo) return null;
-
-    for (const tid of this._tourOrder) {
-      const pack = this._scenesByTour.get(tid);
-      if (pack?.sceneById?.has(rawTo)) return { tourId: tid, sceneId: rawTo };
-    }
-
-    return null;
-  }
-
-  // ============================================================
-  // Navigation
-  // ============================================================
-
+  // ---------------- core: navigation ----------------
   prevScene() {
     const idx = Math.max(0, this._sceneOrder.indexOf(this.currentSceneId));
     const prev = this._sceneOrder[(idx - 1 + this._sceneOrder.length) % this._sceneOrder.length];
@@ -906,7 +260,7 @@ export default class App {
       return;
     }
 
-    if (tourId !== this.currentTourId) this._setCurrentTour(tourId);
+    if (tourId !== this.currentTourId) this._setCurrentTour(tourId, { emit: true });
 
     const scene = this._sceneById.get(sceneId);
     if (!scene) return;
@@ -925,12 +279,12 @@ export default class App {
 
     if (!inVR) {
       const fadeOutMs = alreadyCached ? 90 : 170;
-      if (this._firstPaint) this._setFade(1);
-      else await this._fadeTo(1, fadeOutMs);
+      if (this._firstPaint) this.uiManager.setFade(1);
+      else await this.uiManager.fadeTo(1, fadeOutMs);
     }
 
     this.currentSceneId = sceneId;
-    this._syncTopBarTitle();
+    this.emit("scene:changed", { tourId: this.currentTourId, sceneId, scene });
 
     if (pushHash) history.replaceState(null, "", `#${this.currentTourId}:${sceneId}`);
 
@@ -944,13 +298,12 @@ export default class App {
 
     if (!inVR) {
       const fadeInMs = alreadyCached ? 120 : 220;
-      await this._fadeTo(0, this._firstPaint ? 220 : fadeInMs);
+      await this.uiManager.fadeTo(0, this._firstPaint ? 220 : fadeInMs);
     }
 
     this._firstPaint = false;
     this._preloadNeighbors(scene);
 
-    this._updateMapMarker();
     this._syncVrWidgetIfExists();
 
     this._isTransitioning = false;
@@ -1012,7 +365,6 @@ export default class App {
     this.hotspotRenderer.clear(this.hotspotsEl);
 
     const sceneStyle = scene.hotspotStyle ?? {};
-
     for (const hs of (scene.hotspots ?? [])) {
       const yawIn = Number(hs.yaw ?? 0);
       const pitchIn = Number(hs.pitch ?? 0);
@@ -1026,12 +378,7 @@ export default class App {
         hs
       );
 
-      const el = this.hotspotRenderer.createHotspot({
-        hs,
-        sceneStyle,
-        position: basePos
-      });
-
+      const el = this.hotspotRenderer.createHotspot({ hs, sceneStyle, position: basePos });
       this.hotspotsEl.appendChild(el);
     }
   }
@@ -1065,7 +412,6 @@ export default class App {
       tries++;
       if (ok) return;
       if (tries >= maxTries) return;
-
       requestAnimationFrame(attempt);
     };
 
@@ -1087,13 +433,12 @@ export default class App {
     const targetPitch = (pitch === null || Number.isNaN(pitch)) ? startPitch : pitch;
 
     const endYaw = startYaw + shortestDeltaDeg(startYaw, targetYaw);
-
     lc.yawObject.rotation.y = THREE.MathUtils.degToRad(endYaw);
     lc.pitchObject.rotation.x = THREE.MathUtils.degToRad(targetPitch);
-
     return true;
   }
 
+  // ---------------- hash parsing ----------------
   _getInitialFromHash() {
     const h = (location.hash || "").replace("#", "").trim();
     if (!h) return null;
@@ -1122,70 +467,300 @@ export default class App {
     return null;
   }
 
-  _createFadeOverlay() {
-    let el = document.querySelector("#sceneFade");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "sceneFade";
-      el.style.position = "fixed";
-      el.style.left = "0";
-      el.style.top = "0";
-      el.style.right = "0";
-      el.style.bottom = "0";
-      el.style.background = "#000";
-      el.style.opacity = "1";
-      el.style.pointerEvents = "none";
-      el.style.zIndex = "1200";
-      el.style.transition = "opacity 200ms ease";
-      document.body.appendChild(el);
+  // ---------------- hotspot target resolve ----------------
+  _resolveHotspotTarget(hs) {
+    if (!hs) return null;
+
+    const rawTo = (hs.to ?? "").toString().trim();
+    const rawTour = (hs.toTour ?? "").toString().trim();
+
+    if (rawTour && rawTo) {
+      const tid = this._canonicalTourId(rawTour);
+      if (tid && this._scenesByTour.get(tid)?.sceneById?.has(rawTo)) return { tourId: tid, sceneId: rawTo };
     }
-    this._fadeEl = el;
+
+    if (rawTo) {
+      const m = rawTo.match(/^([^:\/]+)[:\/](.+)$/);
+      if (m) {
+        const tid = this._canonicalTourId(m[1]);
+        const sid = m[2];
+        if (tid && this._scenesByTour.get(tid)?.sceneById?.has(sid)) return { tourId: tid, sceneId: sid };
+      }
+    }
+
+    if (rawTo) {
+      const tid = this._canonicalTourId(rawTo);
+      if (tid) {
+        const start = this._getTourStartSceneId(tid);
+        if (start) return { tourId: tid, sceneId: start };
+      }
+    }
+
+    if (rawTo && this._sceneById.has(rawTo)) return { tourId: this.currentTourId, sceneId: rawTo };
+
+    if (!this._linkTours || !rawTo) return null;
+
+    for (const tid of this._tourOrder) {
+      const pack = this._scenesByTour.get(tid);
+      if (pack?.sceneById?.has(rawTo)) return { tourId: tid, sceneId: rawTo };
+    }
+
+    return null;
   }
 
-  _setFade(alpha) {
-    if (!this._fadeEl) return;
-    this._fadeEl.style.transition = "none";
-    this._fadeEl.style.opacity = String(alpha);
-    void this._fadeEl.offsetHeight;
-    this._fadeEl.style.transition = "opacity 200ms ease";
+  // ---------------- helpers ----------------
+  getPanoUrlsForTour(tourId) {
+    const pack = this._scenesByTour.get(tourId);
+    const out = [];
+    for (const id of (pack?.sceneOrder ?? [])) {
+      const sc = pack.sceneById.get(id);
+      if (sc?.pano) out.push(new URL(sc.pano, window.location.href).toString());
+    }
+    return Array.from(new Set(out));
   }
 
-  _fadeTo(alpha, durationMs) {
-    if (!this._fadeEl) return Promise.resolve();
-    this._fadeEl.style.transition = `opacity ${durationMs}ms ease`;
-    this._fadeEl.style.opacity = String(alpha);
+  // ---------------- VR lifecycle + console/widget ----------------
+  _bindXRSessionLifecycle() {
+    const xr = this.sceneEl?.renderer?.xr;
+    if (!xr?.addEventListener) return;
 
-    return new Promise((resolve) => {
-      const onEnd = () => resolve();
-      this._fadeEl.addEventListener("transitionend", onEnd, { once: true });
-      setTimeout(resolve, durationMs + 40);
+    const onStart = async () => {
+      requestAnimationFrame(async () => {
+        await this._ensureVrUiIfImmersive();
+      });
+    };
+
+    const onEnd = () => {
+      this._destroyVrWidget();
+      this._destroyVrConsole();
+    };
+
+    xr.addEventListener("sessionstart", onStart);
+    xr.addEventListener("sessionend", onEnd);
+
+    this._xrUnsub = () => {
+      xr.removeEventListener("sessionstart", onStart);
+      xr.removeEventListener("sessionend", onEnd);
+    };
+  }
+
+  async _ensureVrUiIfImmersive() {
+    if (!this.sceneEl.is("vr-mode")) return;
+
+    const session = await this._waitXRSession(2000);
+    if (!session) return;
+
+    // widget
+    this._ensureVrWidget();
+    this._syncVrWidgetIfExists();
+
+    // console
+    if (this._vrDebugEnabled) this._ensureVrConsole();
+  }
+
+  async _waitXRSession(timeoutMs = 2000) {
+    const start = performance.now();
+    while (performance.now() - start < timeoutMs) {
+      const s = this.sceneEl?.renderer?.xr?.getSession?.() || null;
+      if (s) return s;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return this.sceneEl?.renderer?.xr?.getSession?.() || null;
+  }
+
+  _ensureVrConsole() {
+    if (this._vrConsoleEl) {
+      this._vrConsoleEl.setAttribute("visible", "true");
+      if (this._vrConsoleEl.object3D) this._vrConsoleEl.object3D.visible = true;
+      this._bindVrConsoleInputs();
+      return;
+    }
+
+    const el = document.createElement("a-entity");
+    el.setAttribute("id", "vrConsole");
+    el.setAttribute("position", "0 -0.12 -0.65");
+    el.setAttribute("visible", "true");
+    el.setAttribute("vr-debug-console", "");
+    this.cameraEl.appendChild(el);
+    this._vrConsoleEl = el;
+
+    this._bindVrConsoleInputs();
+  }
+
+  _toggleVrConsoleVisible() {
+    if (!this._vrConsoleEl) return;
+
+    const aVisible = this._vrConsoleEl.getAttribute("visible");
+    const oVisible = this._vrConsoleEl.object3D?.visible;
+    const isVisible = (aVisible !== false && aVisible !== "false") && (oVisible !== false);
+
+    const next = !isVisible;
+    this._vrConsoleEl.setAttribute("visible", next ? "true" : "false");
+    if (this._vrConsoleEl.object3D) this._vrConsoleEl.object3D.visible = next;
+  }
+
+  _bindVrConsoleInputs() {
+    if (this._vrConsoleInputBound) return;
+    if (!this._vrDebugEnabled) return;
+
+    const right = this.rightHandEl;
+    if (!right) return;
+
+    this._onRightThumbstickDown = () => {
+      if (!this.sceneEl.is("vr-mode")) return;
+      this._toggleVrConsoleVisible();
+    };
+
+    right.addEventListener("thumbstickdown", this._onRightThumbstickDown);
+    right.addEventListener("stickdown", this._onRightThumbstickDown);
+
+    this._vrConsoleInputBound = true;
+  }
+
+  _unbindVrConsoleInputs() {
+    if (!this._vrConsoleInputBound) return;
+
+    const right = this.rightHandEl;
+    if (right && this._onRightThumbstickDown) {
+      right.removeEventListener("thumbstickdown", this._onRightThumbstickDown);
+      right.removeEventListener("stickdown", this._onRightThumbstickDown);
+    }
+
+    this._onRightThumbstickDown = null;
+    this._vrConsoleInputBound = false;
+  }
+
+  _destroyVrConsole() {
+    this._unbindVrConsoleInputs();
+    if (!this._vrConsoleEl) return;
+    try { this._vrConsoleEl.remove(); } catch {}
+    this._vrConsoleEl = null;
+  }
+
+  _ensureVrWidget() {
+    if (this._vrWidgetEl) {
+      this._vrWidgetEl.setAttribute("visible", "true");
+      if (this._vrWidgetEl.object3D) this._vrWidgetEl.object3D.visible = true;
+      return;
+    }
+
+    const el = document.createElement("a-entity");
+    el.setAttribute("id", "vrWidget");
+    el.setAttribute("visible", "true");
+    el.setAttribute("vr-widget", "");
+    this.cameraEl.appendChild(el);
+    this._vrWidgetEl = el;
+
+    const hPrev = () => void this.prevScene();
+    const hNext = () => void this.nextScene();
+    const hFov = (e) => {
+      const d = Number(e?.detail?.delta || 0);
+      this.setFov(this._fov + d, { emit: true });
+    };
+    const hTour = (e) => {
+      const delta = Number(e?.detail?.delta || 0);
+      this._stepTour(delta);
+    };
+    const hScene = (e) => {
+      const delta = Number(e?.detail?.delta || 0);
+      this._stepScene(delta);
+    };
+
+    // dropdown VR
+    const hSelectTour = (e) => {
+      const tid = String(e?.detail?.tourId || "");
+      if (!tid || tid === this.currentTourId) return;
+      this.setCurrentTour(tid);
+      const start = this._getTourStartSceneId(tid);
+      if (start) void this.goToScene(start, { tourId: tid });
+    };
+    const hSelectScene = (e) => {
+      const sid = String(e?.detail?.sceneId || "");
+      if (!sid || sid === this.currentSceneId) return;
+      void this.goToScene(sid, { tourId: this.currentTourId });
+    };
+
+    el.addEventListener("vrwidget:prevscene", hPrev);
+    el.addEventListener("vrwidget:nextscene", hNext);
+    el.addEventListener("vrwidget:fovdelta", hFov);
+    el.addEventListener("vrwidget:tourstep", hTour);
+    el.addEventListener("vrwidget:scenestep", hScene);
+    el.addEventListener("vrwidget:selecttour", hSelectTour);
+    el.addEventListener("vrwidget:selectscene", hSelectScene);
+
+    this._vrWidgetHandlers = { hPrev, hNext, hFov, hTour, hScene, hSelectTour, hSelectScene };
+  }
+
+  _destroyVrWidget() {
+    const el = this._vrWidgetEl;
+    if (!el) return;
+
+    try {
+      const hs = this._vrWidgetHandlers;
+      if (hs) {
+        el.removeEventListener("vrwidget:prevscene", hs.hPrev);
+        el.removeEventListener("vrwidget:nextscene", hs.hNext);
+        el.removeEventListener("vrwidget:fovdelta", hs.hFov);
+        el.removeEventListener("vrwidget:tourstep", hs.hTour);
+        el.removeEventListener("vrwidget:scenestep", hs.hScene);
+        el.removeEventListener("vrwidget:selecttour", hs.hSelectTour);
+        el.removeEventListener("vrwidget:selectscene", hs.hSelectScene);
+      }
+    } catch {}
+
+    try { el.remove(); } catch {}
+    this._vrWidgetEl = null;
+    this._vrWidgetHandlers = null;
+  }
+
+  _syncVrWidgetIfExists() {
+    const el = this._vrWidgetEl;
+    if (!el) return;
+
+    const tour = this.getCurrentTour();
+    const scene = this.getCurrentScene();
+
+    const hasMap = !!tour?.map_png;
+    const marker = parsePercentPair(scene?.scene_map_position);
+
+    const tourList = this._tourOrder.map(tid => ({ id: tid, title: this.getTourTitle(tid) }));
+    const sceneList = this._sceneOrder.map(sid => {
+      const sc = this._sceneById.get(sid);
+      return { id: sid, name: sc?.name ?? sid };
     });
+
+    el.emit("vrwidget:update", {
+      tourTitle: tour?.title ?? this.currentTourId ?? "—",
+      sceneTitle: scene?.name ?? scene?.id ?? "—",
+      currentTourId: this.currentTourId ?? "",
+      currentSceneId: this.currentSceneId ?? "",
+      tourList,
+      sceneList,
+      fov: this._fov,
+      hasMap,
+      mapSrc: tour?.map_png ?? "",
+      marker: hasMap ? marker : null
+    }, false);
   }
 
-  showTooltip(text) {
-    if (!this._canHover) return;
-    if (this.sceneEl.is("vr-mode")) return;
-    const el = this.ui.tooltip;
-    if (!el) return;
-    el.textContent = text || "";
-    el.style.left = `${this._mouse.x}px`;
-    el.style.top = `${this._mouse.y}px`;
-    el.hidden = !text;
+  _stepTour(delta) {
+    const order = this._tourOrder;
+    const idx = Math.max(0, order.indexOf(this.currentTourId));
+    const next = order[(idx + delta + order.length) % order.length];
+    if (!next || next === this.currentTourId) return;
+
+    this.setCurrentTour(next);
+    const start = this._getTourStartSceneId(next);
+    if (start) void this.goToScene(start, { tourId: next });
   }
 
-  hideTooltip() {
-    const el = this.ui.tooltip;
-    if (!el) return;
-    el.hidden = true;
-  }
+  _stepScene(delta) {
+    const order = this._sceneOrder;
+    const idx = Math.max(0, order.indexOf(this.currentSceneId));
+    const next = order[(idx + delta + order.length) % order.length];
+    if (!next || next === this.currentSceneId) return;
 
-  toast(msg, ms = 1800) {
-    const el = this.ui.toast;
-    if (!el) return;
-    el.textContent = msg;
-    el.hidden = false;
-    clearTimeout(this._toastT);
-    this._toastT = setTimeout(() => (el.hidden = true), ms);
+    void this.goToScene(next, { tourId: this.currentTourId });
   }
 }
 
