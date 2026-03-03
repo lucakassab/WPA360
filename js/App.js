@@ -52,7 +52,7 @@ export default class App {
     // VR
     this._vrDebugEnabled = false;
     this._vrConsoleEl = null;
-    this._vrConsoleVisible = true; // ✅ estado desejado
+    this._vrConsoleVisible = true;
     this._vrWidgetEl = null;
     this._vrWidgetHandlers = null;
 
@@ -63,6 +63,7 @@ export default class App {
     this._mediaLoading = false;
     this._loadingOverlayEl = null;
     this._loadingLabelEl = null;
+    this._loadingToken = 0; // ✅ token anti-stale
 
     // UI manager
     this.uiManager = new AppUI(this, this.ui);
@@ -108,27 +109,34 @@ export default class App {
 
     this._vrDebugEnabled = !!vrDebug;
 
+    // load tours
     const data = await loadTours();
     this._defaultTourId = data.defaultTourId;
     this._tourOrder = data.tourOrder;
     this._toursById = data.toursById;
     this._scenesByTour = data.scenesByTour;
 
+    // prefs
     this._linkTours = localStorage.getItem(LS_LINK) === "1";
 
+    // set current tour
     this._setCurrentTour(this._defaultTourId, { emit: false });
 
+    // init UI
     this.uiManager.init();
 
-    // ✅ loading overlay (desktop/mobile)
+    // ✅ loading overlay (DOM)
     this._createLoadingOverlay();
 
+    // FOV from storage
     const savedFov = Number(localStorage.getItem(LS_FOV));
     const initialFov = Number.isFinite(savedFov) ? savedFov : 80;
     this.setFov(initialFov, { emit: true });
 
+    // hover support
     this._canHover = window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches ?? false;
 
+    // hotspot renderer
     this.hotspotRenderer = new HotspotRenderer({
       showTooltip: (t) => this.showTooltip(t),
       hideTooltip: () => this.hideTooltip(),
@@ -141,6 +149,7 @@ export default class App {
       }
     });
 
+    // initial scene from hash
     const initial = this._getInitialFromHash();
     if (initial) {
       await this.goToScene(initial.sceneId, { tourId: initial.tourId, pushHash: false });
@@ -149,6 +158,7 @@ export default class App {
       await this.goToScene(firstScene, { tourId: this.currentTourId, pushHash: false });
     }
 
+    // hash change
     window.addEventListener("hashchange", () => {
       const parsed = this._getInitialFromHash();
       if (!parsed) return;
@@ -156,6 +166,7 @@ export default class App {
       if (!same) void this.goToScene(parsed.sceneId, { tourId: parsed.tourId, pushHash: false });
     });
 
+    // VR enter/exit
     this.sceneEl.addEventListener("enter-vr", async () => {
       this.emit("vr:enter");
       await this._ensureVrUiIfImmersive();
@@ -167,8 +178,10 @@ export default class App {
       this._destroyVrConsole();
     });
 
+    // XR session lifecycle
     this._bindXRSessionLifecycle();
 
+    // hotspot debug
     if (debugHotspots) {
       const mod = await import("./tour/HotspotDebug.js");
       this._debug = new mod.default(this);
@@ -179,24 +192,38 @@ export default class App {
     }
   }
 
-  // ---------------- loading overlay ----------------
+  // ---------------- loading overlay (fix definitivo) ----------------
   _createLoadingOverlay() {
-    if (this._loadingOverlayEl) return;
+    // ✅ se tiver algum overlay antigo teu, mata pra não conflitar
+    const old = document.getElementById("loadingOverlay");
+    if (old) {
+      try { old.remove(); } catch {}
+    }
+
+    // ✅ id novo pra não bater com nada teu
+    const existing = document.getElementById("mediaLoadingOverlay");
+    if (existing) {
+      this._loadingOverlayEl = existing;
+      this._loadingLabelEl = existing.querySelector("[data-loading-label]") || null;
+      return;
+    }
 
     const wrap = document.createElement("div");
-    wrap.id = "loadingOverlay";
-    wrap.hidden = true;
+    wrap.id = "mediaLoadingOverlay";
+    wrap.setAttribute("aria-hidden", "true");
 
     Object.assign(wrap.style, {
       position: "fixed",
       inset: "0",
-      zIndex: "99999",
+      zIndex: "999999",
       background: "rgba(0,0,0,0.55)",
-      backdropFilter: "blur(6px)",
-      display: "flex",
+      backdropFilter: "blur(8px)",
+      display: "none",              // ✅ começa morto
       alignItems: "center",
       justifyContent: "center",
-      pointerEvents: "auto"
+      pointerEvents: "none",        // ✅ sem bloquear quando escondido
+      opacity: "0",
+      transition: "opacity 120ms ease"
     });
 
     const box = document.createElement("div");
@@ -209,7 +236,8 @@ export default class App {
       alignItems: "center",
       gap: "12px",
       color: "rgba(255,255,255,0.92)",
-      font: "800 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+      font: "800 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+      boxShadow: "0 18px 60px rgba(0,0,0,0.45)"
     });
 
     const spinner = document.createElement("div");
@@ -229,8 +257,8 @@ export default class App {
     document.head.appendChild(style);
 
     const label = document.createElement("div");
+    label.dataset.loadingLabel = "1";
     label.textContent = "Carregando…";
-    this._loadingLabelEl = label;
 
     box.appendChild(spinner);
     box.appendChild(label);
@@ -238,18 +266,43 @@ export default class App {
     document.body.appendChild(wrap);
 
     this._loadingOverlayEl = wrap;
+    this._loadingLabelEl = label;
   }
 
-  _setLoading(loading, label = "Carregando…") {
-    this._mediaLoading = !!loading;
+  _setLoading(loading, label = "Carregando…", token = null) {
+    // ✅ token: evita load velho prender overlay
+    if (token != null && token !== this._loadingToken) return;
 
-    // desktop/mobile overlay
-    if (this._loadingOverlayEl) {
-      this._loadingOverlayEl.hidden = !this._mediaLoading;
-      if (this._loadingLabelEl) this._loadingLabelEl.textContent = label;
+    const next = !!loading;
+    this._mediaLoading = next;
+
+    const el = this._loadingOverlayEl;
+    if (el) {
+      if (next) {
+        if (this._loadingLabelEl) this._loadingLabelEl.textContent = label || "Carregando…";
+
+        el.style.display = "flex";
+        el.style.pointerEvents = "auto";
+        el.style.opacity = "1";
+        el.setAttribute("aria-hidden", "false");
+      } else {
+        // ✅ hard hide: some com blur/texto SEM depender de hidden/CSS
+        el.style.opacity = "0";
+        el.style.pointerEvents = "none";
+        el.setAttribute("aria-hidden", "true");
+
+        // depois do fade curtinho, mata display
+        setTimeout(() => {
+          // se outro loading começou nesse meio tempo, não mata
+          if (this._mediaLoading) return;
+          el.style.display = "none";
+        }, 140);
+
+        if (this._loadingLabelEl) this._loadingLabelEl.textContent = "";
+      }
     }
 
-    // VR widget badge
+    // VR badge
     this._syncVrWidgetIfExists();
   }
 
@@ -260,6 +313,7 @@ export default class App {
 
     try { localStorage.setItem(LS_FOV, String(this._fov)); } catch {}
 
+    // camera
     if (this.cameraEl) {
       this.cameraEl.setAttribute("camera", "fov", this._fov);
       const cam = this.cameraEl.getObject3D("camera");
@@ -338,14 +392,15 @@ export default class App {
     this._isTransitioning = true;
     this._queuedNav = null;
 
+    const loadToken = ++this._loadingToken; // ✅ novo token pro fluxo
     const inVR = this.sceneEl.is("vr-mode");
     const panoComp = this.panoEl?.components?.["stereo-top-bottom"];
 
     this.hideTooltip();
     this._setHotspotsVisible(false);
 
-    // ✅ mostra loading
-    this._setLoading(true, "Carregando mídia…");
+    // ✅ show loading
+    this._setLoading(true, "Carregando mídia…", loadToken);
 
     try {
       const alreadyCached = panoComp?.isCached?.(scene.pano) ?? false;
@@ -362,7 +417,11 @@ export default class App {
 
       if (pushHash) history.replaceState(null, "", `#${this.currentTourId}:${sceneId}`);
 
+      // ✅ espera o “done real” do pano (evento stereo-loaded ou promise do setSrc)
       await this._setPanoAndWait(scene.pano);
+
+      // ✅ pano carregou MESMO: já pode tirar overlay aqui (não espera fade/hotspot/etc)
+      this._setLoading(false, "", loadToken);
 
       this._applyViewForScene(scene, fromHotspot);
 
@@ -377,14 +436,16 @@ export default class App {
 
       this._firstPaint = false;
       this._preloadNeighbors(scene);
-
       this._syncVrWidgetIfExists();
     } catch (e) {
       console.error("goToScene falhou:", e);
       this.toast("Falha ao carregar mídia.");
+
+      // ✅ garante remover overlay em erro também
+      this._setLoading(false, "", loadToken);
     } finally {
-      // ✅ hide loading
-      this._setLoading(false);
+      // ✅ se algum caminho ainda deixou ligado, mata aqui (com token)
+      this._setLoading(false, "", loadToken);
 
       this._isTransitioning = false;
 
@@ -403,13 +464,16 @@ export default class App {
 
   async _setPanoAndWait(src) {
     const comp = this.panoEl?.components?.["stereo-top-bottom"];
-    if (comp?.setSrc) { await comp.setSrc(src); return; }
+    if (comp?.setSrc) {
+      await comp.setSrc(src);
+      return;
+    }
 
     this.panoEl.setAttribute("stereo-top-bottom", { src, radius: 5000 });
 
     await new Promise((resolve, reject) => {
       const onLoad = (e) => { if (e?.detail?.src === src) resolve(); };
-      const onErr = (e) => { reject(new Error(e?.detail?.src || "stereo-error")); };
+      const onErr = () => { reject(new Error("stereo-error")); };
 
       this.panoEl.addEventListener("stereo-loaded", onLoad, { once: true });
       this.panoEl.addEventListener("stereo-error", onErr, { once: true });
@@ -525,6 +589,7 @@ export default class App {
     return true;
   }
 
+  // ---------------- hash parsing ----------------
   _getInitialFromHash() {
     const h = (location.hash || "").replace("#", "").trim();
     if (!h) return null;
@@ -553,6 +618,7 @@ export default class App {
     return null;
   }
 
+  // ---------------- hotspot target resolve ----------------
   _resolveHotspotTarget(hs) {
     if (!hs) return null;
 
@@ -593,6 +659,17 @@ export default class App {
     return null;
   }
 
+  // ---------------- helpers ----------------
+  getPanoUrlsForTour(tourId) {
+    const pack = this._scenesByTour.get(tourId);
+    const out = [];
+    for (const id of (pack?.sceneOrder ?? [])) {
+      const sc = pack.sceneById.get(id);
+      if (sc?.pano) out.push(new URL(sc.pano, window.location.href).toString());
+    }
+    return Array.from(new Set(out));
+  }
+
   // ---------------- VR lifecycle + console/widget ----------------
   _bindXRSessionLifecycle() {
     const xr = this.sceneEl?.renderer?.xr;
@@ -627,7 +704,6 @@ export default class App {
     this._ensureVrWidget();
     this._syncVrWidgetIfExists();
 
-    // ✅ garante console criado quando vrDebug=true
     if (this._vrDebugEnabled) {
       this._ensureVrConsole({ forceShow: true });
       this._bindVrConsoleInputs();
@@ -650,6 +726,7 @@ export default class App {
     if (this._vrConsoleEl) {
       if (forceShow) this._vrConsoleVisible = true;
       this._applyVrConsoleVisibility();
+      this._bindVrConsoleInputs();
       return;
     }
 
@@ -663,6 +740,7 @@ export default class App {
 
     if (forceShow) this._vrConsoleVisible = true;
     this._applyVrConsoleVisibility();
+    this._bindVrConsoleInputs();
   }
 
   _applyVrConsoleVisibility() {
@@ -673,13 +751,10 @@ export default class App {
   }
 
   _toggleVrConsoleVisible() {
-    // ✅ se não existe ainda, cria e mostra
     if (!this._vrConsoleEl) {
       this._ensureVrConsole({ forceShow: true });
-      this._bindVrConsoleInputs();
       return;
     }
-
     this._vrConsoleVisible = !this._vrConsoleVisible;
     this._applyVrConsoleVisibility();
   }
@@ -696,7 +771,6 @@ export default class App {
       this._toggleVrConsoleVisible();
     };
 
-    // ✅ mapeamento "thumbstick down"
     right.addEventListener("thumbstickdown", this._onRightThumbstickDown);
     right.addEventListener("stickdown", this._onRightThumbstickDown);
 
@@ -828,7 +902,6 @@ export default class App {
       mapSrc: tour?.map_png ?? "",
       marker: hasMap ? marker : null,
 
-      // ✅ loading para o badge VR
       loading: this._mediaLoading
     }, false);
   }
