@@ -26,11 +26,13 @@ export default class App {
 
     this._events = new EventTarget();
 
+    // tours
     this._defaultTourId = null;
     this._tourOrder = [];
     this._toursById = new Map();
     this._scenesByTour = new Map();
 
+    // current
     this.currentTourId = null;
     this._sceneOrder = [];
     this._sceneById = new Map();
@@ -47,21 +49,33 @@ export default class App {
     this.hotspotAnchorEl = null;
     this.hotspotRenderer = null;
 
+    // VR
     this._vrDebugEnabled = false;
     this._vrConsoleEl = null;
+    this._vrConsoleVisible = true; // ✅ estado desejado
     this._vrWidgetEl = null;
     this._vrWidgetHandlers = null;
 
     this._vrConsoleInputBound = false;
     this._onRightThumbstickDown = null;
 
+    // Loading
+    this._mediaLoading = false;
+    this._loadingOverlayEl = null;
+    this._loadingLabelEl = null;
+
+    // UI manager
     this.uiManager = new AppUI(this, this.ui);
+
+    // misc
     this._canHover = false;
   }
 
+  // ---------------- events ----------------
   on(type, handler) { this._events.addEventListener(type, handler); }
   emit(type, detail = {}) { this._events.dispatchEvent(new CustomEvent(type, { detail })); }
 
+  // ---------------- getters / setters p/ UI ----------------
   getTourOrder() { return [...this._tourOrder]; }
   getSceneOrder() { return [...this._sceneOrder]; }
   getTourTitle(tourId) {
@@ -77,6 +91,7 @@ export default class App {
     this.emit("link:changed", { value: this._linkTours });
   }
 
+  // ---------------- UI passthroughs ----------------
   toast(msg, ms) { this.uiManager.toast(msg, ms); }
   showTooltip(text) { this.uiManager.showTooltip(text); }
   hideTooltip() { this.uiManager.hideTooltip(); }
@@ -84,6 +99,7 @@ export default class App {
   setVRButtonVisible(visible) { this.uiManager.setVRButtonVisible(visible); }
   setInstallButtonVisible(visible) { this.uiManager.setInstallButtonVisible(visible); }
 
+  // ---------------- init ----------------
   async init({ debugHotspots = false, vrDebug = false } = {}) {
     await new Promise((resolve) => {
       if (this.sceneEl.hasLoaded) return resolve();
@@ -103,6 +119,9 @@ export default class App {
     this._setCurrentTour(this._defaultTourId, { emit: false });
 
     this.uiManager.init();
+
+    // ✅ loading overlay (desktop/mobile)
+    this._createLoadingOverlay();
 
     const savedFov = Number(localStorage.getItem(LS_FOV));
     const initialFov = Number.isFinite(savedFov) ? savedFov : 80;
@@ -160,6 +179,81 @@ export default class App {
     }
   }
 
+  // ---------------- loading overlay ----------------
+  _createLoadingOverlay() {
+    if (this._loadingOverlayEl) return;
+
+    const wrap = document.createElement("div");
+    wrap.id = "loadingOverlay";
+    wrap.hidden = true;
+
+    Object.assign(wrap.style, {
+      position: "fixed",
+      inset: "0",
+      zIndex: "99999",
+      background: "rgba(0,0,0,0.55)",
+      backdropFilter: "blur(6px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      pointerEvents: "auto"
+    });
+
+    const box = document.createElement("div");
+    Object.assign(box.style, {
+      padding: "14px 16px",
+      borderRadius: "14px",
+      border: "1px solid rgba(255,255,255,0.14)",
+      background: "rgba(15,15,15,0.88)",
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      color: "rgba(255,255,255,0.92)",
+      font: "800 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+    });
+
+    const spinner = document.createElement("div");
+    Object.assign(spinner.style, {
+      width: "18px",
+      height: "18px",
+      borderRadius: "999px",
+      border: "3px solid rgba(255,255,255,0.18)",
+      borderTopColor: "rgba(255,255,255,0.92)",
+      animation: "spin 0.85s linear infinite"
+    });
+
+    const style = document.createElement("style");
+    style.textContent = `
+      @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+    `;
+    document.head.appendChild(style);
+
+    const label = document.createElement("div");
+    label.textContent = "Carregando…";
+    this._loadingLabelEl = label;
+
+    box.appendChild(spinner);
+    box.appendChild(label);
+    wrap.appendChild(box);
+    document.body.appendChild(wrap);
+
+    this._loadingOverlayEl = wrap;
+  }
+
+  _setLoading(loading, label = "Carregando…") {
+    this._mediaLoading = !!loading;
+
+    // desktop/mobile overlay
+    if (this._loadingOverlayEl) {
+      this._loadingOverlayEl.hidden = !this._mediaLoading;
+      if (this._loadingLabelEl) this._loadingLabelEl.textContent = label;
+    }
+
+    // VR widget badge
+    this._syncVrWidgetIfExists();
+  }
+
+  // ---------------- core: fov ----------------
   setFov(fov, { emit = true } = {}) {
     const v = Math.max(30, Math.min(140, Number(fov) || 80));
     this._fov = Math.round(v);
@@ -176,6 +270,7 @@ export default class App {
     this._syncVrWidgetIfExists();
   }
 
+  // ---------------- core: tour switching ----------------
   setCurrentTour(tourId) {
     const ok = this._setCurrentTour(tourId, { emit: true });
     return ok;
@@ -213,6 +308,7 @@ export default class App {
     return pack?.sceneOrder?.[0] ?? null;
   }
 
+  // ---------------- core: navigation ----------------
   prevScene() {
     const idx = Math.max(0, this._sceneOrder.indexOf(this.currentSceneId));
     const prev = this._sceneOrder[(idx - 1 + this._sceneOrder.length) % this._sceneOrder.length];
@@ -248,43 +344,55 @@ export default class App {
     this.hideTooltip();
     this._setHotspotsVisible(false);
 
-    const alreadyCached = panoComp?.isCached?.(scene.pano) ?? false;
-    try { await (panoComp?.preload?.(scene.pano) ?? Promise.resolve(null)); } catch {}
+    // ✅ mostra loading
+    this._setLoading(true, "Carregando mídia…");
 
-    if (!inVR) {
-      const fadeOutMs = alreadyCached ? 90 : 170;
-      if (this._firstPaint) this.uiManager.setFade(1);
-      else await this.uiManager.fadeTo(1, fadeOutMs);
-    }
+    try {
+      const alreadyCached = panoComp?.isCached?.(scene.pano) ?? false;
+      try { await (panoComp?.preload?.(scene.pano) ?? Promise.resolve(null)); } catch {}
 
-    this.currentSceneId = sceneId;
-    this.emit("scene:changed", { tourId: this.currentTourId, sceneId, scene });
+      if (!inVR) {
+        const fadeOutMs = alreadyCached ? 90 : 170;
+        if (this._firstPaint) this.uiManager.setFade(1);
+        else await this.uiManager.fadeTo(1, fadeOutMs);
+      }
 
-    if (pushHash) history.replaceState(null, "", `#${this.currentTourId}:${sceneId}`);
+      this.currentSceneId = sceneId;
+      this.emit("scene:changed", { tourId: this.currentTourId, sceneId, scene });
 
-    await this._setPanoAndWait(scene.pano);
-    this._applyViewForScene(scene, fromHotspot);
+      if (pushHash) history.replaceState(null, "", `#${this.currentTourId}:${sceneId}`);
 
-    this._ensureHotspotAnchor();
-    this._renderHotspots(scene);
-    this._setHotspotsVisible(true);
+      await this._setPanoAndWait(scene.pano);
 
-    if (!inVR) {
-      const fadeInMs = alreadyCached ? 120 : 220;
-      await this.uiManager.fadeTo(0, this._firstPaint ? 220 : fadeInMs);
-    }
+      this._applyViewForScene(scene, fromHotspot);
 
-    this._firstPaint = false;
-    this._preloadNeighbors(scene);
+      this._ensureHotspotAnchor();
+      this._renderHotspots(scene);
+      this._setHotspotsVisible(true);
 
-    this._syncVrWidgetIfExists();
+      if (!inVR) {
+        const fadeInMs = alreadyCached ? 120 : 220;
+        await this.uiManager.fadeTo(0, this._firstPaint ? 220 : fadeInMs);
+      }
 
-    this._isTransitioning = false;
+      this._firstPaint = false;
+      this._preloadNeighbors(scene);
 
-    if (this._queuedNav) {
-      const q = this._queuedNav;
-      this._queuedNav = null;
-      await this.goToScene(q.sceneId, q.opts);
+      this._syncVrWidgetIfExists();
+    } catch (e) {
+      console.error("goToScene falhou:", e);
+      this.toast("Falha ao carregar mídia.");
+    } finally {
+      // ✅ hide loading
+      this._setLoading(false);
+
+      this._isTransitioning = false;
+
+      if (this._queuedNav) {
+        const q = this._queuedNav;
+        this._queuedNav = null;
+        await this.goToScene(q.sceneId, q.opts);
+      }
     }
   }
 
@@ -298,9 +406,15 @@ export default class App {
     if (comp?.setSrc) { await comp.setSrc(src); return; }
 
     this.panoEl.setAttribute("stereo-top-bottom", { src, radius: 5000 });
-    await new Promise((resolve) => {
+
+    await new Promise((resolve, reject) => {
       const onLoad = (e) => { if (e?.detail?.src === src) resolve(); };
+      const onErr = (e) => { reject(new Error(e?.detail?.src || "stereo-error")); };
+
       this.panoEl.addEventListener("stereo-loaded", onLoad, { once: true });
+      this.panoEl.addEventListener("stereo-error", onErr, { once: true });
+
+      setTimeout(() => reject(new Error("timeout stereo-loaded")), 15000);
     });
   }
 
@@ -479,6 +593,7 @@ export default class App {
     return null;
   }
 
+  // ---------------- VR lifecycle + console/widget ----------------
   _bindXRSessionLifecycle() {
     const xr = this.sceneEl?.renderer?.xr;
     if (!xr?.addEventListener) return;
@@ -512,7 +627,11 @@ export default class App {
     this._ensureVrWidget();
     this._syncVrWidgetIfExists();
 
-    if (this._vrDebugEnabled) this._ensureVrConsole();
+    // ✅ garante console criado quando vrDebug=true
+    if (this._vrDebugEnabled) {
+      this._ensureVrConsole({ forceShow: true });
+      this._bindVrConsoleInputs();
+    }
   }
 
   async _waitXRSession(timeoutMs = 2000) {
@@ -525,12 +644,83 @@ export default class App {
     return this.sceneEl?.renderer?.xr?.getSession?.() || null;
   }
 
-  _ensureVrConsole() {
-    // (mantém o seu)
+  _ensureVrConsole({ forceShow = false } = {}) {
+    if (!this._vrDebugEnabled) return;
+
+    if (this._vrConsoleEl) {
+      if (forceShow) this._vrConsoleVisible = true;
+      this._applyVrConsoleVisibility();
+      return;
+    }
+
+    const el = document.createElement("a-entity");
+    el.setAttribute("id", "vrConsole");
+    el.setAttribute("position", "0 -0.12 -0.65");
+    el.setAttribute("visible", "true");
+    el.setAttribute("vr-debug-console", "");
+    this.cameraEl.appendChild(el);
+    this._vrConsoleEl = el;
+
+    if (forceShow) this._vrConsoleVisible = true;
+    this._applyVrConsoleVisibility();
+  }
+
+  _applyVrConsoleVisibility() {
+    if (!this._vrConsoleEl) return;
+    const v = !!this._vrConsoleVisible;
+    this._vrConsoleEl.setAttribute("visible", v ? "true" : "false");
+    if (this._vrConsoleEl.object3D) this._vrConsoleEl.object3D.visible = v;
+  }
+
+  _toggleVrConsoleVisible() {
+    // ✅ se não existe ainda, cria e mostra
+    if (!this._vrConsoleEl) {
+      this._ensureVrConsole({ forceShow: true });
+      this._bindVrConsoleInputs();
+      return;
+    }
+
+    this._vrConsoleVisible = !this._vrConsoleVisible;
+    this._applyVrConsoleVisibility();
+  }
+
+  _bindVrConsoleInputs() {
+    if (this._vrConsoleInputBound) return;
+    if (!this._vrDebugEnabled) return;
+
+    const right = this.rightHandEl;
+    if (!right) return;
+
+    this._onRightThumbstickDown = () => {
+      if (!this.sceneEl.is("vr-mode")) return;
+      this._toggleVrConsoleVisible();
+    };
+
+    // ✅ mapeamento "thumbstick down"
+    right.addEventListener("thumbstickdown", this._onRightThumbstickDown);
+    right.addEventListener("stickdown", this._onRightThumbstickDown);
+
+    this._vrConsoleInputBound = true;
+  }
+
+  _unbindVrConsoleInputs() {
+    if (!this._vrConsoleInputBound) return;
+
+    const right = this.rightHandEl;
+    if (right && this._onRightThumbstickDown) {
+      right.removeEventListener("thumbstickdown", this._onRightThumbstickDown);
+      right.removeEventListener("stickdown", this._onRightThumbstickDown);
+    }
+
+    this._onRightThumbstickDown = null;
+    this._vrConsoleInputBound = false;
   }
 
   _destroyVrConsole() {
-    // (mantém o seu)
+    this._unbindVrConsoleInputs();
+    if (!this._vrConsoleEl) return;
+    try { this._vrConsoleEl.remove(); } catch {}
+    this._vrConsoleEl = null;
   }
 
   _ensureVrWidget() {
@@ -562,13 +752,11 @@ export default class App {
       if (start) void this.goToScene(start, { tourId: tid });
     };
 
-    // ✅ AQUI a correção: usa o tourId vindo do widget
     const hSelectScene = (e) => {
       const sid = String(e?.detail?.sceneId || "");
       const tid = this._canonicalTourId(e?.detail?.tourId) ?? this.currentTourId;
       if (!sid) return;
 
-      // se for mesma cena no mesmo tour, ignora
       const same = (tid === this.currentTourId) && (sid === this.currentSceneId);
       if (same) return;
 
@@ -592,7 +780,24 @@ export default class App {
   }
 
   _destroyVrWidget() {
-    // (mantém o seu, só garantindo remover selectscene etc.)
+    const el = this._vrWidgetEl;
+    if (!el) return;
+
+    try {
+      const hs = this._vrWidgetHandlers;
+      if (hs) {
+        el.removeEventListener("vrwidget:prevscene", hs.hPrev);
+        el.removeEventListener("vrwidget:nextscene", hs.hNext);
+        el.removeEventListener("vrwidget:fovdelta", hs.hFov);
+        el.removeEventListener("vrwidget:selecttour", hs.hSelectTour);
+        el.removeEventListener("vrwidget:selectscene", hs.hSelectScene);
+        el.removeEventListener("vrwidget:requestsync", hs.hReqSync);
+      }
+    } catch {}
+
+    try { el.remove(); } catch {}
+    this._vrWidgetEl = null;
+    this._vrWidgetHandlers = null;
   }
 
   _syncVrWidgetIfExists() {
@@ -621,7 +826,10 @@ export default class App {
       fov: this._fov,
       hasMap,
       mapSrc: tour?.map_png ?? "",
-      marker: hasMap ? marker : null
+      marker: hasMap ? marker : null,
+
+      // ✅ loading para o badge VR
+      loading: this._mediaLoading
     }, false);
   }
 }
