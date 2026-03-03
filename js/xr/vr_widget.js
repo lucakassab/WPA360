@@ -1,4 +1,3 @@
-// js/xr/vr_widget.js
 import { ensureVrWidgetView } from "./vr_widget_view.js";
 
 export function registerVrWidget(AFRAME) {
@@ -23,7 +22,6 @@ export function registerVrWidget(AFRAME) {
       this.RO = { BG: 900, PANEL: 1000, BTN: 1000, TXT: 1100, MARK: 1200 };
       this.Z  = { BG: 0.00, BTN: 0.02, TXT: 0.06, PANEL: 0.03, MARK: 0.095 };
 
-      // offset “colado” em metros no mundo
       this.TEXT_Z_WORLD = 0.012;
 
       this.state = {
@@ -42,7 +40,10 @@ export function registerVrWidget(AFRAME) {
         mapVisible: false,
         mapZoom: 1.0,
 
-        dropdown: null
+        dropdown: null,
+
+        // ✅ loading
+        loading: false
       };
 
       this.el.setAttribute("position", `0 -0.10 -${baseDist}`);
@@ -93,6 +94,35 @@ export function registerVrWidget(AFRAME) {
         scale: this.data.titleScale,
         order: this.RO.TXT
       });
+
+      // ✅ loading badge (VR)
+      this.loadingBg = V.makePlane({
+        parent: this.el,
+        w: 0.46,
+        h: 0.10,
+        x: 0,
+        y: yTitle - 0.11,
+        z: this.Z.BTN,
+        color: "#111",
+        opacity: 0.92,
+        order: this.RO.BTN
+      });
+      this.loadingText = V.makeText({
+        parent: this.el,
+        value: "Carregando…",
+        x: 0,
+        y: yTitle - 0.11,
+        z: this.Z.TXT,
+        width: 1.2,
+        wrapCount: 16,
+        align: "center",
+        anchor: "center",
+        baseline: "center",
+        scale: this.data.textScale,
+        order: this.RO.TXT
+      });
+      this.loadingBg.setAttribute("visible", "false");
+      this.loadingText.setAttribute("visible", "false");
 
       const leftX = (-w / 2) + padX;
       const rightX = (w / 2) - padX;
@@ -174,7 +204,6 @@ export function registerVrWidget(AFRAME) {
           textScale: this.data.btnTextScale,
           textZ: this.TEXT_Z_WORLD
         });
-
         this._bindClick(btn, items[i].ev);
         if (items[i].label === "Map") this.btnMap = btn;
       }
@@ -210,7 +239,6 @@ export function registerVrWidget(AFRAME) {
         order: this.RO.PANEL
       });
 
-      // ✅ título contido no painel
       this.dropdownTitle = V.makeText({
         parent: this.dropdownPanel,
         value: "Select",
@@ -307,6 +335,9 @@ export function registerVrWidget(AFRAME) {
       if (d.mapSrc != null) this.state.mapSrc = String(d.mapSrc || "");
       if (d.marker != null) this.state.marker = d.marker;
 
+      // ✅ loading
+      if (d.loading != null) this.state.loading = !!d.loading;
+
       const tourLabel = V.truncateOneLine(this.state.tourTitle || "—", 28);
       const sceneLabel = V.truncateOneLine(this.state.sceneTitle || "—", 28);
 
@@ -314,6 +345,11 @@ export function registerVrWidget(AFRAME) {
       this.tourValueText?.setAttribute("text", "value", tourLabel);
       this.sceneValueText?.setAttribute("text", "value", sceneLabel);
       this.fovText?.setAttribute("text", "value", `FOV ${this.state.fov}`);
+
+      // ✅ show/hide loading badge
+      const show = this.state.loading;
+      this.loadingBg?.setAttribute("visible", show ? "true" : "false");
+      this.loadingText?.setAttribute("visible", show ? "true" : "false");
 
       if (this.btnMap) this.btnMap.setAttribute("material", "color", this.state.hasMap ? "#111" : "#330");
 
@@ -398,7 +434,6 @@ export function registerVrWidget(AFRAME) {
         if (isSel) btn.setAttribute("material", "color", "#1f3a52");
 
         this._bindClick(btn, () => {
-          // ✅ AQUI: manda o tourId junto pra App usar o contexto correto
           if (kind === "tour") {
             this.el.emit("vrwidget:selecttour", { tourId: String(it.id) }, false);
           } else {
