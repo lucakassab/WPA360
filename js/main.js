@@ -3,28 +3,21 @@ import PlatformManager from "./PlatformManager.js";
 import { registerStereoTopBottom } from "./xr/StereoTopBottom.js";
 import { registerFaceCamera } from "./tour/FaceCamera.js";
 import { registerRenderOnTop } from "./tour/RenderOnTop.js";
-import { initPWA } from "./pwa/pwa.js";
 import { registerVrDebugConsole } from "./xr/VrDebugConsole.js";
-import { registerVrWidget } from "./xr/vr_widget.js"; // ✅ novo
+import { initPWA } from "./pwa/pwa.js";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const DEBUG_HOTSPOTS = false;
 
-  const vr_debug = true;
-
-  const vr_foveated_rendering_enabled = false;
-  const vr_foveation_level = 0.7;
-  const vr_framebuffer_scale = 1.6;
-
-  const vr_log_inputs = true;
-  const vr_handtracking_logging = true;
+  // ✅ flag pedida
+  const VR_DEBUG = true; // <-- troca pra false quando quiser
 
   registerStereoTopBottom(window.AFRAME);
   registerFaceCamera(window.AFRAME);
   registerRenderOnTop(window.AFRAME);
 
-  if (vr_debug) registerVrDebugConsole(window.AFRAME);
-  registerVrWidget(window.AFRAME); // ✅ sempre registra
+  // ✅ registra o componente do console VR
+  registerVrDebugConsole(window.AFRAME);
 
   const app = new App({
     sceneEl: document.querySelector("#scene"),
@@ -50,7 +43,6 @@ window.addEventListener("DOMContentLoaded", async () => {
       mapImg: document.querySelector("#mapImg"),
       mapMarker: document.querySelector("#mapMarker"),
       btnMapClose: document.querySelector("#btnMapClose"),
-      btnMiniMap: document.querySelector("#btnMiniMap"),
 
       btnDownloadTour: document.querySelector("#btnDownloadTour"),
 
@@ -67,26 +59,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     },
   });
 
-  app.vrConfig = {
-    debugConsole: vr_debug,
-    logInputs: vr_debug && vr_log_inputs,
-
-    foveatedRenderingEnabled: vr_foveated_rendering_enabled,
-    foveationLevel: vr_foveation_level,
-
-    framebufferScale: vr_framebuffer_scale,
-
-    handTrackingLogging: vr_debug && vr_handtracking_logging
-  };
-
-  await app.init({ debugHotspots: DEBUG_HOTSPOTS, vrDebug: vr_debug });
+  await app.init({ debugHotspots: DEBUG_HOTSPOTS, vrDebug: VR_DEBUG });
 
   const pm = new PlatformManager();
   await pm.init(app);
 
   await initPWA(app);
 });
-
-
-
-
