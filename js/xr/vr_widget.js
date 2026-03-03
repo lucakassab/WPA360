@@ -6,7 +6,10 @@ export function registerVrWidget(AFRAME) {
     schema: {
       width: { type: "number", default: 1.32 },
       height: { type: "number", default: 0.88 },
+
+      // ✅ +30% mais longe
       distance: { type: "number", default: 0.85 },
+
       mapHeight: { type: "number", default: 0.46 },
       uiScale: { type: "number", default: 1.0 },
 
@@ -42,21 +45,27 @@ export function registerVrWidget(AFRAME) {
       });
     },
 
-    // ============================ BUILD ============================
-
     _buildUI() {
       const w = this.data.width;
       const h = this.data.height;
 
-      // Layers (Z)
+      // ✅ Distância base (afasta 30%)
+      const baseDist = this.data.distance * 1.30;
+
+      // Layers (Z) RELATIVOS AO ROOT (não ao mundo)
+      // Regra: valores pequenos, mas separados o suficiente pra não z-fighting.
       this.Z = {
         BG: 0.00,
-        BTN: 0.05,
-        TXT: 0.10,
-        PANEL: 0.14,
-        PANEL_TXT: 0.19,
-        MAP: 0.12,
-        MAP_TXT: 0.17
+        BTN: 0.02,
+        TXT: 0.06,
+
+        // ✅ Painéis flutuantes: um pouco mais perto que botões/texto,
+        // mas NÃO exagerado pra não "pular" pra cara
+        PANEL: 0.035,
+        PANEL_TXT: 0.075,
+
+        MAP: 0.030,
+        MAP_TXT: 0.070
       };
 
       // Grid basics
@@ -67,7 +76,8 @@ export function registerVrWidget(AFRAME) {
         rowH: 0.11
       };
 
-      this.el.setAttribute("position", `0 -0.10 -${this.data.distance}`);
+      // ✅ Root mais longe
+      this.el.setAttribute("position", `0 -0.10 -${baseDist}`);
       this.el.setAttribute("visible", "true");
       this.el.object3D.scale.set(this.data.uiScale, this.data.uiScale, this.data.uiScale);
 
@@ -84,7 +94,7 @@ export function registerVrWidget(AFRAME) {
       const yTitle = this.L.topY - 0.09;
       const yRow1 = yTitle - this.L.rowGap;
       const yRow2 = yRow1 - this.L.rowGap;
-      const yRow2b = yRow2 - 0.105; // mini-linha do FOV text
+      const yRow2b = yRow2 - 0.105; // mini linha do FOV
       const yPanelTop = yRow2b - 0.02;
 
       // Title
@@ -99,7 +109,7 @@ export function registerVrWidget(AFRAME) {
         scale: this.data.titleScale
       });
 
-      // === Row 1: Tour/Scene triggers + values (fixos, sem overlap) ===
+      // === Row 1 ===
       const leftX = (-w / 2) + this.L.padX;
       const rightX = (w / 2) - this.L.padX;
 
@@ -146,8 +156,7 @@ export function registerVrWidget(AFRAME) {
       this._onClick(this.btnTourDrop, () => this._toggleDropdown("tour"));
       this._onClick(this.btnSceneDrop, () => this._toggleDropdown("scene"));
 
-      // === Row 2: layout automático (SEM OVERLAP) ===
-      // itens com larguras desejadas
+      // === Row 2 (layout automático) ===
       const row2Items = [
         { key: "prev", label: "Prev", w: 0.22, onClick: () => this._emit("vrwidget:prevscene", {}) },
         { key: "next", label: "Next", w: 0.22, onClick: () => this._emit("vrwidget:nextscene", {}) },
@@ -162,7 +171,6 @@ export function registerVrWidget(AFRAME) {
         minGap: 0.02
       });
 
-      // cria botões já posicionados
       for (let i = 0; i < row2Items.length; i++) {
         const it = row2Items[i];
         const p = placements[i];
@@ -178,14 +186,9 @@ export function registerVrWidget(AFRAME) {
 
         this._onClick(btn, it.onClick);
 
-        if (it.key === "prev") this.btnPrev = btn;
-        if (it.key === "next") this.btnNext = btn;
-        if (it.key === "map")  this.btnMap = btn;
-        if (it.key === "fovm") this.btnFovMinus = btn;
-        if (it.key === "fovp") this.btnFovPlus = btn;
+        if (it.key === "map") this.btnMap = btn;
       }
 
-      // FOV text em mini-linha abaixo (não briga com botões nunca)
       this.fovText = this._makeText({
         value: "FOV 80",
         x: (w / 2) - this.L.padX - 0.22,
@@ -199,6 +202,9 @@ export function registerVrWidget(AFRAME) {
 
       // ==================== Dropdown Panel ====================
       this.dropdownPanel = document.createElement("a-entity");
+
+      // ✅ dropdown NÃO pode ficar mais perto que o root (só relative Z pequeno)
+      // e também não pode ficar “na frente” demais dos botões.
       this.dropdownPanel.setAttribute("visible", "false");
       this.dropdownPanel.setAttribute("position", `0 ${yPanelTop} ${this.Z.PANEL}`);
       this.el.appendChild(this.dropdownPanel);
@@ -207,7 +213,6 @@ export function registerVrWidget(AFRAME) {
       // ==================== Map Panel ====================
       this._buildMapPanel(yPanelTop);
 
-      // Start hidden
       this._setDropdown(null);
       this._setMapVisible(false);
       this._applyMarker(null);
@@ -223,7 +228,7 @@ export function registerVrWidget(AFRAME) {
       this.ddBg.setAttribute("width", w);
       this.ddBg.setAttribute("height", h);
       this.ddBg.setAttribute("material", "color:#050505; opacity:0.92; transparent:true; shader:flat; depthTest:false; depthWrite:false");
-      this.ddBg.setAttribute("position", `0 ${-h/2} 0`);
+      this.ddBg.setAttribute("position", `0 ${-h/2} ${this.Z.BG}`);
       this.ddBg.setAttribute("render-on-top", "");
       this.dropdownPanel.appendChild(this.ddBg);
 
@@ -240,6 +245,8 @@ export function registerVrWidget(AFRAME) {
       });
 
       this.dropdownList = document.createElement("a-entity");
+
+      // ✅ lista fica no mesmo “plano” do dropdown, não mais pra frente
       this.dropdownList.setAttribute("position", `0 -0.14 ${this.Z.PANEL_TXT}`);
       this.dropdownPanel.appendChild(this.dropdownList);
 
@@ -260,6 +267,8 @@ export function registerVrWidget(AFRAME) {
       const mapH = this.data.mapHeight;
 
       this.mapGroup = document.createElement("a-entity");
+
+      // ✅ map no MESMO offset base do dropdown, sem vir pra cara
       this.mapGroup.setAttribute("position", `0 ${yPanelTop - 0.02} ${this.Z.MAP}`);
       this.el.appendChild(this.mapGroup);
 
@@ -267,7 +276,7 @@ export function registerVrWidget(AFRAME) {
       this.mapPlane.setAttribute("width", w);
       this.mapPlane.setAttribute("height", mapH);
       this.mapPlane.setAttribute("material", "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false");
-      this.mapPlane.setAttribute("position", `0 ${-mapH/2} 0`);
+      this.mapPlane.setAttribute("position", `0 ${-mapH/2} ${this.Z.BG}`);
       this.mapPlane.setAttribute("render-on-top", "");
       this.mapGroup.appendChild(this.mapPlane);
 
@@ -289,20 +298,14 @@ export function registerVrWidget(AFRAME) {
       this._onClick(this.btnZoomReset, () => this._setMapZoom(1.0));
     },
 
-    // ============================ UPDATE ============================
-
     _applyUpdate(d) {
       if (d.tourTitle != null) this.state.tourTitle = String(d.tourTitle);
       if (d.sceneTitle != null) this.state.sceneTitle = String(d.sceneTitle);
-
       if (d.currentTourId != null) this.state.currentTourId = String(d.currentTourId);
       if (d.currentSceneId != null) this.state.currentSceneId = String(d.currentSceneId);
-
       if (d.tourList != null) this.state.tourList = Array.isArray(d.tourList) ? d.tourList : [];
       if (d.sceneList != null) this.state.sceneList = Array.isArray(d.sceneList) ? d.sceneList : [];
-
       if (d.fov != null) this.state.fov = Math.round(Number(d.fov) || 80);
-
       if (d.hasMap != null) this.state.hasMap = !!d.hasMap;
       if (d.mapSrc != null) this.state.mapSrc = String(d.mapSrc || "");
       if (d.marker != null) this.state.marker = d.marker;
@@ -329,8 +332,6 @@ export function registerVrWidget(AFRAME) {
       if (!this.state.hasMap) this._setMapVisible(false);
       if (this.state.dropdown) this._renderDropdownList();
     },
-
-    // ============================ DROPDOWNS ============================
 
     _toggleDropdown(kind) {
       if (this.state.mapVisible) this._setMapVisible(false);
@@ -398,8 +399,6 @@ export function registerVrWidget(AFRAME) {
       }
     },
 
-    // ============================ MAP ============================
-
     _toggleMapVisible() {
       if (!this.state.hasMap) return;
       if (this.state.dropdown) this._setDropdown(null);
@@ -438,8 +437,6 @@ export function registerVrWidget(AFRAME) {
       this.markerEl.setAttribute("position", `${x} ${y} ${this.Z.MAP_TXT}`);
       this.markerEl.setAttribute("visible", "true");
     },
-
-    // ============================ HELPERS ============================
 
     _emit(name, detail) {
       this.el.emit(name, detail || {}, false);
@@ -491,7 +488,6 @@ export function registerVrWidget(AFRAME) {
       txt.setAttribute("render-on-top", "");
       btn.appendChild(txt);
 
-      // hover
       const hi = () => btn.setAttribute("material", "color", "#2a2a2a");
       const lo = () => btn.setAttribute("material", "color", "#111");
       btn.addEventListener("raycaster-intersected", hi);
@@ -527,30 +523,23 @@ export function registerVrWidget(AFRAME) {
     return str.slice(0, Math.max(0, max - 1)) + "…";
   }
 
-  // ✅ layout dinâmico: distribui itens na linha sem overlap
   function layoutRow(widths, { left, right, minGap = 0.02 }) {
     const avail = Math.max(0.1, right - left);
     const n = widths.length;
     const sumW = widths.reduce((a, b) => a + b, 0);
 
-    // tenta usar gap mínimo
     const need = sumW + minGap * (n - 1);
 
     let scale = 1.0;
     let gap = minGap;
 
     if (need > avail) {
-      // encolhe tudo proporcionalmente
       scale = avail / need;
-      // mantém gap mínimo proporcional também (não zera)
       gap = minGap * scale;
     } else {
-      // distribui gap extra automaticamente
       const extra = avail - sumW;
       gap = (n > 1) ? (extra / (n - 1)) : 0;
       gap = Math.max(minGap, gap);
-      // se gap ficou maior que o necessário, ok
-      // (se isso empurrar pra fora, o cálculo abaixo mantém dentro)
     }
 
     const out = [];
@@ -562,8 +551,6 @@ export function registerVrWidget(AFRAME) {
       x += w + gap;
     }
 
-    // clamp final pra garantir dentro do range
-    // (se o gap mínimo estourou, ajusta levemente shift)
     const last = out[out.length - 1];
     const end = last.x + last.w / 2;
     const over = end - right;
