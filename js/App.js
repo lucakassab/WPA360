@@ -75,6 +75,10 @@ export default class App {
     this._vrWidgetHandlers = null;
 
     this._xrUnsub = null;
+
+    // ✅ thumbstick toggle handlers
+    this._vrConsoleInputBound = false;
+    this._onRightThumbstickDown = null;
   }
 
   on(type, handler) { this._events.addEventListener(type, handler); }
@@ -151,7 +155,7 @@ export default class App {
 
       // ✅ destrói tudo que é só VR
       this._destroyVrWidget();
-      this._destroyVrConsole();
+      this._destroyVrConsole(); // inclui unbind do thumbstick
     });
 
     this._canHover = window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches ?? false;
@@ -223,7 +227,6 @@ export default class App {
     if (!xr?.addEventListener) return;
 
     const onStart = async () => {
-      // espera 1 frame pro A-Frame marcar vr-mode
       requestAnimationFrame(async () => {
         await this._ensureVrUiIfImmersive();
       });
@@ -244,18 +247,14 @@ export default class App {
   }
 
   async _ensureVrUiIfImmersive() {
-    // só cria se A-Frame estiver em vr-mode (isso é o “imersivo” na prática)
     if (!this.sceneEl.is("vr-mode")) return;
 
-    // garante session existe (evita criar cedo demais)
     const session = await this._waitXRSession(2000);
     if (!session) return;
 
-    // ✅ widget
     this._ensureVrWidget();
     this._syncVrWidgetIfExists();
 
-    // ✅ console (só se vrDebug true)
     if (this._vrDebugEnabled) this._ensureVrConsole();
   }
 
@@ -269,10 +268,15 @@ export default class App {
     return this.sceneEl?.renderer?.xr?.getSession?.() || null;
   }
 
+  // ============================================================
+  // ✅ VR CONSOLE + THUMBSTICK TOGGLE
+  // ============================================================
+
   _ensureVrConsole() {
     if (this._vrConsoleEl) {
       this._vrConsoleEl.setAttribute("visible", "true");
       if (this._vrConsoleEl.object3D) this._vrConsoleEl.object3D.visible = true;
+      this._bindVrConsoleInputs();
       return;
     }
 
@@ -283,13 +287,73 @@ export default class App {
     el.setAttribute("vr-debug-console", "");
     this.cameraEl.appendChild(el);
     this._vrConsoleEl = el;
+
+    this._bindVrConsoleInputs();
+  }
+
+  _toggleVrConsoleVisible() {
+    if (!this._vrConsoleEl) return;
+
+    const aVisible = this._vrConsoleEl.getAttribute("visible");
+    const oVisible = this._vrConsoleEl.object3D?.visible;
+
+    const isVisible = (aVisible !== false && aVisible !== "false") && (oVisible !== false);
+
+    const next = !isVisible;
+    this._vrConsoleEl.setAttribute("visible", next ? "true" : "false");
+    if (this._vrConsoleEl.object3D) this._vrConsoleEl.object3D.visible = next;
+
+    // feedback no console (quando visível)
+    try { console.log(`vr_console: ${next ? "SHOW" : "HIDE"}`); } catch {}
+  }
+
+  _bindVrConsoleInputs() {
+    if (this._vrConsoleInputBound) return;
+    if (!this._vrDebugEnabled) return;
+
+    const right = this.rightHandEl;
+    if (!right) return;
+
+    // Thumbstick DOWN (right controller) -> toggle console
+    this._onRightThumbstickDown = () => {
+      // só reage em VR de verdade
+      if (!this.sceneEl.is("vr-mode")) return;
+      this._toggleVrConsoleVisible();
+    };
+
+    // evento padrão do A-Frame/oculus-touch-controls
+    right.addEventListener("thumbstickdown", this._onRightThumbstickDown);
+
+    // fallback extra (algumas builds expõem como "stickdown")
+    right.addEventListener("stickdown", this._onRightThumbstickDown);
+
+    this._vrConsoleInputBound = true;
+  }
+
+  _unbindVrConsoleInputs() {
+    if (!this._vrConsoleInputBound) return;
+
+    const right = this.rightHandEl;
+    if (right && this._onRightThumbstickDown) {
+      right.removeEventListener("thumbstickdown", this._onRightThumbstickDown);
+      right.removeEventListener("stickdown", this._onRightThumbstickDown);
+    }
+
+    this._onRightThumbstickDown = null;
+    this._vrConsoleInputBound = false;
   }
 
   _destroyVrConsole() {
+    this._unbindVrConsoleInputs();
+
     if (!this._vrConsoleEl) return;
     try { this._vrConsoleEl.remove(); } catch {}
     this._vrConsoleEl = null;
   }
+
+  // ============================================================
+  // ✅ VR WIDGET (já existente)
+  // ============================================================
 
   _ensureVrWidget() {
     if (this._vrWidgetEl) {
@@ -384,7 +448,7 @@ export default class App {
   }
 
   // ============================================================
-  // ✅ TOP BAR (Menu + dropdowns)
+  // Top bar
   // ============================================================
 
   _setupTopBar() {
@@ -674,7 +738,6 @@ export default class App {
       if (cam) { cam.fov = this._fov; cam.updateProjectionMatrix?.(); }
     }
 
-    // ✅ se widget existir, atualiza
     this._syncVrWidgetIfExists();
   }
 
@@ -888,8 +951,6 @@ export default class App {
     this._preloadNeighbors(scene);
 
     this._updateMapMarker();
-
-    // ✅ VR widget update
     this._syncVrWidgetIfExists();
 
     this._isTransitioning = false;
