@@ -1,12 +1,14 @@
 // js/xr/vr_widget.js
+import { ensureVrWidgetView } from "./vr_widget_view.js";
+
 export function registerVrWidget(AFRAME) {
-  if (!AFRAME) throw new Error("AFRAME não carregou.");
+  const V = ensureVrWidgetView(AFRAME);
 
   AFRAME.registerComponent("vr-widget", {
     schema: {
       width: { type: "number", default: 1.32 },
       height: { type: "number", default: 0.88 },
-      distance: { type: "number", default: 0.85 }, // base
+      distance: { type: "number", default: 0.85 },
       mapHeight: { type: "number", default: 0.46 },
       uiScale: { type: "number", default: 1.0 },
 
@@ -16,6 +18,12 @@ export function registerVrWidget(AFRAME) {
     },
 
     init() {
+      // +30% longe (pedido anterior)
+      const baseDist = this.data.distance * 1.30;
+
+      this.RO = { BG: 900, PANEL: 1000, BTN: 1000, TXT: 1100, MARK: 1200 };
+      this.Z  = { BG: 0.00, BTN: 0.02, TXT: 0.06, TXT_FRONT: 0.09, PANEL: 0.03, MARK: 0.095 };
+
       this.state = {
         tourTitle: "—",
         sceneTitle: "—",
@@ -35,269 +43,254 @@ export function registerVrWidget(AFRAME) {
         dropdown: null
       };
 
-      this._buildUI();
+      this.el.setAttribute("position", `0 -0.10 -${baseDist}`);
+      this.el.object3D.scale.set(this.data.uiScale, this.data.uiScale, this.data.uiScale);
 
-      this.el.addEventListener("vrwidget:update", (e) => {
-        this._applyUpdate(e?.detail || {});
+      this._build();
+
+      // ✅ handshake: pede sync assim que o componente nascer
+      queueMicrotask(() => {
+        this.el.emit("vrwidget:requestsync", { reason: "init" }, false);
       });
+
+      this.el.addEventListener("vrwidget:update", (e) => this._applyUpdate(e?.detail || {}));
     },
 
-    _buildUI() {
+    // =================== BUILD ===================
+
+    _build() {
       const w = this.data.width;
       const h = this.data.height;
 
-      // ✅ +30% mais longe
-      const baseDist = this.data.distance * 2.0;
+      const padX = 0.06;
+      const topY = h / 2;
+      const rowGap = 0.13;
+      const rowH = 0.11;
 
-      // ✅ Render order por camada (mata texto escuro)
-      this.RO = {
-        BG: 900,
-        PANEL: 1000,
-        BTN: 1000,
-        TXT: 1100,
-        MARK: 1200
-      };
-
-      // Z local (pequeno, só pra separar geometria)
-      this.Z = {
-        BG: 0.00,
-        PANEL: 0.02,
-        BTN: 0.025,
-        TXT: 0.060,
-        TXT_FRONT: 0.090, // texto sempre mais à frente do botão
-        MARK: 0.095
-      };
-
-      this.L = {
-        padX: 0.06,
-        topY: h / 2,
-        rowGap: 0.13,
-        rowH: 0.11
-      };
-
-      this.el.setAttribute("position", `0 -0.10 -${baseDist}`);
-      this.el.setAttribute("visible", "true");
-      this.el.object3D.scale.set(this.data.uiScale, this.data.uiScale, this.data.uiScale);
-
-      // BG
-      this.bg = document.createElement("a-plane");
-      this.bg.setAttribute("width", w);
-      this.bg.setAttribute("height", h);
-      this.bg.setAttribute(
-        "material",
-        "color:#000; opacity:0.78; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
-      );
-      this.bg.setAttribute("position", `0 0 ${this.Z.BG}`);
-      this.bg.setAttribute("render-on-top", `order:${this.RO.BG}; depthTest:false; depthWrite:false`);
-      this.el.appendChild(this.bg);
-
-      // rows
-      const yTitle = this.L.topY - 0.09;
-      const yRow1 = yTitle - this.L.rowGap;
-      const yRow2 = yRow1 - this.L.rowGap;
+      const yTitle = topY - 0.09;
+      const yRow1 = yTitle - rowGap;
+      const yRow2 = yRow1 - rowGap;
       const yRow2b = yRow2 - 0.105;
       const yPanelTop = yRow2b - 0.02;
 
+      // BG
+      V.makePlane({
+        parent: this.el,
+        w, h,
+        x: 0, y: 0, z: this.Z.BG,
+        color: "#000",
+        opacity: 0.78,
+        order: this.RO.BG
+      });
+
       // Title
-      this.titleEl = this._makeText({
+      this.titleEl = V.makeText({
+        parent: this.el,
         value: "—",
-        x: 0,
-        y: yTitle,
-        z: this.Z.TXT,
+        x: 0, y: yTitle, z: this.Z.TXT,
         width: 3.2,
         wrapCount: 28,
         align: "center",
-        scale: this.data.titleScale
+        scale: this.data.titleScale,
+        order: this.RO.TXT
       });
 
-      // Row 1
-      const leftX = (-w / 2) + this.L.padX;
-      const rightX = (w / 2) - this.L.padX;
+      const leftX = (-w / 2) + padX;
+      const rightX = (w / 2) - padX;
 
-      this.btnTourDrop = this._makeButton({
+      // Row 1 buttons
+      this.btnTourDrop = V.makeButton({
+        parent: this.el,
         label: "Tour",
-        x: leftX + 0.14,
-        y: yRow1,
-        z: this.Z.BTN,
-        w: 0.28,
-        h: this.L.rowH
+        x: leftX + 0.14, y: yRow1, z: this.Z.BTN,
+        w: 0.28, h: rowH,
+        orderPlane: this.RO.BTN,
+        orderText: this.RO.TXT,
+        textScale: this.data.btnTextScale,
+        textZ: this.Z.TXT_FRONT
       });
 
-      this.btnSceneDrop = this._makeButton({
+      this.btnSceneDrop = V.makeButton({
+        parent: this.el,
         label: "Scene",
-        x: rightX - 0.16,
-        y: yRow1,
-        z: this.Z.BTN,
-        w: 0.32,
-        h: this.L.rowH
+        x: rightX - 0.16, y: yRow1, z: this.Z.BTN,
+        w: 0.32, h: rowH,
+        orderPlane: this.RO.BTN,
+        orderText: this.RO.TXT,
+        textScale: this.data.btnTextScale,
+        textZ: this.Z.TXT_FRONT
       });
 
-      this.tourValueText = this._makeText({
+      this.tourValueText = V.makeText({
+        parent: this.el,
         value: "—",
-        x: leftX + 0.48,
-        y: yRow1,
-        z: this.Z.TXT,
+        x: leftX + 0.48, y: yRow1, z: this.Z.TXT,
         width: 2.4,
         wrapCount: 26,
         align: "left",
-        scale: this.data.textScale
+        scale: this.data.textScale,
+        order: this.RO.TXT
       });
 
-      this.sceneValueText = this._makeText({
+      this.sceneValueText = V.makeText({
+        parent: this.el,
         value: "—",
-        x: rightX - 0.56,
-        y: yRow1,
-        z: this.Z.TXT,
+        x: rightX - 0.56, y: yRow1, z: this.Z.TXT,
         width: 2.4,
         wrapCount: 26,
         align: "right",
-        scale: this.data.textScale
+        scale: this.data.textScale,
+        order: this.RO.TXT
       });
 
-      this._onClick(this.btnTourDrop, () => this._toggleDropdown("tour"));
-      this._onClick(this.btnSceneDrop, () => this._toggleDropdown("scene"));
+      this._bindClick(this.btnTourDrop, () => this._toggleDropdown("tour"));
+      this._bindClick(this.btnSceneDrop, () => this._toggleDropdown("scene"));
 
-      // Row 2 (layout automático)
-      const row2Items = [
-        { key: "prev", label: "Prev", w: 0.22, onClick: () => this._emit("vrwidget:prevscene", {}) },
-        { key: "next", label: "Next", w: 0.22, onClick: () => this._emit("vrwidget:nextscene", {}) },
-        { key: "map",  label: "Map",  w: 0.20, onClick: () => this._toggleMapVisible() },
-        { key: "fovm", label: "FOV-", w: 0.18, onClick: () => this._emit("vrwidget:fovdelta", { delta: -5 }) },
-        { key: "fovp", label: "FOV+", w: 0.18, onClick: () => this._emit("vrwidget:fovdelta", { delta: +5 }) }
+      // Row 2 auto layout
+      const items = [
+        { label: "Prev", w: 0.22, ev: () => this.el.emit("vrwidget:prevscene", {}, false) },
+        { label: "Next", w: 0.22, ev: () => this.el.emit("vrwidget:nextscene", {}, false) },
+        { label: "Map",  w: 0.20, ev: () => this._toggleMapVisible() },
+        { label: "FOV-", w: 0.18, ev: () => this.el.emit("vrwidget:fovdelta", { delta: -5 }, false) },
+        { label: "FOV+", w: 0.18, ev: () => this.el.emit("vrwidget:fovdelta", { delta: +5 }, false) }
       ];
 
-      const placements = layoutRow(row2Items.map(i => i.w), {
-        left: (-w / 2) + this.L.padX,
-        right: (w / 2) - this.L.padX,
+      const placements = V.layoutRow(items.map(i => i.w), {
+        left: (-w / 2) + padX,
+        right: (w / 2) - padX,
         minGap: 0.02
       });
 
-      for (let i = 0; i < row2Items.length; i++) {
-        const it = row2Items[i];
+      for (let i = 0; i < items.length; i++) {
         const p = placements[i];
-
-        const btn = this._makeButton({
-          label: it.label,
-          x: p.x,
-          y: yRow2,
-          z: this.Z.BTN,
-          w: p.w,
-          h: this.L.rowH
+        const btn = V.makeButton({
+          parent: this.el,
+          label: items[i].label,
+          x: p.x, y: yRow2, z: this.Z.BTN,
+          w: p.w, h: rowH,
+          orderPlane: this.RO.BTN,
+          orderText: this.RO.TXT,
+          textScale: this.data.btnTextScale,
+          textZ: this.Z.TXT_FRONT
         });
 
-        this._onClick(btn, it.onClick);
-        if (it.key === "map") this.btnMap = btn;
+        this._bindClick(btn, items[i].ev);
+
+        if (items[i].label === "Map") this.btnMap = btn;
       }
 
-      this.fovText = this._makeText({
+      this.fovText = V.makeText({
+        parent: this.el,
         value: "FOV 80",
-        x: (w / 2) - this.L.padX - 0.22,
-        y: yRow2b,
-        z: this.Z.TXT,
+        x: (w / 2) - padX - 0.22, y: yRow2b, z: this.Z.TXT,
         width: 2.0,
         wrapCount: 14,
         align: "right",
-        scale: this.data.textScale
+        scale: this.data.textScale,
+        order: this.RO.TXT
       });
 
-      // Dropdown panel (mesma profundidade do widget, não mais perto)
+      // Dropdown container
       this.dropdownPanel = document.createElement("a-entity");
       this.dropdownPanel.setAttribute("visible", "false");
       this.dropdownPanel.setAttribute("position", `0 ${yPanelTop} ${this.Z.PANEL}`);
       this.el.appendChild(this.dropdownPanel);
-      this._buildDropdownPanel();
 
-      // Map panel
-      this._buildMapPanel(yPanelTop);
+      // dropdown bg + title + list + close
+      const ddW = this.data.width - 0.10;
+      const ddH = 0.52;
 
-      this._setDropdown(null);
-      this._setMapVisible(false);
-      this._applyMarker(null);
-    },
+      V.makePlane({
+        parent: this.dropdownPanel,
+        w: ddW, h: ddH,
+        x: 0, y: -ddH/2, z: this.Z.BG,
+        color: "#050505",
+        opacity: 0.92,
+        order: this.RO.PANEL
+      });
 
-    _buildDropdownPanel() {
-      while (this.dropdownPanel.firstChild) this.dropdownPanel.removeChild(this.dropdownPanel.firstChild);
-
-      const w = this.data.width - 0.10;
-      const h = 0.52;
-
-      this.ddBg = document.createElement("a-plane");
-      this.ddBg.setAttribute("width", w);
-      this.ddBg.setAttribute("height", h);
-      this.ddBg.setAttribute(
-        "material",
-        "color:#050505; opacity:0.92; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
-      );
-      this.ddBg.setAttribute("position", `0 ${-h/2} ${this.Z.BG}`);
-      this.ddBg.setAttribute("render-on-top", `order:${this.RO.PANEL}; depthTest:false; depthWrite:false`);
-      this.dropdownPanel.appendChild(this.ddBg);
-
-      this.dropdownTitle = this._makeText({
+      this.dropdownTitle = V.makeText({
+        parent: this.dropdownPanel,
         value: "Select",
-        x: (-w/2) + 0.12,
-        y: -0.06,
-        z: this.Z.TXT,
+        x: (-ddW/2) + 0.12, y: -0.06, z: this.Z.TXT,
         width: 2.8,
         wrapCount: 24,
         align: "left",
         scale: this.data.textScale,
-        parent: this.dropdownPanel
+        order: this.RO.TXT
       });
 
       this.dropdownList = document.createElement("a-entity");
       this.dropdownList.setAttribute("position", `0 -0.14 ${this.Z.TXT}`);
       this.dropdownPanel.appendChild(this.dropdownList);
 
-      const btnClose = this._makeButton({
+      this.btnClose = V.makeButton({
+        parent: this.dropdownPanel,
         label: "Close",
-        x: (w/2) - 0.16,
-        y: -0.06,
-        z: this.Z.BTN,
-        w: 0.18,
-        h: 0.10,
-        parent: this.dropdownPanel
+        x: (ddW/2) - 0.16, y: -0.06, z: this.Z.BTN,
+        w: 0.18, h: 0.10,
+        orderPlane: this.RO.BTN,
+        orderText: this.RO.TXT,
+        textScale: this.data.btnTextScale,
+        textZ: this.Z.TXT_FRONT
       });
-      this._onClick(btnClose, () => this._setDropdown(null));
-    },
+      this._bindClick(this.btnClose, () => this._setDropdown(null));
 
-    _buildMapPanel(yPanelTop) {
-      const w = this.data.width - 0.10;
-      const mapH = this.data.mapHeight;
+      // "Loading…" placeholder (resolve o “só Close”)
+      this.dropdownLoading = V.makeText({
+        parent: this.dropdownPanel,
+        value: "Loading…",
+        x: 0, y: -0.22, z: this.Z.TXT,
+        width: 2.6,
+        wrapCount: 24,
+        align: "center",
+        scale: this.data.textScale,
+        order: this.RO.TXT
+      });
 
+      // Map panel
       this.mapGroup = document.createElement("a-entity");
+      this.mapGroup.setAttribute("visible", "false");
       this.mapGroup.setAttribute("position", `0 ${yPanelTop - 0.02} ${this.Z.PANEL}`);
       this.el.appendChild(this.mapGroup);
 
-      this.mapPlane = document.createElement("a-plane");
-      this.mapPlane.setAttribute("width", w);
-      this.mapPlane.setAttribute("height", mapH);
-      this.mapPlane.setAttribute(
-        "material",
-        "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
-      );
-      this.mapPlane.setAttribute("position", `0 ${-mapH/2} ${this.Z.BG}`);
-      this.mapPlane.setAttribute("render-on-top", `order:${this.RO.PANEL}; depthTest:false; depthWrite:false`);
-      this.mapGroup.appendChild(this.mapPlane);
+      const mapW = this.data.width - 0.10;
+      const mapH = this.data.mapHeight;
+
+      this.mapPlane = V.makePlane({
+        parent: this.mapGroup,
+        w: mapW, h: mapH,
+        x: 0, y: -mapH/2, z: this.Z.BG,
+        color: "#111",
+        opacity: 0.95,
+        order: this.RO.PANEL
+      });
 
       this.markerEl = document.createElement("a-circle");
       this.markerEl.setAttribute("radius", 0.020);
-      this.markerEl.setAttribute(
-        "material",
-        "color:#ff3b30; shader:flat; depthTest:false; depthWrite:false; side:double"
-      );
+      this.markerEl.setAttribute("material", "color:#ff3b30; shader:flat; depthTest:false; depthWrite:false; transparent:true; opacity:1; side:double");
       this.markerEl.setAttribute("position", `0 ${-mapH/2} ${this.Z.MARK}`);
-      this.markerEl.setAttribute("render-on-top", `order:${this.RO.MARK}; depthTest:false; depthWrite:false`);
+      this.markerEl.setAttribute("vr-ui-fix", `order:${this.RO.MARK}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1`);
       this.mapGroup.appendChild(this.markerEl);
 
+      // zoom buttons
       const yBtns = -mapH - 0.10;
-      this.btnZoomOut = this._makeButton({ label: "Zoom-", x: -0.22, y: yBtns, z: this.Z.BTN, w: 0.22, h: 0.11, parent: this.mapGroup });
-      this.btnZoomIn  = this._makeButton({ label: "Zoom+", x: +0.02, y: yBtns, z: this.Z.BTN, w: 0.22, h: 0.11, parent: this.mapGroup });
-      this.btnZoomReset = this._makeButton({ label: "Reset", x: +0.28, y: yBtns, z: this.Z.BTN, w: 0.18, h: 0.11, parent: this.mapGroup });
+      const zBtn = this.Z.BTN;
 
-      this._onClick(this.btnZoomOut, () => this._setMapZoom(this.state.mapZoom / 1.15));
-      this._onClick(this.btnZoomIn,  () => this._setMapZoom(this.state.mapZoom * 1.15));
-      this._onClick(this.btnZoomReset, () => this._setMapZoom(1.0));
+      const b1 = V.makeButton({ parent: this.mapGroup, label: "Zoom-", x: -0.22, y: yBtns, z: zBtn, w: 0.22, h: 0.11, orderPlane: this.RO.BTN, orderText: this.RO.TXT, textScale: this.data.btnTextScale, textZ: this.Z.TXT_FRONT });
+      const b2 = V.makeButton({ parent: this.mapGroup, label: "Zoom+", x: +0.02, y: yBtns, z: zBtn, w: 0.22, h: 0.11, orderPlane: this.RO.BTN, orderText: this.RO.TXT, textScale: this.data.btnTextScale, textZ: this.Z.TXT_FRONT });
+      const b3 = V.makeButton({ parent: this.mapGroup, label: "Reset", x: +0.28, y: yBtns, z: zBtn, w: 0.18, h: 0.11, orderPlane: this.RO.BTN, orderText: this.RO.TXT, textScale: this.data.btnTextScale, textZ: this.Z.TXT_FRONT });
+
+      this._bindClick(b1, () => this._setMapZoom(this.state.mapZoom / 1.15));
+      this._bindClick(b2, () => this._setMapZoom(this.state.mapZoom * 1.15));
+      this._bindClick(b3, () => this._setMapZoom(1.0));
+
+      // hide on start
+      this._setDropdown(null);
+      this._applyMarker(null);
     },
+
+    // =================== UPDATE ===================
 
     _applyUpdate(d) {
       if (d.tourTitle != null) this.state.tourTitle = String(d.tourTitle);
@@ -311,16 +304,18 @@ export function registerVrWidget(AFRAME) {
       if (d.mapSrc != null) this.state.mapSrc = String(d.mapSrc || "");
       if (d.marker != null) this.state.marker = d.marker;
 
-      const tourLabel = truncateOneLine(this.state.tourTitle || "—", 28);
-      const sceneLabel = truncateOneLine(this.state.sceneTitle || "—", 28);
+      const tourLabel = V.truncateOneLine(this.state.tourTitle || "—", 28);
+      const sceneLabel = V.truncateOneLine(this.state.sceneTitle || "—", 28);
 
       this.titleEl?.setAttribute("text", "value", sceneLabel);
       this.tourValueText?.setAttribute("text", "value", tourLabel);
       this.sceneValueText?.setAttribute("text", "value", sceneLabel);
       this.fovText?.setAttribute("text", "value", `FOV ${this.state.fov}`);
 
+      // map color
       if (this.btnMap) this.btnMap.setAttribute("material", "color", this.state.hasMap ? "#111" : "#330");
 
+      // map texture
       if (this.mapPlane && this.state.mapSrc) {
         this.mapPlane.setAttribute(
           "material",
@@ -330,12 +325,13 @@ export function registerVrWidget(AFRAME) {
 
       this._applyMarker(this.state.hasMap ? this.state.marker : null);
 
-      if (!this.state.hasMap) this._setMapVisible(false);
+      // ✅ se dropdown aberto e agora tem lista, renderiza na hora
       if (this.state.dropdown) this._renderDropdownList();
     },
 
+    // =================== DROPDOWNS ===================
+
     _toggleDropdown(kind) {
-      if (this.state.mapVisible) this._setMapVisible(false);
       if (this.state.dropdown === kind) this._setDropdown(null);
       else this._setDropdown(kind);
     },
@@ -343,7 +339,17 @@ export function registerVrWidget(AFRAME) {
     _setDropdown(kind) {
       this.state.dropdown = kind;
       this.dropdownPanel.setAttribute("visible", kind ? "true" : "false");
-      if (kind) this._renderDropdownList();
+
+      if (!kind) return;
+
+      // ✅ render IMEDIATO (mesmo se vazio)
+      this._renderDropdownList();
+
+      // ✅ se ainda não tem dados, pede sync pro App
+      const items = (kind === "tour") ? this.state.tourList : this.state.sceneList;
+      if (!items || items.length === 0) {
+        this.el.emit("vrwidget:requestsync", { reason: "dropdown-open", kind }, false);
+      }
     },
 
     _renderDropdownList() {
@@ -353,7 +359,13 @@ export function registerVrWidget(AFRAME) {
       if (!kind) return;
 
       const items = (kind === "tour") ? this.state.tourList : this.state.sceneList;
+
       this.dropdownTitle?.setAttribute("text", "value", kind === "tour" ? "Select Tour" : "Select Scene");
+
+      // loading placeholder
+      const empty = !items || items.length === 0;
+      this.dropdownLoading.setAttribute("visible", empty ? "true" : "false");
+      if (empty) return;
 
       const panelW = this.data.width - 0.18;
       const colW = (panelW - 0.06) / 2;
@@ -368,7 +380,7 @@ export function registerVrWidget(AFRAME) {
       for (let i = 0; i < shown.length; i++) {
         const it = shown[i];
         const raw = kind === "tour" ? (it.title ?? it.id ?? String(it)) : (it.name ?? it.id ?? String(it));
-        const label = truncateOneLine(raw, 22);
+        const label = V.truncateOneLine(raw, 22);
 
         const col = (i < maxRows) ? 0 : 1;
         const row = (i < maxRows) ? i : (i - maxRows);
@@ -376,14 +388,15 @@ export function registerVrWidget(AFRAME) {
         const x = colX[col];
         const y = -(row * (rowH + rowGap));
 
-        const btn = this._makeButton({
+        const btn = V.makeButton({
+          parent: this.dropdownList,
           label,
-          x,
-          y,
-          z: this.Z.BTN,
-          w: colW,
-          h: rowH,
-          parent: this.dropdownList
+          x, y, z: this.Z.BTN,
+          w: colW, h: rowH,
+          orderPlane: this.RO.BTN,
+          orderText: this.RO.TXT,
+          textScale: this.data.btnTextScale,
+          textZ: this.Z.TXT_FRONT
         });
 
         const isSel = (kind === "tour")
@@ -392,30 +405,31 @@ export function registerVrWidget(AFRAME) {
 
         if (isSel) btn.setAttribute("material", "color", "#1f3a52");
 
-        this._onClick(btn, () => {
-          if (kind === "tour") this._emit("vrwidget:selecttour", { tourId: it.id });
-          else this._emit("vrwidget:selectscene", { sceneId: it.id });
+        this._bindClick(btn, () => {
+          if (kind === "tour") this.el.emit("vrwidget:selecttour", { tourId: it.id }, false);
+          else this.el.emit("vrwidget:selectscene", { sceneId: it.id }, false);
           this._setDropdown(null);
         });
       }
     },
 
+    // =================== MAP ===================
+
     _toggleMapVisible() {
       if (!this.state.hasMap) return;
+      // fecha dropdown se abrir map
       if (this.state.dropdown) this._setDropdown(null);
-      this._setMapVisible(!this.state.mapVisible);
-    },
 
-    _setMapVisible(v) {
-      this.state.mapVisible = !!v;
-      this.mapGroup?.setAttribute("visible", this.state.mapVisible ? "true" : "false");
+      const next = !this.state.mapVisible;
+      this.state.mapVisible = next;
+      this.mapGroup.setAttribute("visible", next ? "true" : "false");
     },
 
     _setMapZoom(z) {
       const nz = Math.max(0.7, Math.min(3.5, Number(z) || 1));
       this.state.mapZoom = nz;
-      if (this.mapPlane?.object3D) this.mapPlane.object3D.scale.set(nz, nz, 1);
-      this._applyMarker(this.state.hasMap ? this.state.marker : null);
+      this.mapPlane.object3D.scale.set(nz, nz, 1);
+      this._applyMarker(this.state.marker);
     },
 
     _applyMarker(pos) {
@@ -439,127 +453,19 @@ export function registerVrWidget(AFRAME) {
       this.markerEl.setAttribute("visible", "true");
     },
 
-    _emit(name, detail) {
-      this.el.emit(name, detail || {}, false);
-    },
+    // =================== Click helper ===================
 
-    _makeText({ value, x, y, z, width, wrapCount, align, scale, parent = null }) {
-      const t = document.createElement("a-entity");
-      t.setAttribute("text", [
-        `value:${escapeText(value)}`,
-        "color:#fff",
-        "opacity:1",
-        `align:${align || "left"}`,
-        "baseline:center",
-        "anchor:center",
-        `width:${width || 2.0}`,
-        `wrapCount:${wrapCount || 24}`,
-        "side:double"
-      ].join(";"));
-      t.setAttribute("position", `${x || 0} ${y || 0} ${z || this.Z.TXT}`);
-      t.setAttribute("scale", `${scale} ${scale} ${scale}`);
-      t.setAttribute("render-on-top", `order:${this.RO.TXT}; depthTest:false; depthWrite:false`);
-      (parent || this.el).appendChild(t);
-      return t;
-    },
+    _bindClick(el, fn) {
+      if (!el) return;
+      el.__lastClickTs = 0;
 
-    _makeButton({ label, x, y, z, w, h, parent = null }) {
-      const btn = document.createElement("a-plane");
-      btn.classList.add("clickable");
-      btn.setAttribute("width", w);
-      btn.setAttribute("height", h);
-      btn.setAttribute("position", `${x} ${y} ${z}`);
-      btn.setAttribute(
-        "material",
-        "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
-      );
-      btn.setAttribute("render-on-top", `order:${this.RO.BTN}; depthTest:false; depthWrite:false`);
-
-      const txt = document.createElement("a-entity");
-      txt.setAttribute("text", [
-        `value:${escapeText(label || "—")}`,
-        "color:#fff",
-        "opacity:1",
-        "align:center",
-        "baseline:center",
-        "anchor:center",
-        "width:2.2",
-        "wrapCount:20",
-        "side:double"
-      ].join(";"));
-
-      // ✅ texto sempre na frente do plano do botão
-      txt.setAttribute("position", `0 0 ${this.Z.TXT_FRONT}`);
-      txt.setAttribute("scale", `${this.data.btnTextScale} ${this.data.btnTextScale} ${this.data.btnTextScale}`);
-      txt.setAttribute("render-on-top", `order:${this.RO.TXT}; depthTest:false; depthWrite:false`);
-      btn.appendChild(txt);
-
-      const hi = () => btn.setAttribute("material", "color", "#2a2a2a");
-      const lo = () => btn.setAttribute("material", "color", "#111");
-      btn.addEventListener("raycaster-intersected", hi);
-      btn.addEventListener("raycaster-intersected-cleared", lo);
-
-      (parent || this.el).appendChild(btn);
-      return btn;
-    },
-
-    _onClick(btn, fn) {
-      if (!btn) return;
-      btn.__lastClickTs = 0;
-      btn.addEventListener("click", (e) => {
+      el.addEventListener("click", (e) => {
         e?.stopPropagation?.();
         const now = performance.now();
-        if (now - (btn.__lastClickTs || 0) < 250) return;
-        btn.__lastClickTs = now;
+        if (now - (el.__lastClickTs || 0) < 250) return;
+        el.__lastClickTs = now;
         fn?.();
       });
     }
   });
-
-  function escapeText(s) {
-    return String(s || "").replace(/;/g, ",").replace(/\n/g, " ");
-  }
-
-  function truncateOneLine(s, max) {
-    const str = String(s || "");
-    if (str.length <= max) return str;
-    return str.slice(0, Math.max(0, max - 1)) + "…";
-  }
-
-  function layoutRow(widths, { left, right, minGap = 0.02 }) {
-    const avail = Math.max(0.1, right - left);
-    const n = widths.length;
-    const sumW = widths.reduce((a, b) => a + b, 0);
-
-    const need = sumW + minGap * (n - 1);
-
-    let scale = 1.0;
-    let gap = minGap;
-
-    if (need > avail) {
-      scale = avail / need;
-      gap = minGap * scale;
-    } else {
-      const extra = avail - sumW;
-      gap = (n > 1) ? (extra / (n - 1)) : 0;
-      gap = Math.max(minGap, gap);
-    }
-
-    const out = [];
-    let x = left;
-    for (let i = 0; i < n; i++) {
-      const w = widths[i] * scale;
-      const cx = x + w / 2;
-      out.push({ x: cx, w });
-      x += w + gap;
-    }
-
-    const last = out[out.length - 1];
-    const end = last.x + last.w / 2;
-    const over = end - right;
-    if (over > 0.0001) {
-      for (const p of out) p.x -= over;
-    }
-    return out;
-  }
 }
