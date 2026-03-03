@@ -10,7 +10,7 @@ import { registerVrWidget } from "./xr/vr_widget.js"; // ✅ novo
 window.addEventListener("DOMContentLoaded", async () => {
   const DEBUG_HOTSPOTS = false;
 
-  const vr_debug = false;
+  const vr_debug = true;
 
   const vr_foveated_rendering_enabled = false;
   const vr_foveation_level = 0.7;
@@ -86,6 +86,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   await initPWA(app);
 });
+
 
 
 
