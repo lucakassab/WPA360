@@ -4,8 +4,6 @@ export function ensureVrWidgetView(AFRAME) {
 
   // registra 1x
   if (!AFRAME.components["vr-ui-fix"]) {
-    const THREE = AFRAME.THREE;
-
     AFRAME.registerComponent("vr-ui-fix", {
       schema: {
         order: { type: "int", default: 1100 },
@@ -21,6 +19,15 @@ export function ensureVrWidgetView(AFRAME) {
         this._apply = this._apply.bind(this);
         this.el.addEventListener("object3dset", this._apply);
         this.el.addEventListener("loaded", this._apply);
+
+        // texto/mesh às vezes nasce depois -> reaplica algumas vezes
+        let n = 0;
+        const tick = () => {
+          this._apply();
+          n++;
+          if (n < 6) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
       },
 
       update() { this._apply(); },
@@ -47,7 +54,7 @@ export function ensureVrWidgetView(AFRAME) {
             m.transparent = d.transparent;
             m.opacity = d.opacity;
 
-            // ✅ mata o "texto cinza" em VR com tone mapping
+            // ✅ mata tone mapping (texto “cinza/lavado” em XR)
             m.toneMapped = d.toneMapped;
 
             // força cor quando fizer sentido (texto)
@@ -55,7 +62,7 @@ export function ensureVrWidgetView(AFRAME) {
               try { m.color.set(force); } catch {}
             }
 
-            // evita alpha zoado
+            // alpha mais estável
             if (m.alphaTest != null) m.alphaTest = 0.01;
 
             m.needsUpdate = true;
@@ -119,8 +126,10 @@ export function ensureVrWidgetView(AFRAME) {
       "material",
       `color:${color}; opacity:${opacity}; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double`
     );
-    // ✅ toneMapped=false aqui também pra não lavar UI
-    p.setAttribute("vr-ui-fix", `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:${opacity}`);
+    p.setAttribute(
+      "vr-ui-fix",
+      `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:${opacity}`
+    );
     parent.appendChild(p);
     return p;
   }
@@ -131,7 +140,7 @@ export function ensureVrWidgetView(AFRAME) {
       `value:${escapeText(value)}`,
       "color:#ffffff",
       "opacity:1",
-      `align:${align || "left"}`,
+      `align:${align || "center"}`,
       "baseline:center",
       "anchor:center",
       `width:${width || 2.0}`,
@@ -141,14 +150,35 @@ export function ensureVrWidgetView(AFRAME) {
     t.setAttribute("position", `${x} ${y} ${z}`);
     t.setAttribute("scale", `${scale} ${scale} ${scale}`);
 
-    // ✅ força material do texto: renderOrder alto + toneMapped false + força branco
-    t.setAttribute("vr-ui-fix", `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff`);
+    t.setAttribute(
+      "vr-ui-fix",
+      `order:${order}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff`
+    );
 
     parent.appendChild(t);
     return t;
   }
 
-  function makeButton({ parent, label, x, y, z, w, h, orderPlane, orderText, textScale, textZ }) {
+  function makeButton({
+    parent,
+    label,
+    x, y, z,
+    w, h,
+    orderPlane,
+    orderText,
+    textScale,
+    textZ
+  }) {
+    // ✅ garante texto sempre NA FRENTE
+    const planeOrder = Number(orderPlane) || 1000;
+    let txtOrder = Number(orderText) || (planeOrder + 50);
+    if (txtOrder <= planeOrder) txtOrder = planeOrder + 50;
+
+    // ✅ Z mínimo seguro pro texto ficar “na cara” do plano
+    let tz = Number(textZ);
+    if (!Number.isFinite(tz)) tz = 0.06;
+    tz = Math.max(0.035, tz);
+
     const btn = document.createElement("a-plane");
     btn.classList.add("clickable");
     btn.setAttribute("width", w);
@@ -158,7 +188,10 @@ export function ensureVrWidgetView(AFRAME) {
       "material",
       "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false; side:double"
     );
-    btn.setAttribute("vr-ui-fix", `order:${orderPlane}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:0.95`);
+    btn.setAttribute(
+      "vr-ui-fix",
+      `order:${planeOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:0.95`
+    );
     parent.appendChild(btn);
 
     const txt = document.createElement("a-entity");
@@ -166,16 +199,22 @@ export function ensureVrWidgetView(AFRAME) {
       `value:${escapeText(label || "—")}`,
       "color:#ffffff",
       "opacity:1",
+      // ✅ centralização correta
       "align:center",
-      "baseline:center",
       "anchor:center",
+      "baseline:center",
       "width:2.2",
       "wrapCount:20",
       "side:double"
     ].join(";"));
-    txt.setAttribute("position", `0 0 ${textZ}`);
+
+    // ✅ centro do botão + na frente do plano
+    txt.setAttribute("position", `0 0 ${tz}`);
     txt.setAttribute("scale", `${textScale} ${textScale} ${textScale}`);
-    txt.setAttribute("vr-ui-fix", `order:${orderText}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff`);
+    txt.setAttribute(
+      "vr-ui-fix",
+      `order:${txtOrder}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; forceColor:#ffffff`
+    );
     btn.appendChild(txt);
 
     // hover
