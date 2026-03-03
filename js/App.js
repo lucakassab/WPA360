@@ -115,10 +115,10 @@ export default class App {
     // set current tour
     this._setCurrentTour(this._defaultTourId, { emit: false });
 
-    // init UI (dropdowns, menu, map, download, fov, fade, tooltip, etc.)
+    // init UI
     this.uiManager.init();
 
-    // FOV from storage AFTER UI init (pra UI receber via evento)
+    // FOV from storage AFTER UI init
     const savedFov = Number(localStorage.getItem(LS_FOV));
     const initialFov = Number.isFinite(savedFov) ? savedFov : 80;
     this.setFov(initialFov, { emit: true });
@@ -156,7 +156,7 @@ export default class App {
       if (!same) void this.goToScene(parsed.sceneId, { tourId: parsed.tourId, pushHash: false });
     });
 
-    // VR enter/exit -> emit + ensure VR UI
+    // VR enter/exit
     this.sceneEl.addEventListener("enter-vr", async () => {
       this.emit("vr:enter");
       await this._ensureVrUiIfImmersive();
@@ -168,7 +168,7 @@ export default class App {
       this._destroyVrConsole();
     });
 
-    // XR session lifecycle (mais confiável)
+    // XR session lifecycle
     this._bindXRSessionLifecycle();
 
     // hotspot debug
@@ -657,16 +657,7 @@ export default class App {
       const d = Number(e?.detail?.delta || 0);
       this.setFov(this._fov + d, { emit: true });
     };
-    const hTour = (e) => {
-      const delta = Number(e?.detail?.delta || 0);
-      this._stepTour(delta);
-    };
-    const hScene = (e) => {
-      const delta = Number(e?.detail?.delta || 0);
-      this._stepScene(delta);
-    };
 
-    // dropdown VR
     const hSelectTour = (e) => {
       const tid = String(e?.detail?.tourId || "");
       if (!tid || tid === this.currentTourId) return;
@@ -674,21 +665,29 @@ export default class App {
       const start = this._getTourStartSceneId(tid);
       if (start) void this.goToScene(start, { tourId: tid });
     };
+
     const hSelectScene = (e) => {
       const sid = String(e?.detail?.sceneId || "");
       if (!sid || sid === this.currentSceneId) return;
       void this.goToScene(sid, { tourId: this.currentTourId });
     };
 
+    // ✅ handshake: widget pede sync quando abre dropdown / init
+    const hReqSync = () => this._syncVrWidgetIfExists();
+
     el.addEventListener("vrwidget:prevscene", hPrev);
     el.addEventListener("vrwidget:nextscene", hNext);
     el.addEventListener("vrwidget:fovdelta", hFov);
-    el.addEventListener("vrwidget:tourstep", hTour);
-    el.addEventListener("vrwidget:scenestep", hScene);
     el.addEventListener("vrwidget:selecttour", hSelectTour);
     el.addEventListener("vrwidget:selectscene", hSelectScene);
+    el.addEventListener("vrwidget:requestsync", hReqSync);
 
-    this._vrWidgetHandlers = { hPrev, hNext, hFov, hTour, hScene, hSelectTour, hSelectScene };
+    // ✅ garante sync inicial (mesmo se o primeiro update for “perdido”)
+    el.addEventListener("loaded", () => this._syncVrWidgetIfExists());
+    requestAnimationFrame(() => this._syncVrWidgetIfExists());
+    queueMicrotask(() => this._syncVrWidgetIfExists());
+
+    this._vrWidgetHandlers = { hPrev, hNext, hFov, hSelectTour, hSelectScene, hReqSync };
   }
 
   _destroyVrWidget() {
@@ -701,10 +700,9 @@ export default class App {
         el.removeEventListener("vrwidget:prevscene", hs.hPrev);
         el.removeEventListener("vrwidget:nextscene", hs.hNext);
         el.removeEventListener("vrwidget:fovdelta", hs.hFov);
-        el.removeEventListener("vrwidget:tourstep", hs.hTour);
-        el.removeEventListener("vrwidget:scenestep", hs.hScene);
         el.removeEventListener("vrwidget:selecttour", hs.hSelectTour);
         el.removeEventListener("vrwidget:selectscene", hs.hSelectScene);
+        el.removeEventListener("vrwidget:requestsync", hs.hReqSync);
       }
     } catch {}
 
