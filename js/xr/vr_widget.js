@@ -18,11 +18,13 @@ export function registerVrWidget(AFRAME) {
     },
 
     init() {
-      // +30% longe (pedido anterior)
       const baseDist = this.data.distance * 1.30;
 
       this.RO = { BG: 900, PANEL: 1000, BTN: 1000, TXT: 1100, MARK: 1200 };
-      this.Z  = { BG: 0.00, BTN: 0.02, TXT: 0.06, TXT_FRONT: 0.09, PANEL: 0.03, MARK: 0.095 };
+      this.Z  = { BG: 0.00, BTN: 0.02, TXT: 0.06, PANEL: 0.03, MARK: 0.095 };
+
+      // ✅ OFFSET “COLADO” EM METROS NO MUNDO
+      this.TEXT_Z_WORLD = 0.012;
 
       this.state = {
         tourTitle: "—",
@@ -48,15 +50,13 @@ export function registerVrWidget(AFRAME) {
 
       this._build();
 
-      // ✅ handshake: pede sync assim que o componente nascer
+      // handshake
       queueMicrotask(() => {
         this.el.emit("vrwidget:requestsync", { reason: "init" }, false);
       });
 
       this.el.addEventListener("vrwidget:update", (e) => this._applyUpdate(e?.detail || {}));
     },
-
-    // =================== BUILD ===================
 
     _build() {
       const w = this.data.width;
@@ -73,7 +73,6 @@ export function registerVrWidget(AFRAME) {
       const yRow2b = yRow2 - 0.105;
       const yPanelTop = yRow2b - 0.02;
 
-      // BG
       V.makePlane({
         parent: this.el,
         w, h,
@@ -83,7 +82,6 @@ export function registerVrWidget(AFRAME) {
         order: this.RO.BG
       });
 
-      // Title
       this.titleEl = V.makeText({
         parent: this.el,
         value: "—",
@@ -98,7 +96,6 @@ export function registerVrWidget(AFRAME) {
       const leftX = (-w / 2) + padX;
       const rightX = (w / 2) - padX;
 
-      // Row 1 buttons
       this.btnTourDrop = V.makeButton({
         parent: this.el,
         label: "Tour",
@@ -107,7 +104,7 @@ export function registerVrWidget(AFRAME) {
         orderPlane: this.RO.BTN,
         orderText: this.RO.TXT,
         textScale: this.data.btnTextScale,
-        textZ: this.Z.TXT_FRONT
+        textZ: this.TEXT_Z_WORLD
       });
 
       this.btnSceneDrop = V.makeButton({
@@ -118,7 +115,7 @@ export function registerVrWidget(AFRAME) {
         orderPlane: this.RO.BTN,
         orderText: this.RO.TXT,
         textScale: this.data.btnTextScale,
-        textZ: this.Z.TXT_FRONT
+        textZ: this.TEXT_Z_WORLD
       });
 
       this.tourValueText = V.makeText({
@@ -146,7 +143,6 @@ export function registerVrWidget(AFRAME) {
       this._bindClick(this.btnTourDrop, () => this._toggleDropdown("tour"));
       this._bindClick(this.btnSceneDrop, () => this._toggleDropdown("scene"));
 
-      // Row 2 auto layout
       const items = [
         { label: "Prev", w: 0.22, ev: () => this.el.emit("vrwidget:prevscene", {}, false) },
         { label: "Next", w: 0.22, ev: () => this.el.emit("vrwidget:nextscene", {}, false) },
@@ -171,11 +167,10 @@ export function registerVrWidget(AFRAME) {
           orderPlane: this.RO.BTN,
           orderText: this.RO.TXT,
           textScale: this.data.btnTextScale,
-          textZ: this.Z.TXT_FRONT
+          textZ: this.TEXT_Z_WORLD
         });
 
         this._bindClick(btn, items[i].ev);
-
         if (items[i].label === "Map") this.btnMap = btn;
       }
 
@@ -190,13 +185,12 @@ export function registerVrWidget(AFRAME) {
         order: this.RO.TXT
       });
 
-      // Dropdown container
+      // Dropdown panel
       this.dropdownPanel = document.createElement("a-entity");
       this.dropdownPanel.setAttribute("visible", "false");
       this.dropdownPanel.setAttribute("position", `0 ${yPanelTop} ${this.Z.PANEL}`);
       this.el.appendChild(this.dropdownPanel);
 
-      // dropdown bg + title + list + close
       const ddW = this.data.width - 0.10;
       const ddH = 0.52;
 
@@ -232,11 +226,10 @@ export function registerVrWidget(AFRAME) {
         orderPlane: this.RO.BTN,
         orderText: this.RO.TXT,
         textScale: this.data.btnTextScale,
-        textZ: this.Z.TXT_FRONT
+        textZ: this.TEXT_Z_WORLD
       });
       this._bindClick(this.btnClose, () => this._setDropdown(null));
 
-      // "Loading…" placeholder (resolve o “só Close”)
       this.dropdownLoading = V.makeText({
         parent: this.dropdownPanel,
         value: "Loading…",
@@ -270,27 +263,23 @@ export function registerVrWidget(AFRAME) {
       this.markerEl.setAttribute("radius", 0.020);
       this.markerEl.setAttribute("material", "color:#ff3b30; shader:flat; depthTest:false; depthWrite:false; transparent:true; opacity:1; side:double");
       this.markerEl.setAttribute("position", `0 ${-mapH/2} ${this.Z.MARK}`);
-      this.markerEl.setAttribute("vr-ui-fix", `order:${this.RO.MARK}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1`);
+      this.markerEl.setAttribute("vr-ui-fix", `order:${this.RO.MARK}; toneMapped:false; depthTest:false; depthWrite:false; transparent:true; opacity:1; applyDescendants:false`);
       this.mapGroup.appendChild(this.markerEl);
 
-      // zoom buttons
       const yBtns = -mapH - 0.10;
       const zBtn = this.Z.BTN;
 
-      const b1 = V.makeButton({ parent: this.mapGroup, label: "Zoom-", x: -0.22, y: yBtns, z: zBtn, w: 0.22, h: 0.11, orderPlane: this.RO.BTN, orderText: this.RO.TXT, textScale: this.data.btnTextScale, textZ: this.Z.TXT_FRONT });
-      const b2 = V.makeButton({ parent: this.mapGroup, label: "Zoom+", x: +0.02, y: yBtns, z: zBtn, w: 0.22, h: 0.11, orderPlane: this.RO.BTN, orderText: this.RO.TXT, textScale: this.data.btnTextScale, textZ: this.Z.TXT_FRONT });
-      const b3 = V.makeButton({ parent: this.mapGroup, label: "Reset", x: +0.28, y: yBtns, z: zBtn, w: 0.18, h: 0.11, orderPlane: this.RO.BTN, orderText: this.RO.TXT, textScale: this.data.btnTextScale, textZ: this.Z.TXT_FRONT });
+      const b1 = V.makeButton({ parent: this.mapGroup, label: "Zoom-", x: -0.22, y: yBtns, z: zBtn, w: 0.22, h: 0.11, orderPlane: this.RO.BTN, orderText: this.RO.TXT, textScale: this.data.btnTextScale, textZ: this.TEXT_Z_WORLD });
+      const b2 = V.makeButton({ parent: this.mapGroup, label: "Zoom+", x: +0.02, y: yBtns, z: zBtn, w: 0.22, h: 0.11, orderPlane: this.RO.BTN, orderText: this.RO.TXT, textScale: this.data.btnTextScale, textZ: this.TEXT_Z_WORLD });
+      const b3 = V.makeButton({ parent: this.mapGroup, label: "Reset", x: +0.28, y: yBtns, z: zBtn, w: 0.18, h: 0.11, orderPlane: this.RO.BTN, orderText: this.RO.TXT, textScale: this.data.btnTextScale, textZ: this.TEXT_Z_WORLD });
 
       this._bindClick(b1, () => this._setMapZoom(this.state.mapZoom / 1.15));
       this._bindClick(b2, () => this._setMapZoom(this.state.mapZoom * 1.15));
       this._bindClick(b3, () => this._setMapZoom(1.0));
 
-      // hide on start
       this._setDropdown(null);
       this._applyMarker(null);
     },
-
-    // =================== UPDATE ===================
 
     _applyUpdate(d) {
       if (d.tourTitle != null) this.state.tourTitle = String(d.tourTitle);
@@ -312,24 +301,17 @@ export function registerVrWidget(AFRAME) {
       this.sceneValueText?.setAttribute("text", "value", sceneLabel);
       this.fovText?.setAttribute("text", "value", `FOV ${this.state.fov}`);
 
-      // map color
       if (this.btnMap) this.btnMap.setAttribute("material", "color", this.state.hasMap ? "#111" : "#330");
 
-      // map texture
       if (this.mapPlane && this.state.mapSrc) {
-        this.mapPlane.setAttribute(
-          "material",
-          `src:${this.state.mapSrc}; shader:flat; transparent:true; opacity:1.0; depthTest:false; depthWrite:false; side:double`
-        );
+        this.mapPlane.setAttribute("material", `src:${this.state.mapSrc}; shader:flat; transparent:true; opacity:1.0; depthTest:false; depthWrite:false; side:double`);
       }
 
       this._applyMarker(this.state.hasMap ? this.state.marker : null);
 
-      // ✅ se dropdown aberto e agora tem lista, renderiza na hora
+      if (!this.state.hasMap) this._setMapVisible(false);
       if (this.state.dropdown) this._renderDropdownList();
     },
-
-    // =================== DROPDOWNS ===================
 
     _toggleDropdown(kind) {
       if (this.state.dropdown === kind) this._setDropdown(null);
@@ -342,10 +324,8 @@ export function registerVrWidget(AFRAME) {
 
       if (!kind) return;
 
-      // ✅ render IMEDIATO (mesmo se vazio)
       this._renderDropdownList();
 
-      // ✅ se ainda não tem dados, pede sync pro App
       const items = (kind === "tour") ? this.state.tourList : this.state.sceneList;
       if (!items || items.length === 0) {
         this.el.emit("vrwidget:requestsync", { reason: "dropdown-open", kind }, false);
@@ -362,7 +342,6 @@ export function registerVrWidget(AFRAME) {
 
       this.dropdownTitle?.setAttribute("text", "value", kind === "tour" ? "Select Tour" : "Select Scene");
 
-      // loading placeholder
       const empty = !items || items.length === 0;
       this.dropdownLoading.setAttribute("visible", empty ? "true" : "false");
       if (empty) return;
@@ -396,7 +375,7 @@ export function registerVrWidget(AFRAME) {
           orderPlane: this.RO.BTN,
           orderText: this.RO.TXT,
           textScale: this.data.btnTextScale,
-          textZ: this.Z.TXT_FRONT
+          textZ: this.TEXT_Z_WORLD
         });
 
         const isSel = (kind === "tour")
@@ -413,16 +392,18 @@ export function registerVrWidget(AFRAME) {
       }
     },
 
-    // =================== MAP ===================
-
     _toggleMapVisible() {
       if (!this.state.hasMap) return;
-      // fecha dropdown se abrir map
       if (this.state.dropdown) this._setDropdown(null);
 
       const next = !this.state.mapVisible;
       this.state.mapVisible = next;
       this.mapGroup.setAttribute("visible", next ? "true" : "false");
+    },
+
+    _setMapVisible(v) {
+      this.state.mapVisible = !!v;
+      this.mapGroup?.setAttribute("visible", this.state.mapVisible ? "true" : "false");
     },
 
     _setMapZoom(z) {
@@ -452,8 +433,6 @@ export function registerVrWidget(AFRAME) {
       this.markerEl.setAttribute("position", `${x} ${y} ${this.Z.MARK}`);
       this.markerEl.setAttribute("visible", "true");
     },
-
-    // =================== Click helper ===================
 
     _bindClick(el, fn) {
       if (!el) return;
