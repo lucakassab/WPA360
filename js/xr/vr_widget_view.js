@@ -192,8 +192,8 @@ export function ensureVrWidgetView(AFRAME) {
     if (txtOrder <= planeOrder) txtOrder = planeOrder + 50;
 
     let tz = Number(textZ);
-    if (!Number.isFinite(tz)) tz = 0.06;
-    tz = Math.max(0.002, tz); // ✅ mais pra frente ainda pra matar z-fighting
+    if (!Number.isFinite(tz)) tz = 0.015;
+    tz = Math.max(0.015, tz); // ✅ mais pra frente ainda pra matar z-fighting
 
     const btn = document.createElement("a-plane");
     btn.classList.add("clickable");
