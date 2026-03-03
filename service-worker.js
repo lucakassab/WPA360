@@ -10,6 +10,7 @@ const APP_SHELL = [
 
   "./js/main.js",
   "./js/App.js",
+  "./js/AppUI.js",
   "./js/PlatformManager.js",
 
   "./js/platform/Desktop.js",
