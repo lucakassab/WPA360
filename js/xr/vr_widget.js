@@ -4,16 +4,16 @@ export function registerVrWidget(AFRAME) {
 
   AFRAME.registerComponent("vr-widget", {
     schema: {
-      width: { type: "number", default: 1.30 },
-      height: { type: "number", default: 0.84 },
+      width: { type: "number", default: 1.32 },
+      height: { type: "number", default: 0.88 },
       distance: { type: "number", default: 0.85 },
       mapHeight: { type: "number", default: 0.46 },
       uiScale: { type: "number", default: 1.0 },
 
-      // ✅ texto maior e estável
-      textScale: { type: "number", default: 0.24 },     // antes ~0.14–0.20
-      buttonTextScale: { type: "number", default: 0.24 },
-      titleTextScale: { type: "number", default: 0.30 }
+      // Texto: escala estável (não gigante pra não invadir layout)
+      titleScale: { type: "number", default: 0.26 },
+      textScale: { type: "number", default: 0.18 },
+      btnTextScale: { type: "number", default: 0.18 }
     },
 
     init() {
@@ -22,13 +22,13 @@ export function registerVrWidget(AFRAME) {
         sceneTitle: "—",
         currentTourId: "",
         currentSceneId: "",
-        tourList: [],   // [{id,title}]
-        sceneList: [],  // [{id,name}]
+        tourList: [],
+        sceneList: [],
         fov: 80,
 
         hasMap: false,
         mapSrc: "",
-        marker: null, // {x,y}
+        marker: null,
 
         mapVisible: false,
         mapZoom: 1.0,
@@ -43,100 +43,129 @@ export function registerVrWidget(AFRAME) {
       });
     },
 
-    // ============================= UI BUILD =============================
+    // ============================ BUILD ============================
 
     _buildUI() {
       const w = this.data.width;
       const h = this.data.height;
+
+      // Layers (Z): espaçados pra evitar z-fighting
+      this.Z = {
+        BG: 0.00,
+        BTN: 0.05,
+        TXT: 0.10,
+        PANEL: 0.14,
+        PANEL_TXT: 0.19,
+        MAP: 0.12,
+        MAP_TXT: 0.17
+      };
+
+      // Grid config (linhas fixas e espaçamento)
+      this.L = {
+        padX: 0.06,
+        topY: h / 2,
+        rowGap: 0.13,
+        rowH: 0.11
+      };
 
       this.el.setAttribute("position", `0 -0.10 -${this.data.distance}`);
       this.el.setAttribute("visible", "true");
       this.el.object3D.scale.set(this.data.uiScale, this.data.uiScale, this.data.uiScale);
 
       // BG
-      const bg = document.createElement("a-plane");
-      bg.setAttribute("width", w);
-      bg.setAttribute("height", h);
-      bg.setAttribute("material", "color:#000; opacity:0.78; transparent:true; shader:flat; depthTest:false; depthWrite:false");
-      bg.setAttribute("position", "0 0 0");
-      bg.setAttribute("render-on-top", "");
-      this.el.appendChild(bg);
+      this.bg = document.createElement("a-plane");
+      this.bg.setAttribute("width", w);
+      this.bg.setAttribute("height", h);
+      this.bg.setAttribute("material", "color:#000; opacity:0.78; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+      this.bg.setAttribute("position", `0 0 ${this.Z.BG}`);
+      this.bg.setAttribute("render-on-top", "");
+      this.el.appendChild(this.bg);
 
-      // Title (scene)
+      // Row Y positions
+      const yTitle = this.L.topY - 0.09;
+      const yRow1 = yTitle - this.L.rowGap;
+      const yRow2 = yRow1 - this.L.rowGap;
+      const yPanelTop = yRow2 - 0.04;
+
+      // Title
       this.titleEl = this._makeText({
         value: "—",
-        width: 3.2,
-        wrapCount: 30,
-        align: "center",
-        scale: this.data.titleTextScale,
         x: 0,
-        y: (h / 2) - 0.08,
-        z: 0.06
+        y: yTitle,
+        z: this.Z.TXT,
+        width: 3.2,
+        wrapCount: 28,
+        align: "center",
+        scale: this.data.titleScale
       });
-      this.el.appendChild(this.titleEl);
 
-      // Row 1: Tour dropdown + Scene dropdown
-      const row1Y = (h / 2) - 0.20;
+      // === Row 1: Tour / Scene dropdown triggers + values ===
+      const leftX = (-w / 2) + this.L.padX;
+      const rightX = (w / 2) - this.L.padX;
 
-      // ✅ sem glyph “▼” (às vezes some). A gente mostra “Tour” e abre lista.
-      this.btnTourDrop = this._makeButton({ label: "Tour", x: (-w/2) + 0.22, y: row1Y, w: 0.30, h: 0.11 });
+      // Botões fixos nas bordas
+      this.btnTourDrop = this._makeButton({
+        label: "Tour",
+        x: leftX + 0.14,
+        y: yRow1,
+        z: this.Z.BTN,
+        w: 0.28,
+        h: this.L.rowH
+      });
+
+      this.btnSceneDrop = this._makeButton({
+        label: "Scene",
+        x: rightX - 0.16,
+        y: yRow1,
+        z: this.Z.BTN,
+        w: 0.32,
+        h: this.L.rowH
+      });
+
+      // Textos de valor (ficam no miolo, sem invadir botões)
       this.tourValueText = this._makeText({
         value: "—",
-        width: 2.8,
-        wrapCount: 34,
+        x: leftX + 0.48,
+        y: yRow1,
+        z: this.Z.TXT,
+        width: 2.4,
+        wrapCount: 26,
         align: "left",
-        scale: this.data.textScale,
-        x: (-w/2) + 0.58,
-        y: row1Y,
-        z: 0.06
+        scale: this.data.textScale
       });
 
-      this.btnSceneDrop = this._makeButton({ label: "Scene", x: (w/2) - 0.52, y: row1Y, w: 0.34, h: 0.11 });
       this.sceneValueText = this._makeText({
         value: "—",
-        width: 2.8,
-        wrapCount: 34,
+        x: rightX - 0.56,
+        y: yRow1,
+        z: this.Z.TXT,
+        width: 2.4,
+        wrapCount: 26,
         align: "right",
-        scale: this.data.textScale,
-        x: (w/2) - 0.90,
-        y: row1Y,
-        z: 0.06
+        scale: this.data.textScale
       });
-
-      this.el.appendChild(this.btnTourDrop);
-      this.el.appendChild(this.tourValueText);
-      this.el.appendChild(this.btnSceneDrop);
-      this.el.appendChild(this.sceneValueText);
 
       this._onClick(this.btnTourDrop, () => this._toggleDropdown("tour"));
       this._onClick(this.btnSceneDrop, () => this._toggleDropdown("scene"));
 
-      // Row 2: Prev / Next / Map / FOV- / FOV+
-      const row2Y = (h / 2) - 0.34;
+      // === Row 2: Prev / Next / Map / FOV - / FOV + / FOV text ===
+      this.btnPrev = this._makeButton({ label: "Prev", x: leftX + 0.12, y: yRow2, z: this.Z.BTN, w: 0.22, h: this.L.rowH });
+      this.btnNext = this._makeButton({ label: "Next", x: leftX + 0.36, y: yRow2, z: this.Z.BTN, w: 0.22, h: this.L.rowH });
+      this.btnMap  = this._makeButton({ label: "Map",  x: leftX + 0.60, y: yRow2, z: this.Z.BTN, w: 0.20, h: this.L.rowH });
 
-      this.btnPrev = this._makeButton({ label: "Prev", x: (-w/2) + 0.17, y: row2Y, w: 0.22, h: 0.11 });
-      this.btnNext = this._makeButton({ label: "Next", x: (-w/2) + 0.41, y: row2Y, w: 0.22, h: 0.11 });
-      this.btnMap  = this._makeButton({ label: "Map",  x: (-w/2) + 0.65, y: row2Y, w: 0.20, h: 0.11 });
+      this.btnFovMinus = this._makeButton({ label: "FOV-", x: rightX - 0.58, y: yRow2, z: this.Z.BTN, w: 0.18, h: this.L.rowH });
+      this.btnFovPlus  = this._makeButton({ label: "FOV+", x: rightX - 0.38, y: yRow2, z: this.Z.BTN, w: 0.18, h: this.L.rowH });
 
-      this.btnFovMinus = this._makeButton({ label: "FOV -", x: (w/2) - 0.58, y: row2Y, w: 0.20, h: 0.11 });
-      this.btnFovPlus  = this._makeButton({ label: "FOV +", x: (w/2) - 0.36, y: row2Y, w: 0.20, h: 0.11 });
       this.fovText = this._makeText({
         value: "FOV 80",
-        width: 2.0,
-        wrapCount: 14,
+        x: rightX - 0.14,
+        y: yRow2,
+        z: this.Z.TXT,
+        width: 1.8,
+        wrapCount: 12,
         align: "left",
-        scale: this.data.textScale,
-        x: (w/2) - 0.12,
-        y: row2Y,
-        z: 0.06
+        scale: this.data.textScale
       });
-
-      this.el.appendChild(this.btnPrev);
-      this.el.appendChild(this.btnNext);
-      this.el.appendChild(this.btnMap);
-      this.el.appendChild(this.btnFovMinus);
-      this.el.appendChild(this.btnFovPlus);
-      this.el.appendChild(this.fovText);
 
       this._onClick(this.btnPrev, () => this._emit("vrwidget:prevscene", {}));
       this._onClick(this.btnNext, () => this._emit("vrwidget:nextscene", {}));
@@ -144,86 +173,105 @@ export function registerVrWidget(AFRAME) {
       this._onClick(this.btnFovPlus,  () => this._emit("vrwidget:fovdelta", { delta: +5 }));
       this._onClick(this.btnMap, () => this._toggleMapVisible());
 
-      // Dropdown panel (hidden by default)
+      // ==================== Dropdown Panel ====================
       this.dropdownPanel = document.createElement("a-entity");
       this.dropdownPanel.setAttribute("visible", "false");
-      this.dropdownPanel.setAttribute("position", `0 ${row2Y - 0.02} 0.06`);
+      this.dropdownPanel.setAttribute("position", `0 ${yPanelTop} ${this.Z.PANEL}`);
       this.el.appendChild(this.dropdownPanel);
 
       this._buildDropdownPanel();
 
-      // Map group (hidden by default)
-      const mapYTop = row2Y - 0.12;
+      // ==================== Map Panel ====================
+      this._buildMapPanel(yPanelTop);
+
+      // Start hidden
+      this._setDropdown(null);
+      this._setMapVisible(false);
+      this._applyMarker(null);
+    },
+
+    _buildDropdownPanel() {
+      // clear
+      while (this.dropdownPanel.firstChild) this.dropdownPanel.removeChild(this.dropdownPanel.firstChild);
+
+      const w = this.data.width - 0.10;
+      const h = 0.52;
+
+      // background
+      this.ddBg = document.createElement("a-plane");
+      this.ddBg.setAttribute("width", w);
+      this.ddBg.setAttribute("height", h);
+      this.ddBg.setAttribute("material", "color:#050505; opacity:0.92; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+      this.ddBg.setAttribute("position", `0 ${-h/2} 0`);
+      this.ddBg.setAttribute("render-on-top", "");
+      this.dropdownPanel.appendChild(this.ddBg);
+
+      // title
+      this.dropdownTitle = this._makeText({
+        value: "Select",
+        x: (-w/2) + 0.12,
+        y: -0.06,
+        z: this.Z.PANEL_TXT,
+        width: 2.8,
+        wrapCount: 24,
+        align: "left",
+        scale: this.data.textScale,
+        parent: this.dropdownPanel
+      });
+
+      // list container
+      this.dropdownList = document.createElement("a-entity");
+      this.dropdownList.setAttribute("position", `0 -0.14 ${this.Z.PANEL_TXT}`);
+      this.dropdownPanel.appendChild(this.dropdownList);
+
+      // close
+      const btnClose = this._makeButton({
+        label: "Close",
+        x: (w/2) - 0.16,
+        y: -0.06,
+        z: this.Z.PANEL_TXT,
+        w: 0.18,
+        h: 0.10,
+        parent: this.dropdownPanel
+      });
+      this._onClick(btnClose, () => this._setDropdown(null));
+    },
+
+    _buildMapPanel(yPanelTop) {
+      const w = this.data.width - 0.10;
       const mapH = this.data.mapHeight;
-      const mapW = w - 0.10;
 
       this.mapGroup = document.createElement("a-entity");
-      this.mapGroup.setAttribute("position", `0 ${mapYTop - mapH/2 - 0.02} 0.05`);
+      this.mapGroup.setAttribute("position", `0 ${yPanelTop - 0.02} ${this.Z.MAP}`);
       this.el.appendChild(this.mapGroup);
 
       this.mapPlane = document.createElement("a-plane");
-      this.mapPlane.setAttribute("width", mapW);
+      this.mapPlane.setAttribute("width", w);
       this.mapPlane.setAttribute("height", mapH);
       this.mapPlane.setAttribute("material", "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false");
-      this.mapPlane.setAttribute("position", "0 0 0");
+      this.mapPlane.setAttribute("position", `0 ${-mapH/2} 0`);
       this.mapPlane.setAttribute("render-on-top", "");
       this.mapGroup.appendChild(this.mapPlane);
 
       this.markerEl = document.createElement("a-circle");
       this.markerEl.setAttribute("radius", 0.020);
       this.markerEl.setAttribute("material", "color:#ff3b30; shader:flat; depthTest:false; depthWrite:false");
-      this.markerEl.setAttribute("position", `0 0 0.06`);
+      this.markerEl.setAttribute("position", `0 ${-mapH/2} ${this.Z.MAP_TXT}`);
       this.markerEl.setAttribute("render-on-top", "");
       this.mapGroup.appendChild(this.markerEl);
 
-      const zy = -(mapH/2) - 0.09;
-      this.btnZoomOut = this._makeButton({ label: "Zoom -", x: -0.20, y: zy, w: 0.22, h: 0.11, z: 0.08, parent: this.mapGroup });
-      this.btnZoomIn  = this._makeButton({ label: "Zoom +", x: +0.04, y: zy, w: 0.22, h: 0.11, z: 0.08, parent: this.mapGroup });
-      this.btnZoomReset = this._makeButton({ label: "Reset", x: +0.30, y: zy, w: 0.18, h: 0.11, z: 0.08, parent: this.mapGroup });
+      // zoom buttons (embaixo do mapa)
+      const yBtns = -mapH - 0.10;
+      this.btnZoomOut = this._makeButton({ label: "Zoom-", x: -0.22, y: yBtns, z: this.Z.MAP_TXT, w: 0.22, h: 0.11, parent: this.mapGroup });
+      this.btnZoomIn  = this._makeButton({ label: "Zoom+", x: +0.02, y: yBtns, z: this.Z.MAP_TXT, w: 0.22, h: 0.11, parent: this.mapGroup });
+      this.btnZoomReset = this._makeButton({ label: "Reset", x: +0.28, y: yBtns, z: this.Z.MAP_TXT, w: 0.18, h: 0.11, parent: this.mapGroup });
 
       this._onClick(this.btnZoomOut, () => this._setMapZoom(this.state.mapZoom / 1.15));
       this._onClick(this.btnZoomIn,  () => this._setMapZoom(this.state.mapZoom * 1.15));
       this._onClick(this.btnZoomReset, () => this._setMapZoom(1.0));
-
-      this._setMapVisible(false);
-      this._applyMarker(null);
     },
 
-    _buildDropdownPanel() {
-      while (this.dropdownPanel.firstChild) this.dropdownPanel.removeChild(this.dropdownPanel.firstChild);
-
-      const w = this.data.width - 0.10;
-      const h = 0.48;
-
-      const bg = document.createElement("a-plane");
-      bg.setAttribute("width", w);
-      bg.setAttribute("height", h);
-      bg.setAttribute("material", "color:#050505; opacity:0.92; transparent:true; shader:flat; depthTest:false; depthWrite:false");
-      bg.setAttribute("position", `0 ${-h/2} 0`);
-      bg.setAttribute("render-on-top", "");
-      this.dropdownPanel.appendChild(bg);
-
-      this.dropdownTitle = this._makeText({
-        value: "Select",
-        width: 3.0,
-        wrapCount: 28,
-        align: "left",
-        scale: this.data.textScale,
-        x: (-w/2) + 0.08,
-        y: -0.06,
-        z: 0.06,
-        parent: this.dropdownPanel
-      });
-
-      this.dropdownList = document.createElement("a-entity");
-      this.dropdownList.setAttribute("position", `0 -0.12 0.06`);
-      this.dropdownPanel.appendChild(this.dropdownList);
-
-      const btnClose = this._makeButton({ label: "Close", x: (w/2) - 0.18, y: -0.06, w: 0.18, h: 0.10, z: 0.06, parent: this.dropdownPanel });
-      this._onClick(btnClose, () => this._setDropdown(null));
-    },
-
-    // ============================= UPDATE =============================
+    // ============================ UPDATE ============================
 
     _applyUpdate(d) {
       if (d.tourTitle != null) this.state.tourTitle = String(d.tourTitle);
@@ -241,13 +289,19 @@ export function registerVrWidget(AFRAME) {
       if (d.mapSrc != null) this.state.mapSrc = String(d.mapSrc || "");
       if (d.marker != null) this.state.marker = d.marker;
 
-      this.titleEl?.setAttribute("text", "value", this.state.sceneTitle || "—");
-      this.tourValueText?.setAttribute("text", "value", this.state.tourTitle || "—");
-      this.sceneValueText?.setAttribute("text", "value", this.state.sceneTitle || "—");
+      // ✅ truncar pra não invadir (VR wrap é zoado)
+      const tourLabel = truncateOneLine(this.state.tourTitle || "—", 28);
+      const sceneLabel = truncateOneLine(this.state.sceneTitle || "—", 28);
+
+      this.titleEl?.setAttribute("text", "value", sceneLabel);
+      this.tourValueText?.setAttribute("text", "value", tourLabel);
+      this.sceneValueText?.setAttribute("text", "value", sceneLabel);
       this.fovText?.setAttribute("text", "value", `FOV ${this.state.fov}`);
 
+      // map button visual
       if (this.btnMap) this.btnMap.setAttribute("material", "color", this.state.hasMap ? "#111" : "#330");
 
+      // map texture
       if (this.mapPlane && this.state.mapSrc) {
         this.mapPlane.setAttribute(
           "material",
@@ -255,21 +309,28 @@ export function registerVrWidget(AFRAME) {
         );
       }
 
+      // marker
       this._applyMarker(this.state.hasMap ? this.state.marker : null);
+
+      // se não tem map, fecha map
       if (!this.state.hasMap) this._setMapVisible(false);
 
+      // se dropdown tá aberto, rerender
       if (this.state.dropdown) this._renderDropdownList();
     },
 
-    // ============================= DROPDOWNS =============================
+    // ============================ DROPDOWNS ============================
 
     _toggleDropdown(kind) {
+      // abrir dropdown fecha map pra evitar sobreposição
+      if (this.state.mapVisible) this._setMapVisible(false);
+
       if (this.state.dropdown === kind) this._setDropdown(null);
       else this._setDropdown(kind);
     },
 
     _setDropdown(kind) {
-      this.state.dropdown = kind; // "tour"|"scene"|null
+      this.state.dropdown = kind;
       this.dropdownPanel.setAttribute("visible", kind ? "true" : "false");
       if (kind) this._renderDropdownList();
     },
@@ -283,35 +344,35 @@ export function registerVrWidget(AFRAME) {
       const items = (kind === "tour") ? this.state.tourList : this.state.sceneList;
       this.dropdownTitle?.setAttribute("text", "value", kind === "tour" ? "Select Tour" : "Select Scene");
 
+      // Layout 2 colunas x 6 linhas (12 itens)
       const panelW = this.data.width - 0.18;
-      const rowH = 0.10;
-
-      // ✅ layout 2 colunas (até 10 itens) – sem scroll por enquanto
       const colW = (panelW - 0.06) / 2;
       const colX = [-colW/2 - 0.03, colW/2 + 0.03];
-      const maxRows = 5;
-      const maxItems = 10;
+      const rowH = 0.10;
+      const rowGap = 0.012;
+      const maxRows = 6;
+      const maxItems = 12;
+
       const shown = items.slice(0, maxItems);
 
       for (let i = 0; i < shown.length; i++) {
         const it = shown[i];
-        const label = kind === "tour"
-          ? (it.title ?? it.id ?? String(it))
-          : (it.name ?? it.id ?? String(it));
+        const raw = kind === "tour" ? (it.title ?? it.id ?? String(it)) : (it.name ?? it.id ?? String(it));
+        const label = truncateOneLine(raw, 22);
 
         const col = (i < maxRows) ? 0 : 1;
         const row = (i < maxRows) ? i : (i - maxRows);
 
         const x = colX[col];
-        const y = -(row * (rowH + 0.012));
+        const y = -(row * (rowH + rowGap));
 
         const btn = this._makeButton({
           label,
           x,
           y,
+          z: this.Z.PANEL_TXT,
           w: colW,
           h: rowH,
-          z: 0.08,
           parent: this.dropdownList
         });
 
@@ -327,27 +388,16 @@ export function registerVrWidget(AFRAME) {
           this._setDropdown(null);
         });
       }
-
-      if (items.length > maxItems) {
-        const more = this._makeText({
-          value: `(+${items.length - maxItems} more…)`,
-          width: 2.2,
-          wrapCount: 22,
-          align: "center",
-          scale: this.data.textScale,
-          x: 0,
-          y: -(maxRows * (rowH + 0.012)) + 0.01,
-          z: 0.08,
-          parent: this.dropdownList
-        });
-        more.setAttribute("opacity", "0.85");
-      }
     },
 
-    // ============================= MAP =============================
+    // ============================ MAP ============================
 
     _toggleMapVisible() {
       if (!this.state.hasMap) return;
+
+      // abrir map fecha dropdown pra evitar sobreposição
+      if (this.state.dropdown) this._setDropdown(null);
+
       this._setMapVisible(!this.state.mapVisible);
     },
 
@@ -371,23 +421,27 @@ export function registerVrWidget(AFRAME) {
         return;
       }
 
-      const mapW = this.data.width - 0.10;
+      const mapW = (this.data.width - 0.10);
       const mapH = this.data.mapHeight;
 
-      const x = ((pos.x / 100) - 0.5) * mapW * this.state.mapZoom;
-      const y = (0.5 - (pos.y / 100)) * mapH * this.state.mapZoom;
+      // mapPlane tá centrado em y=-mapH/2, então marker também referencia esse centro
+      const cx = 0;
+      const cy = -mapH/2;
 
-      this.markerEl.setAttribute("position", `${x} ${y} 0.07`);
+      const x = cx + ((pos.x / 100) - 0.5) * mapW * this.state.mapZoom;
+      const y = cy + (0.5 - (pos.y / 100)) * mapH * this.state.mapZoom;
+
+      this.markerEl.setAttribute("position", `${x} ${y} ${this.Z.MAP_TXT}`);
       this.markerEl.setAttribute("visible", "true");
     },
 
-    // ============================= HELPERS =============================
+    // ============================ HELPERS ============================
 
     _emit(name, detail) {
       this.el.emit(name, detail || {}, false);
     },
 
-    _makeText({ value, width, wrapCount, align, scale, x, y, z, parent = null }) {
+    _makeText({ value, x, y, z, width, wrapCount, align, scale, parent = null }) {
       const t = document.createElement("a-entity");
       t.setAttribute("text", [
         `value:${escapeText(value)}`,
@@ -397,16 +451,17 @@ export function registerVrWidget(AFRAME) {
         "anchor:center",
         `width:${width || 2.0}`,
         `wrapCount:${wrapCount || 24}`,
-        "side:double"
+        "side:double",
+        "opacity:1"
       ].join(";"));
-      t.setAttribute("position", `${x || 0} ${y || 0} ${z || 0.06}`);
-      t.setAttribute("scale", `${scale || this.data.textScale} ${scale || this.data.textScale} ${scale || this.data.textScale}`);
+      t.setAttribute("position", `${x || 0} ${y || 0} ${z || 0.10}`);
+      t.setAttribute("scale", `${scale} ${scale} ${scale}`);
       t.setAttribute("render-on-top", "");
       (parent || this.el).appendChild(t);
       return t;
     },
 
-    _makeButton({ label, x, y, w, h, z = 0.06, parent = null }) {
+    _makeButton({ label, x, y, z, w, h, parent = null }) {
       const btn = document.createElement("a-plane");
       btn.classList.add("clickable");
       btn.setAttribute("width", w);
@@ -422,21 +477,19 @@ export function registerVrWidget(AFRAME) {
         "align:center",
         "baseline:center",
         "anchor:center",
-        "width:2.8",
-        "wrapCount:28",
-        "side:double"
+        "width:2.2",
+        "wrapCount:20",
+        "side:double",
+        "opacity:1"
       ].join(";"));
-
-      // ✅ mais à frente do plano (evita sumir)
-      txt.setAttribute("position", "0 0 0.08");
-      txt.setAttribute("scale", `${this.data.buttonTextScale} ${this.data.buttonTextScale} ${this.data.buttonTextScale}`);
+      txt.setAttribute("position", `0 0 ${this.Z.TXT}`); // bem à frente do plano
+      txt.setAttribute("scale", `${this.data.btnTextScale} ${this.data.btnTextScale} ${this.data.btnTextScale}`);
       txt.setAttribute("render-on-top", "");
       btn.appendChild(txt);
 
-      // hover highlight
+      // hover
       const hi = () => btn.setAttribute("material", "color", "#2a2a2a");
       const lo = () => btn.setAttribute("material", "color", "#111");
-
       btn.addEventListener("raycaster-intersected", hi);
       btn.addEventListener("raycaster-intersected-cleared", lo);
 
@@ -446,13 +499,12 @@ export function registerVrWidget(AFRAME) {
 
     _onClick(btn, fn) {
       if (!btn) return;
-
       btn.__lastClickTs = 0;
 
       btn.addEventListener("click", (e) => {
         e?.stopPropagation?.();
 
-        // ✅ debounce (mata o "abre no down / fecha no up")
+        // debounce: evita toggle duplo (down/up)
         const now = performance.now();
         if (now - (btn.__lastClickTs || 0) < 250) return;
         btn.__lastClickTs = now;
@@ -464,5 +516,11 @@ export function registerVrWidget(AFRAME) {
 
   function escapeText(s) {
     return String(s || "").replace(/;/g, ",").replace(/\n/g, " ");
+  }
+
+  function truncateOneLine(s, max) {
+    const str = String(s || "");
+    if (str.length <= max) return str;
+    return str.slice(0, Math.max(0, max - 1)) + "…";
   }
 }
