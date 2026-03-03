@@ -1,23 +1,26 @@
+// js/main.js
 import App from "./App.js";
 import PlatformManager from "./PlatformManager.js";
 import { registerStereoTopBottom } from "./xr/StereoTopBottom.js";
 import { registerFaceCamera } from "./tour/FaceCamera.js";
 import { registerRenderOnTop } from "./tour/RenderOnTop.js";
 import { registerVrDebugConsole } from "./xr/VrDebugConsole.js";
+import { registerVrWidget } from "./xr/vr_widget.js";
 import { initPWA } from "./pwa/pwa.js";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const DEBUG_HOTSPOTS = false;
 
-  // ✅ flag pedida
-  const VR_DEBUG = true; // <-- troca pra false quando quiser
+  // flag
+  const VR_DEBUG = true; // muda pra false quando quiser
 
   registerStereoTopBottom(window.AFRAME);
   registerFaceCamera(window.AFRAME);
   registerRenderOnTop(window.AFRAME);
 
-  // ✅ registra o componente do console VR
+  // ✅ registra componentes VR
   registerVrDebugConsole(window.AFRAME);
+  registerVrWidget(window.AFRAME);
 
   const app = new App({
     sceneEl: document.querySelector("#scene"),
