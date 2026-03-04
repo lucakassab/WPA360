@@ -359,7 +359,11 @@
     embedded
     renderer="colorManagement: true; antialias: true; foveationLevel: 0;"
     webxr="optionalFeatures: hand-tracking;">
-    <a-entity id="pano" stereo-top-bottom="src: ; radius: 5000; swapEyes: true"></a-entity>
+
+    <a-entity 
+      id="pano" 
+      stereo-top-bottom="src: ; radius: 5000; xrScale: 1.55; disableFoveation: true; invertStereo: true">
+    </a-entity>
     <a-entity id="hotspots"></a-entity>
 
     <a-entity id="cameraRig">
@@ -374,6 +378,7 @@
 
     <a-entity id="leftHand"></a-entity>
     <a-entity id="rightHand"></a-entity>
+
   </a-scene>
 
   <script type="module" src="./js/main.js"></script>

@@ -7,19 +7,18 @@ export function registerVrDebugConsole(AFRAME) {
       maxLines: { type: "int", default: 18 },
       width: { type: "number", default: 1.15 },
       height: { type: "number", default: 0.55 },
+      fontSize: { type: "number", default: 0.055 },
 
-      // valor base (se você setar no atributo)
-      fontSize: { type: "number", default: 0.055 }
+      // ✅ novo: liga/desliga interação de verdade
+      interactive: { type: "boolean", default: true }
     },
 
     init() {
       this.lines = [];
       this._orig = null;
 
-      // ✅ 600% garantido (só na fonte)
       this._FONT_BOOST = 6.0;
 
-      // painel (não altera dimensões/escala)
       const bg = document.createElement("a-plane");
       bg.setAttribute("width", this.data.width);
       bg.setAttribute("height", this.data.height);
@@ -30,7 +29,6 @@ export function registerVrDebugConsole(AFRAME) {
       bg.setAttribute("position", "0 0 0");
       this.el.appendChild(bg);
 
-      // texto
       const text = document.createElement("a-entity");
       text.setAttribute("text", [
         "value:VR DEBUG CONSOLE",
@@ -50,30 +48,31 @@ export function registerVrDebugConsole(AFRAME) {
       this.el.appendChild(text);
       this._textEl = text;
 
-      // botão copiar
       this._makeCopyButton();
 
-      // hooks
       this._hookConsole();
       this._hookErrors();
       this._append("vr_debug: ON");
 
-      // aplica agora e garante depois do mesh existir
       this._applyFontScale(true);
 
       const reapply = () => this._applyFontScale(false);
       text.addEventListener("object3dset", reapply);
       this.el.addEventListener("loaded", reapply);
+
+      // ✅ aplica estado de interação já no init
+      this._applyInteractive();
     },
 
     update() {
-      // se mudar fontSize via atributo, reaplica
       this._applyFontScale(true);
+      this._applyInteractive();
     },
 
-    // ✅ reaplica frequentemente pra impedir overwrite do A-Frame/text
     tick() {
       this._applyFontScale(false);
+      // ✅ garante que não reativa clickables sozinho
+      this._applyInteractive();
     },
 
     remove() {
@@ -88,8 +87,6 @@ export function registerVrDebugConsole(AFRAME) {
     _effectiveFontScale() {
       const base = Number(this.data.fontSize) || 0.055;
       const effective = base * this._FONT_BOOST;
-
-      // mínimo pra ficar legível em VR mesmo se alguém passar valor pequeno
       return Math.max(0.6, effective);
     },
 
@@ -100,12 +97,19 @@ export function registerVrDebugConsole(AFRAME) {
       const s = this._effectiveFontScale();
       const cur = t.object3D.scale.x;
 
-      // só mexe se mudou (evita custo)
       if (Math.abs(cur - s) > 1e-4) {
         t.object3D.scale.set(s, s, s);
-        // mantém atributo também
         t.setAttribute("scale", `${s} ${s} ${s}`);
         if (forceLog) console.log(`[vr-debug-console] fontScale efetivo=${s.toFixed(3)} (base=${this.data.fontSize})`);
+      }
+    },
+
+    _applyInteractive() {
+      const enabled = !!this.data.interactive && this.el.getAttribute("visible") !== false && this.el.object3D?.visible !== false;
+
+      if (this._copyBtn) {
+        if (enabled) this._copyBtn.classList.add("clickable");
+        else this._copyBtn.classList.remove("clickable");
       }
     },
 
@@ -123,40 +127,53 @@ export function registerVrDebugConsole(AFRAME) {
     },
 
     _makeCopyButton() {
-      const w = Math.min(0.70, this.data.width - 0.10);
-      const h = 0.12;
+      // ✅ pequeno, canto direito, só ícone 📋
+      const w = 0.10;
+      const h = 0.10;
 
       const btn = document.createElement("a-plane");
       btn.classList.add("clickable");
       btn.setAttribute("width", w);
       btn.setAttribute("height", h);
-      btn.setAttribute("position", `0 ${(-this.data.height / 2) + 0.10} 0.012`);
+
+      // canto superior direito do painel
+      const x = (this.data.width / 2) - (w / 2) - 0.03;
+      const y = (this.data.height / 2) - (h / 2) - 0.03;
+
+      btn.setAttribute("position", `${x} ${y} 0.012`);
       btn.setAttribute("material", "color:#111; opacity:0.95; transparent:true; shader:flat; depthTest:false; depthWrite:false");
 
       const label = document.createElement("a-entity");
       label.setAttribute("text", [
-        "value:Copy Log to Clipboard",
+        "value:📋",
         "color:#fff",
         "align:center",
         "baseline:center",
         "anchor:center",
-        "width:1.8"
+        "width:0.6"
       ].join(";"));
       label.setAttribute("position", "0 0 0.01");
-      label.setAttribute("scale", "0.14 0.14 0.14");
+      label.setAttribute("scale", "0.28 0.28 0.28");
       btn.appendChild(label);
 
       btn.addEventListener("click", async (e) => {
         e?.stopPropagation?.();
+
+        // ✅ se estiver “invisível”/não interativo, IGNORA
+        if (!this.data.interactive) return;
+        if (this.el.getAttribute("visible") === false) return;
+        if (this.el.object3D && this.el.object3D.visible === false) return;
+
         try {
           await navigator.clipboard.writeText(this.getLogText());
-          this._append("OK: log copiado pro clipboard");
+          this._append("OK: log copiado");
         } catch {
-          this._append("ERR: clipboard falhou (permissão?)");
+          this._append("ERR: clipboard falhou");
         }
       });
 
       this.el.appendChild(btn);
+      this._copyBtn = btn;
     },
 
     _hookConsole() {

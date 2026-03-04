@@ -12,6 +12,10 @@ import HotspotRenderer from "./hotspots/HotspotRenderer.js";
 const LS_FOV = "tour_fov_v1";
 const LS_LINK = "tour_link_mode_v1";
 
+// ✅ XR quality knobs (ajusta aqui)
+const XR_FRAMEBUFFER_SCALE = 1.5; // 1.0 = default, 1.3~1.7 geralmente melhora bem no Quest
+const XR_FORCE_FOVEATION = 0.0;   // 0 = OFF, 1 = max
+
 export default class App {
   constructor(refs) {
     this.sceneEl = refs.sceneEl;
@@ -23,6 +27,9 @@ export default class App {
     this.leftHandEl = refs.leftHandEl;
     this.rightHandEl = refs.rightHandEl;
     this.ui = refs.ui;
+
+    this._vrAnchorRAF = 0;
+    this._vrAnchorTmp = null;
 
     this._events = new EventTarget();
 
@@ -61,12 +68,10 @@ export default class App {
     this._vrConsoleInputBound = false;
     this._onRightThumbstickDown = null;
 
-    // ✅ Grip mapping (widget toggle)
     this._vrGripBound = false;
     this._onGripToggle = null;
     this._lastGripToggleMs = 0;
 
-    // ✅ VR loading HUD (preso na câmera)
     this._vrLoadingHudEl = null;
 
     // Loading (DOM overlay)
@@ -80,13 +85,14 @@ export default class App {
 
     // misc
     this._canHover = false;
+
+    // ✅ garante que não aplica tuning 2x
+    this._xrQualityApplied = false;
   }
 
-  // ---------------- events ----------------
   on(type, handler) { this._events.addEventListener(type, handler); }
   emit(type, detail = {}) { this._events.dispatchEvent(new CustomEvent(type, { detail })); }
 
-  // ---------------- getters / setters p/ UI ----------------
   getTourOrder() { return [...this._tourOrder]; }
   getSceneOrder() { return [...this._sceneOrder]; }
   getTourTitle(tourId) {
@@ -102,7 +108,6 @@ export default class App {
     this.emit("link:changed", { value: this._linkTours });
   }
 
-  // ---------------- UI passthroughs ----------------
   toast(msg, ms) { this.uiManager.toast(msg, ms); }
   showTooltip(text) { this.uiManager.showTooltip(text); }
   hideTooltip() { this.uiManager.hideTooltip(); }
@@ -110,7 +115,6 @@ export default class App {
   setVRButtonVisible(visible) { this.uiManager.setVRButtonVisible(visible); }
   setInstallButtonVisible(visible) { this.uiManager.setInstallButtonVisible(visible); }
 
-  // ---------------- init ----------------
   async init({ debugHotspots = false, vrDebug = false } = {}) {
     await new Promise((resolve) => {
       if (this.sceneEl.hasLoaded) return resolve();
@@ -119,34 +123,25 @@ export default class App {
 
     this._vrDebugEnabled = !!vrDebug;
 
-    // load tours
     const data = await loadTours();
     this._defaultTourId = data.defaultTourId;
     this._tourOrder = data.tourOrder;
     this._toursById = data.toursById;
     this._scenesByTour = data.scenesByTour;
 
-    // prefs
     this._linkTours = localStorage.getItem(LS_LINK) === "1";
 
-    // set current tour
     this._setCurrentTour(this._defaultTourId, { emit: false });
 
-    // init UI
     this.uiManager.init();
-
-    // loading overlay (DOM)
     this._createLoadingOverlay();
 
-    // FOV from storage
     const savedFov = Number(localStorage.getItem(LS_FOV));
     const initialFov = Number.isFinite(savedFov) ? savedFov : 80;
     this.setFov(initialFov, { emit: true });
 
-    // hover support
     this._canHover = window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches ?? false;
 
-    // hotspot renderer
     this.hotspotRenderer = new HotspotRenderer({
       showTooltip: (t) => this.showTooltip(t),
       hideTooltip: () => this.hideTooltip(),
@@ -159,7 +154,6 @@ export default class App {
       }
     });
 
-    // initial scene from hash
     const initial = this._getInitialFromHash();
     if (initial) {
       await this.goToScene(initial.sceneId, { tourId: initial.tourId, pushHash: false });
@@ -168,7 +162,6 @@ export default class App {
       await this.goToScene(firstScene, { tourId: this.currentTourId, pushHash: false });
     }
 
-    // hash change
     window.addEventListener("hashchange", () => {
       const parsed = this._getInitialFromHash();
       if (!parsed) return;
@@ -176,24 +169,24 @@ export default class App {
       if (!same) void this.goToScene(parsed.sceneId, { tourId: parsed.tourId, pushHash: false });
     });
 
-    // VR enter/exit
     this.sceneEl.addEventListener("enter-vr", async () => {
       this.emit("vr:enter");
+      this._startVrAnchorFollow();
       await this._ensureVrUiIfImmersive();
     });
 
     this.sceneEl.addEventListener("exit-vr", () => {
       this.emit("vr:exit");
+      this._stopVrAnchorFollow();
       this._destroyVrWidget();
       this._destroyVrConsole();
       this._destroyVrLoadingHud();
       this._unbindVrGripToggle();
+      this._xrQualityApplied = false; // ✅ reseta
     });
 
-    // XR session lifecycle
     this._bindXRSessionLifecycle();
 
-    // hotspot debug
     if (debugHotspots) {
       const mod = await import("./tour/HotspotDebug.js");
       this._debug = new mod.default(this);
@@ -202,6 +195,30 @@ export default class App {
       const el = document.querySelector("#hsdebug");
       if (el) el.remove();
     }
+  }
+
+  // ---------------- XR QUALITY (NOVO) ----------------
+  _applyXrQualityTuning() {
+    if (this._xrQualityApplied) return;
+
+    const r = this.sceneEl?.renderer;
+    if (!r || !r.xr) return;
+
+    // framebuffer scale (supersampling XR)
+    try {
+      if (typeof r.xr.setFramebufferScaleFactor === "function") {
+        r.xr.setFramebufferScaleFactor(XR_FRAMEBUFFER_SCALE);
+      }
+    } catch {}
+
+    // foveation OFF (se disponível)
+    try {
+      if (typeof r.xr.setFoveation === "function") {
+        r.xr.setFoveation(XR_FORCE_FOVEATION);
+      }
+    } catch {}
+
+    this._xrQualityApplied = true;
   }
 
   // ---------------- loading overlay (DOM) ----------------
@@ -281,7 +298,6 @@ export default class App {
     const next = !!loading;
     this._mediaLoading = next;
 
-    // DOM overlay (desktop/mobile)
     const el = this._loadingOverlayEl;
     if (el) {
       if (next) {
@@ -302,7 +318,6 @@ export default class App {
       }
     }
 
-    // ✅ VR: HUD preso na câmera + badge do widget
     this._ensureVrLoadingHud();
     this._setVrLoadingHudVisible(this._mediaLoading, label);
     this._syncVrWidgetIfExists();
@@ -316,7 +331,7 @@ export default class App {
     const hud = document.createElement("a-entity");
     hud.setAttribute("id", "vrLoadingHud");
     hud.setAttribute("visible", "false");
-    hud.setAttribute("position", "0 0 -0.65"); // na cara, mas não tapa tudo
+    hud.setAttribute("position", "0 0 -0.65");
     this.cameraEl.appendChild(hud);
 
     const bg = document.createElement("a-plane");
@@ -337,12 +352,10 @@ export default class App {
       "width:2.6",
       "wrapCount:24"
     ].join(";"));
-    // escala grande pra Quest
     txt.setAttribute("scale", "0.085 0.085 0.085");
     txt.setAttribute("position", "0 0 0.01");
     hud.appendChild(txt);
 
-    // guarda refs
     hud._bg = bg;
     hud._txt = txt;
 
@@ -456,7 +469,6 @@ export default class App {
     this.hideTooltip();
     this._setHotspotsVisible(false);
 
-    // ✅ VR feedback + DOM feedback
     this._setLoading(true, "Carregando mídia…", loadToken);
 
     try {
@@ -476,7 +488,6 @@ export default class App {
 
       await this._setPanoAndWait(scene.pano);
 
-      // ✅ encerra loading assim que a mídia confirmou load
       this._setLoading(false, "", loadToken);
 
       this._applyViewForScene(scene, fromHotspot);
@@ -517,10 +528,7 @@ export default class App {
 
   async _setPanoAndWait(src) {
     const comp = this.panoEl?.components?.["stereo-top-bottom"];
-    if (comp?.setSrc) {
-      await comp.setSrc(src);
-      return;
-    }
+    if (comp?.setSrc) { await comp.setSrc(src); return; }
 
     this.panoEl.setAttribute("stereo-top-bottom", { src, radius: 5000 });
 
@@ -550,19 +558,49 @@ export default class App {
     for (const pano of targets) comp.preload(pano);
   }
 
+  _startVrAnchorFollow() {
+    if (this._vrAnchorRAF) return;
+
+    const tick = () => {
+      if (!this.sceneEl?.is?.("vr-mode")) { this._vrAnchorRAF = 0; return; }
+      this._ensureHotspotAnchor();
+      this._vrAnchorRAF = requestAnimationFrame(tick);
+    };
+
+    this._ensureHotspotAnchor();
+    this._vrAnchorRAF = requestAnimationFrame(tick);
+  }
+
+  _stopVrAnchorFollow() {
+    if (this._vrAnchorRAF) cancelAnimationFrame(this._vrAnchorRAF);
+    this._vrAnchorRAF = 0;
+    this._ensureHotspotAnchor();
+  }
+
   _ensureHotspotAnchor() {
-    const THREE = window.AFRAME.THREE;
+    const THREE = window.AFRAME?.THREE;
+    if (!THREE) return;
+
+    if (!this._vrAnchorTmp) this._vrAnchorTmp = new THREE.Vector3();
 
     if (!this.hotspotAnchorEl) {
       this.hotspotAnchorEl = document.createElement("a-entity");
-      this.hotspotAnchorEl.setAttribute("id", "hotspotAnchor");
+      this.hotspotAnchorEl.setAttribute("id", "hotspotOrigin");
       this.sceneEl.appendChild(this.hotspotAnchorEl);
+      this.hotspotAnchorEl.object3D.matrixAutoUpdate = true;
+    }
+
+    if (this.hotspotsEl && this.hotspotsEl.parentElement !== this.hotspotAnchorEl) {
       this.hotspotAnchorEl.appendChild(this.hotspotsEl);
     }
 
-    const rigWorld = new THREE.Vector3();
-    (this.cameraRigEl?.object3D ?? this.cameraEl.object3D).getWorldPosition(rigWorld);
-    this.hotspotAnchorEl.setAttribute("position", `${rigWorld.x} ${rigWorld.y} ${rigWorld.z}`);
+    if (!this.sceneEl.is("vr-mode")) {
+      this.hotspotAnchorEl.object3D.position.set(0, 0, 0);
+      return;
+    }
+
+    this.cameraEl.object3D.getWorldPosition(this._vrAnchorTmp);
+    this.hotspotAnchorEl.object3D.position.copy(this._vrAnchorTmp);
   }
 
   _renderHotspots(scene) {
@@ -642,7 +680,6 @@ export default class App {
     return true;
   }
 
-  // ---------------- hash parsing ----------------
   _getInitialFromHash() {
     const h = (location.hash || "").replace("#", "").trim();
     if (!h) return null;
@@ -671,7 +708,6 @@ export default class App {
     return null;
   }
 
-  // ---------------- hotspot target resolve ----------------
   _resolveHotspotTarget(hs) {
     if (!hs) return null;
 
@@ -712,12 +748,14 @@ export default class App {
     return null;
   }
 
-  // ---------------- VR lifecycle + console/widget ----------------
   _bindXRSessionLifecycle() {
     const xr = this.sceneEl?.renderer?.xr;
     if (!xr?.addEventListener) return;
 
     const onStart = async () => {
+      // ✅ aplica tuning assim que a sessão começa
+      this._applyXrQualityTuning();
+
       requestAnimationFrame(async () => {
         await this._ensureVrUiIfImmersive();
       });
@@ -728,6 +766,7 @@ export default class App {
       this._destroyVrConsole();
       this._destroyVrLoadingHud();
       this._unbindVrGripToggle();
+      this._xrQualityApplied = false;
     };
 
     xr.addEventListener("sessionstart", onStart);
@@ -745,22 +784,18 @@ export default class App {
     const session = await this._waitXRSession(2000);
     if (!session) return;
 
-    // widget
     this._ensureVrWidget();
     this._applyVrWidgetVisibility();
     this._syncVrWidgetIfExists();
 
-    // loading HUD (se estiver carregando)
     this._ensureVrLoadingHud();
     this._setVrLoadingHudVisible(this._mediaLoading, this._mediaLoading ? "Carregando mídia…" : "");
 
-    // console
     if (this._vrDebugEnabled) {
       this._ensureVrConsole({ forceShow: true });
       this._bindVrConsoleInputs();
     }
 
-    // ✅ grip toggle widget
     this._bindVrGripToggle();
   }
 
@@ -774,7 +809,7 @@ export default class App {
     return this.sceneEl?.renderer?.xr?.getSession?.() || null;
   }
 
-  // ---- VR Console (mantém o teu comportamento anterior) ----
+  // ---- VR Console ----
   _ensureVrConsole({ forceShow = false } = {}) {
     if (!this._vrDebugEnabled) return;
 
@@ -787,7 +822,7 @@ export default class App {
 
     const el = document.createElement("a-entity");
     el.setAttribute("id", "vrConsole");
-    el.setAttribute("position", "0 -0.12 -0.65");
+    el.setAttribute("position", "0 -0.20 -2.0");
     el.setAttribute("visible", "true");
     el.setAttribute("vr-debug-console", "");
     this.cameraEl.appendChild(el);
@@ -852,7 +887,7 @@ export default class App {
     this._vrConsoleEl = null;
   }
 
-  // ---- VR Widget + visibilidade ----
+  // ---- VR Widget ----
   _ensureVrWidget() {
     if (this._vrWidgetEl) return;
 
@@ -865,10 +900,6 @@ export default class App {
 
     const hPrev = () => void this.prevScene();
     const hNext = () => void this.nextScene();
-    const hFov = (e) => {
-      const d = Number(e?.detail?.delta || 0);
-      this.setFov(this._fov + d, { emit: true });
-    };
 
     const hSelectTour = (e) => {
       const tid = String(e?.detail?.tourId || "");
@@ -893,7 +924,6 @@ export default class App {
 
     el.addEventListener("vrwidget:prevscene", hPrev);
     el.addEventListener("vrwidget:nextscene", hNext);
-    el.addEventListener("vrwidget:fovdelta", hFov);
     el.addEventListener("vrwidget:selecttour", hSelectTour);
     el.addEventListener("vrwidget:selectscene", hSelectScene);
     el.addEventListener("vrwidget:requestsync", hReqSync);
@@ -902,15 +932,25 @@ export default class App {
     requestAnimationFrame(() => this._syncVrWidgetIfExists());
     queueMicrotask(() => this._syncVrWidgetIfExists());
 
-    this._vrWidgetHandlers = { hPrev, hNext, hFov, hSelectTour, hSelectScene, hReqSync };
+    this._vrWidgetHandlers = { hPrev, hNext, hSelectTour, hSelectScene, hReqSync };
   }
 
   _applyVrWidgetVisibility() {
     const el = this._vrWidgetEl;
     if (!el) return;
+
     const v = !!this._vrWidgetVisible;
+
     el.setAttribute("visible", v ? "true" : "false");
-    if (el.object3D) el.object3D.visible = v;
+
+    if (el.object3D) {
+      el.object3D.visible = v;
+    }
+
+    // se o widget suportar interactive
+    try {
+      el.setAttribute("vr-widget", "interactive", v ? "true" : "false");
+    } catch {}
   }
 
   _toggleVrWidgetVisible() {
@@ -927,7 +967,6 @@ export default class App {
       if (hs) {
         el.removeEventListener("vrwidget:prevscene", hs.hPrev);
         el.removeEventListener("vrwidget:nextscene", hs.hNext);
-        el.removeEventListener("vrwidget:fovdelta", hs.hFov);
         el.removeEventListener("vrwidget:selecttour", hs.hSelectTour);
         el.removeEventListener("vrwidget:selectscene", hs.hSelectScene);
         el.removeEventListener("vrwidget:requestsync", hs.hReqSync);
@@ -963,7 +1002,6 @@ export default class App {
       currentSceneId: this.currentSceneId ?? "",
       tourList,
       sceneList,
-      fov: this._fov,
       hasMap,
       mapSrc: tour?.map_png ?? "",
       marker: hasMap ? marker : null,
@@ -971,13 +1009,12 @@ export default class App {
     }, false);
   }
 
-  // ✅ Grip toggle bind
   _bindVrGripToggle() {
     if (this._vrGripBound) return;
 
     const handler = () => {
       const now = performance.now();
-      if (now - this._lastGripToggleMs < 250) return; // debounce
+      if (now - this._lastGripToggleMs < 250) return;
       this._lastGripToggleMs = now;
 
       if (!this.sceneEl.is("vr-mode")) return;
@@ -989,7 +1026,6 @@ export default class App {
     const L = this.leftHandEl;
     const R = this.rightHandEl;
 
-    // Meta Quest costuma emitir "gripdown" ou "squeezestart"
     if (L) {
       L.addEventListener("gripdown", handler);
       L.addEventListener("squeezestart", handler);

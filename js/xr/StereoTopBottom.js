@@ -4,6 +4,7 @@ export function registerStereoTopBottom(AFRAME) {
 
   const THREE = AFRAME.THREE;
 
+  // ===== Cache global de textures (memória) =====
   const MAX_CACHE = 12;
   const cache = new Map(); // url -> { tex, promise, lastUsed }
 
@@ -18,6 +19,7 @@ export function registerStereoTopBottom(AFRAME) {
 
   function trimCache() {
     if (cache.size <= MAX_CACHE) return;
+
     const entries = Array.from(cache.entries())
       .filter(([, v]) => v?.tex)
       .sort((a, b) => (a[1].lastUsed ?? 0) - (b[1].lastUsed ?? 0));
@@ -29,11 +31,25 @@ export function registerStereoTopBottom(AFRAME) {
     }
   }
 
+  function isPowerOfTwo(n) {
+    n = n | 0;
+    return n > 0 && (n & (n - 1)) === 0;
+  }
+
+  function getMaxTextureSize(sceneEl) {
+    const r = sceneEl?.renderer;
+    const max = r?.capabilities?.maxTextureSize;
+    return Number.isFinite(max) ? max : 8192;
+  }
+
   function getMaxAnisotropy(sceneEl) {
+    const r = sceneEl?.renderer;
     try {
-      const r = sceneEl?.renderer;
-      return r?.capabilities?.getMaxAnisotropy?.() ?? 0;
-    } catch { return 0; }
+      const a = r?.capabilities?.getMaxAnisotropy?.();
+      return Number.isFinite(a) ? a : 1;
+    } catch {
+      return 1;
+    }
   }
 
   function loadTextureCached(url, sceneEl) {
@@ -49,16 +65,37 @@ export function registerStereoTopBottom(AFRAME) {
     }
 
     const loader = new THREE.TextureLoader();
+
     const promise = new Promise((resolve, reject) => {
       loader.load(
         url,
         (tex) => {
-          tex.minFilter = THREE.LinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          tex.generateMipmaps = false;
+          const img = tex.image;
+          const w = img?.width || 0;
+          const h = img?.height || 0;
 
-          const aniso = getMaxAnisotropy(sceneEl);
-          if (aniso && Number.isFinite(aniso)) tex.anisotropy = aniso;
+          const maxTex = getMaxTextureSize(sceneEl);
+          const fits = (w > 0 && h > 0 && w <= maxTex && h <= maxTex);
+          const pot = isPowerOfTwo(w) && isPowerOfTwo(h);
+
+          if (fits && pot) {
+            tex.generateMipmaps = true;
+            tex.minFilter = THREE.LinearMipmapLinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+
+            const maxA = getMaxAnisotropy(sceneEl);
+            tex.anisotropy = Math.min(4, maxA);
+          } else {
+            tex.generateMipmaps = false;
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.anisotropy = 1;
+          }
+
+          tex.wrapS = THREE.ClampToEdgeWrapping;
+          tex.wrapT = THREE.ClampToEdgeWrapping;
+
+          tex.needsUpdate = true;
 
           cache.set(url, { tex, promise: null, lastUsed: performance.now() });
           trimCache();
@@ -86,20 +123,28 @@ export function registerStereoTopBottom(AFRAME) {
     schema: {
       src: { type: "string", default: "" },
       radius: { type: "number", default: 5000 },
-      segmentsWidth: { type: "int", default: 64 },
-      segmentsHeight: { type: "int", default: 32 },
+      segmentsWidth: { type: "int", default: 128 },
+      segmentsHeight: { type: "int", default: 64 },
       flipX: { type: "boolean", default: true },
 
-      // ✅ teu caso: olhos invertidos -> default true
-      swapEyes: { type: "boolean", default: true }
+      // ===== WebXR quality knobs =====
+      xrScale: { type: "number", default: 1.4 },
+      disableFoveation: { type: "boolean", default: true },
+      fixedFoveation: { type: "number", default: 0.0 },
+
+      // ✅ TESTE: inverter olhos (L/R) pra validar estereo
+      invertStereo: { type: "boolean", default: false }
     },
 
     init() {
       this._currentUrl = "";
       this._currentSrc = "";
+      this._lastQualityApplyMs = 0;
+
       this._makeMesh();
       this._bindBeforeRender();
 
+      // API programática
       this.setSrc = async (src) => this._setSrcInternal(src);
       this.preload = async (src) => {
         if (!src) return null;
@@ -108,10 +153,10 @@ export function registerStereoTopBottom(AFRAME) {
       };
       this.isCached = (src) => isCached(src);
 
-      // helpers pra eye detect
-      this._tmpInv = new THREE.Matrix4();
-      this._tmpPos = new THREE.Vector3();
-      this._tmpPos2 = new THREE.Vector3();
+      // tenta aplicar qualidade quando entrar no VR
+      this.el.sceneEl?.addEventListener?.("enter-vr", () => {
+        this._applyXrQuality(true);
+      });
 
       if (this.data.src) this._setSrcInternal(this.data.src);
     },
@@ -132,11 +177,14 @@ export function registerStereoTopBottom(AFRAME) {
         this.material.uniforms.uFlipX.value = this.data.flipX ? 1.0 : 0.0;
       }
 
+      // invertStereo não precisa uniform — só afeta cálculo do uEye no beforeRender
+
       if (srcChanged) this._setSrcInternal(this.data.src);
     },
 
     remove() {
       if (this.el.getObject3D("mesh")) this.el.removeObject3D("mesh");
+      // não dá dispose: cache segura
     },
 
     _makeMesh(rebuild = false) {
@@ -150,7 +198,7 @@ export function registerStereoTopBottom(AFRAME) {
         },
         vertexShader: `
           precision highp float;
-          varying highp vec2 vUv;
+          varying vec2 vUv;
           void main() {
             vUv = uv;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -165,7 +213,7 @@ export function registerStereoTopBottom(AFRAME) {
           uniform float uEye;
           uniform float uFlipX;
 
-          varying highp vec2 vUv;
+          varying vec2 vUv;
 
           void main() {
             if (uHasMap < 0.5) {
@@ -177,6 +225,7 @@ export function registerStereoTopBottom(AFRAME) {
 
             if (uFlipX > 0.5) uv.x = 1.0 - uv.x;
 
+            // top/bottom: metade da altura por olho
             uv.y = uv.y * 0.5;
             if (uStereo > 0.5) {
               uv.y += 0.5 * uEye;
@@ -201,12 +250,49 @@ export function registerStereoTopBottom(AFRAME) {
       this.el.setObject3D("mesh", this.mesh);
     },
 
+    _applyXrQuality(force = false) {
+      const sceneEl = this.el.sceneEl;
+      const renderer = sceneEl?.renderer;
+      if (!renderer?.xr) return;
+
+      if (!renderer.xr.isPresenting) return;
+
+      const now = performance.now();
+      if (!force && (now - this._lastQualityApplyMs) < 500) return;
+      this._lastQualityApplyMs = now;
+
+      const s = Number(this.data.xrScale);
+      const scale = Number.isFinite(s) ? Math.max(0.5, Math.min(2.0, s)) : 1.0;
+      try {
+        renderer.xr.setFramebufferScaleFactor?.(scale);
+      } catch {}
+
+      try {
+        const session = renderer.xr.getSession?.();
+        const baseLayer = session?.renderState?.baseLayer;
+
+        if (baseLayer && ("fixedFoveation" in baseLayer)) {
+          const want = this.data.disableFoveation
+            ? 0.0
+            : Math.max(0.0, Math.min(1.0, Number(this.data.fixedFoveation) || 0.0));
+
+          baseLayer.fixedFoveation = want;
+        }
+
+        if (this.data.disableFoveation) {
+          renderer.xr.setFoveation?.(0);
+        }
+      } catch {}
+    },
+
     _bindBeforeRender() {
       const sceneEl = this.el.sceneEl;
 
       this.mesh.onBeforeRender = (renderer, _scene, camera) => {
         const presenting = sceneEl.is("vr-mode") || sceneEl.is("ar-mode");
         this.material.uniforms.uStereo.value = presenting ? 1.0 : 0.0;
+
+        if (presenting) this._applyXrQuality(false);
 
         if (!presenting) {
           this.material.uniforms.uEye.value = 0.0;
@@ -215,40 +301,19 @@ export function registerStereoTopBottom(AFRAME) {
 
         const baseCam = sceneEl.camera;
         const xrCam = renderer.xr?.getCamera?.(baseCam);
+        const left = xrCam?.cameras?.[0];
+        const right = xrCam?.cameras?.[1];
 
-        // fallback
-        let eyeIdx = 0.0;
+        // identifica olho atual
+        let eye = 0.0;
+        if (left && camera === left) eye = 0.0;
+        else if (right && camera === right) eye = 1.0;
+        else eye = 0.0;
 
-        // ✅ robusto: decide left/right pelo offset X no espaço do baseCam
-        const cams = xrCam?.cameras;
-        if (Array.isArray(cams) && cams.length >= 2 && baseCam) {
-          // inv(baseCamWorld)
-          this._tmpInv.copy(baseCam.matrixWorld).invert();
+        // ✅ TESTE: inverter olhos
+        if (this.data.invertStereo) eye = 1.0 - eye;
 
-          const c0 = cams[0];
-          const c1 = cams[1];
-
-          this._tmpPos.setFromMatrixPosition(c0.matrixWorld).applyMatrix4(this._tmpInv);
-          this._tmpPos2.setFromMatrixPosition(c1.matrixWorld).applyMatrix4(this._tmpInv);
-
-          const c0IsLeft = this._tmpPos.x < this._tmpPos2.x;
-
-          const leftCam = c0IsLeft ? c0 : c1;
-          const rightCam = c0IsLeft ? c1 : c0;
-
-          if (camera === leftCam) eyeIdx = 0.0;
-          else if (camera === rightCam) eyeIdx = 1.0;
-          else {
-            // se o camera não bate por referência, usa o x dele também
-            const p = this._tmpPos.setFromMatrixPosition(camera.matrixWorld).applyMatrix4(this._tmpInv);
-            eyeIdx = (p.x < 0) ? 0.0 : 1.0;
-          }
-        }
-
-        // ✅ aplica swap (corrige inversão dos teus assets)
-        if (this.data.swapEyes) eyeIdx = 1.0 - eyeIdx;
-
-        this.material.uniforms.uEye.value = eyeIdx;
+        this.material.uniforms.uEye.value = eye;
       };
     },
 
@@ -281,6 +346,8 @@ export function registerStereoTopBottom(AFRAME) {
 
         this.material.uniforms.uMap.value = tex;
         this.material.uniforms.uHasMap.value = 1.0;
+
+        this._applyXrQuality(true);
 
         this.el.emit("stereo-loaded", { src, url, cached: wasCached }, false);
       } catch (err) {

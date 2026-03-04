@@ -12,7 +12,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const DEBUG_HOTSPOTS = false;
 
   // flag
-  const VR_DEBUG = true; // muda pra false quando quiser
+  const VR_DEBUG = false; // muda pra false quando quiser
 
   registerStereoTopBottom(window.AFRAME);
   registerFaceCamera(window.AFRAME);

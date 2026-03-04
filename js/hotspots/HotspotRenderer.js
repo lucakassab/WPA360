@@ -1,7 +1,6 @@
 // js/hotspots/HotspotRenderer.js
 
 const DEFAULT_STYLE = {
-  // Ring (fallback quando não tem PNG)
   ringRadius: 0.12,
   ringThickness: 0.02,
   ringColor: "#ffffff",
@@ -12,30 +11,21 @@ const DEFAULT_STYLE = {
   ringOutlineThickness: 0.012,
   ringOutlineOpacity: 0.85,
 
-  // Label (SEM PLACA)
   labelYOffset: -0.20,
 
-  // Text
   textColor: "#ffffff",
   textSize: 0.12,
   textOpacity: 1.0,
-  textSizeStep: 1, // inteiro (1..10)
+  textSizeStep: 1,
 
-  // Text outline (8 offsets)
   textOutlineEnabled: true,
   textOutlineColor: "#000000",
-  textOutlineWidth: 0.11,   // “força” (offset é clampado)
+  textOutlineWidth: 0.11,
   textOutlineOpacity: 0.80,
 
-  // ✅ PNG custom do hotspot (defaults por cena via hotspotStyle)
-  // hotspot_png: "./assets/ui/hotspot.png"
-  // hotspot_png_size: "0.35,0.35"
-
-  // Extra
   depthOnTop: true,
   hoverScale: 1.10,
 
-  // Hitbox (não muda)
   hitRadius: 0.22
 };
 
@@ -54,29 +44,31 @@ export default class HotspotRenderer {
   }
 
   createHotspot({ hs, sceneStyle, position }) {
-    // merge base + defaults da cena + style por hotspot (compat)
     const style = { ...DEFAULT_STYLE, ...(sceneStyle || {}), ...(hs?.style || {}) };
+    const inVR = !!this.isVR();
+
+    // ✅ No VR: renderOrder alto + depthTest true (VR-safe)
+    // Fora VR: seu comportamento antigo (depthTest false) continua ok.
+    const ROT_TOP = inVR
+      ? "order: 50; depthTest: true; depthWrite: false"
+      : "order: 999; depthTest: false; depthWrite: false";
 
     const root = document.createElement("a-entity");
     root.setAttribute("position", `${position.x} ${position.y} ${position.z}`);
     root.setAttribute("face-camera", "");
-    if (style.depthOnTop) root.setAttribute("render-on-top", "");
 
-    // === HITBOX (raycaster acerta isso) ===
-    // NÃO ALTERAR: interação depende disso
+    if (style.depthOnTop) root.setAttribute("render-on-top", ROT_TOP);
+
+    // HITBOX
     const hit = document.createElement("a-sphere");
     hit.classList.add("clickable");
     hit.setAttribute("radius", clampNum(style.hitRadius, 0.10, 0.50));
     hit.setAttribute("material", "color:#fff; opacity:0; transparent:true; depthTest:false; depthWrite:false");
     hit.setAttribute("position", "0 0 0.01");
-    if (style.depthOnTop) hit.setAttribute("render-on-top", "");
+    if (style.depthOnTop) hit.setAttribute("render-on-top", ROT_TOP);
     root.appendChild(hit);
 
-    // === VISUAL DO HOTSPOT (PNG ou círculo) ===
-    // Hierarquia:
-    // 1) hs.override_hotspot_png / hs.override_hotspot_png_size
-    // 2) hs.style.hotspot_png / hs.style.hotspot_png_size (compat)
-    // 3) sceneStyle.hotspot_png / sceneStyle.hotspot_png_size (defaults por cena)
+    // VISUAL
     const pngPath = resolveHotspotPng(hs, style);
     const pngSize = resolveHotspotPngSize(hs, style);
 
@@ -87,26 +79,32 @@ export default class HotspotRenderer {
       sprite.setAttribute("width", w);
       sprite.setAttribute("height", h);
 
-      // shader flat pra não depender de luz
-      // alphaTest ajuda em PNG com borda semi-transparente
+      // ✅ side:double evita sumir se o billboard der backface em VR
       sprite.setAttribute(
         "material",
-        `src:${pngPath}; transparent:true; opacity:${clampNum(style.ringOpacity, 0, 1)}; shader:flat; alphaTest:0.01; depthTest:false; depthWrite:false`
+        [
+          `src:${pngPath}`,
+          "transparent:true",
+          `opacity:${clampNum(style.ringOpacity, 0, 1)}`,
+          "shader:flat",
+          "alphaTest:0.01",
+          `depthTest:${inVR ? "true" : "false"}`,
+          "depthWrite:false",
+          "side:double"
+        ].join(";")
       );
 
       sprite.setAttribute("position", "0 0 0.002");
-      if (style.depthOnTop) sprite.setAttribute("render-on-top", "");
+      if (style.depthOnTop) sprite.setAttribute("render-on-top", ROT_TOP);
       root.appendChild(sprite);
     } else {
-      // Fallback: círculo (ring + outline)
       const ringGroup = document.createElement("a-entity");
-      if (style.depthOnTop) ringGroup.setAttribute("render-on-top", "");
+      if (style.depthOnTop) ringGroup.setAttribute("render-on-top", ROT_TOP);
       root.appendChild(ringGroup);
 
       if (style.ringOutlineEnabled) {
         const outline = document.createElement("a-ring");
         const grow = Math.max(0.0001, Number(style.ringOutlineThickness) || 0.0);
-
         const inner = Math.max(0.001, (style.ringRadius - style.ringThickness) - grow);
         const outer = style.ringRadius + grow;
 
@@ -114,10 +112,18 @@ export default class HotspotRenderer {
         outline.setAttribute("radius-outer", outer);
         outline.setAttribute(
           "material",
-          `color:${style.ringOutlineColor}; opacity:${style.ringOutlineOpacity}; transparent:true; depthTest:false; depthWrite:false`
+          [
+            `color:${style.ringOutlineColor}`,
+            `opacity:${style.ringOutlineOpacity}`,
+            "transparent:true",
+            "shader:flat",
+            `depthTest:${inVR ? "true" : "false"}`,
+            "depthWrite:false",
+            "side:double"
+          ].join(";")
         );
         outline.setAttribute("position", "0 0 0.001");
-        if (style.depthOnTop) outline.setAttribute("render-on-top", "");
+        if (style.depthOnTop) outline.setAttribute("render-on-top", ROT_TOP);
         ringGroup.appendChild(outline);
       }
 
@@ -126,33 +132,35 @@ export default class HotspotRenderer {
       ring.setAttribute("radius-outer", style.ringRadius);
       ring.setAttribute(
         "material",
-        `color:${style.ringColor}; opacity:${style.ringOpacity}; transparent:true; depthTest:false; depthWrite:false`
+        [
+          `color:${style.ringColor}`,
+          `opacity:${style.ringOpacity}`,
+          "transparent:true",
+          "shader:flat",
+          `depthTest:${inVR ? "true" : "false"}`,
+          "depthWrite:false",
+          "side:double"
+        ].join(";")
       );
       ring.setAttribute("position", "0 0 0.002");
-      if (style.depthOnTop) ring.setAttribute("render-on-top", "");
+      if (style.depthOnTop) ring.setAttribute("render-on-top", ROT_TOP);
       ringGroup.appendChild(ring);
     }
 
-    // ===== Label: suportar hidelabel + labelposoffset =====
+    // LABEL: hidelabel + labelposoffset
     const label = (hs?.label ?? "").toString().trim();
-
-    // ✅ novo: hidelabel (aceita true / "true" / 1)
     const hideLabel = truthy(hs?.hidelabel);
-
-    // ✅ novo: labelposoffset {x,y} / "x,y" / [x,y]
     const posOff = parseXY(hs?.labelposoffset);
 
-    // Renderiza texto somente se tiver label e NÃO estiver oculto
     if (label && !hideLabel) {
       const labelGroup = document.createElement("a-entity");
 
-      // y base + offset custom
       const baseY = Number(style.labelYOffset || -0.2);
       const offX = posOff ? posOff.x : 0;
       const offY = posOff ? posOff.y : 0;
 
       labelGroup.setAttribute("position", `${offX} ${baseY + offY} 0.002`);
-      if (style.depthOnTop) labelGroup.setAttribute("render-on-top", "");
+      if (style.depthOnTop) labelGroup.setAttribute("render-on-top", ROT_TOP);
       root.appendChild(labelGroup);
 
       const stepInt = clampInt(style.textSizeStep, 1, 10);
@@ -161,7 +169,6 @@ export default class HotspotRenderer {
 
       const textWidthUnscaled = estimateTextWidthUnscaled(label);
 
-      // OUTLINE (offset clampado)
       if (style.textOutlineEnabled && (Number(style.textOutlineOpacity) || 0) > 0) {
         const strength = clampNum(style.textOutlineWidth, 0.0, 1.0);
         const offsetRaw = strength * textSizeFinal;
@@ -173,35 +180,33 @@ export default class HotspotRenderer {
           color: style.textOutlineColor,
           opacity: clampNum(style.textOutlineOpacity, 0, 1),
           offset: outlineOffset
-        }, style.depthOnTop);
+        }, style.depthOnTop ? ROT_TOP : null);
       }
 
-      // TEXTO principal (único)
       const text = document.createElement("a-entity");
       text.setAttribute("text", [
         `value:${escapeText(label)}`,
-        `align:center`,
-        `baseline:center`,
-        `anchor:center`,
+        "align:center",
+        "baseline:center",
+        "anchor:center",
         `width:${textWidthUnscaled}`,
         `color:${style.textColor}`,
         `opacity:${clampNum(style.textOpacity, 0, 1)}`
       ].join(";"));
 
-      text.setAttribute("position", "0 0 0.012");
+      // bem colado no plano
+      text.setAttribute("position", "0 0 0.006");
       text.setAttribute("scale", `${textSizeFinal} ${textSizeFinal} ${textSizeFinal}`);
-      if (style.depthOnTop) text.setAttribute("render-on-top", "");
+      if (style.depthOnTop) text.setAttribute("render-on-top", ROT_TOP);
       labelGroup.appendChild(text);
     }
 
-    // === Interação no HITBOX (inalterado) ===
+    // INTERAÇÃO
     const hoverScale = clampNum(style.hoverScale, 1.0, 1.5);
 
     hit.addEventListener("mouseenter", () => {
       if (!this.canHover() || this.isVR()) return;
       root.object3D.scale.set(hoverScale, hoverScale, hoverScale);
-
-      // ✅ tooltip sempre pode mostrar label (mesmo com hidelabel)
       if (label) this.showTooltip(label);
     });
 
@@ -220,10 +225,9 @@ export default class HotspotRenderer {
   }
 }
 
-/* ===== PNG resolution (hierarquia) ===== */
+// ===== helpers =====
 
 function resolveHotspotPng(hs, style) {
-  // prioridade: override_hotspot_png -> hs.style.hotspot_png -> style.hotspot_png (scene default)
   const o = (hs?.override_hotspot_png ?? "").toString().trim();
   if (o) return o;
 
@@ -235,7 +239,6 @@ function resolveHotspotPng(hs, style) {
 }
 
 function resolveHotspotPngSize(hs, style) {
-  // prioridade: override_hotspot_png_size -> hs.style.hotspot_png_size -> style.hotspot_png_size
   const o = hs?.override_hotspot_png_size;
   if (o != null && String(o).trim() !== "") return o;
 
@@ -246,9 +249,7 @@ function resolveHotspotPngSize(hs, style) {
   return def ?? "";
 }
 
-/* ===== Outline por offsets (8 direções) ===== */
-
-function makeTextOutline8(parent, label, { width, size, color, opacity, offset }, onTop) {
+function makeTextOutline8(parent, label, { width, size, color, opacity, offset }, renderOnTopAttr) {
   const dirs = [
     [-1,  0], [ 1,  0],
     [ 0, -1], [ 0,  1],
@@ -262,22 +263,20 @@ function makeTextOutline8(parent, label, { width, size, color, opacity, offset }
     const t = document.createElement("a-entity");
     t.setAttribute("text", [
       `value:${escapeText(label)}`,
-      `align:center`,
-      `baseline:center`,
-      `anchor:center`,
+      "align:center",
+      "baseline:center",
+      "anchor:center",
       `width:${width}`,
       `color:${color}`,
       `opacity:${opacity}`
     ].join(";"));
 
     t.setAttribute("scale", `${size} ${size} ${size}`);
-    t.setAttribute("position", `${dx * o} ${dy * o} 0.010`);
-    if (onTop) t.setAttribute("render-on-top", "");
+    t.setAttribute("position", `${dx * o} ${dy * o} 0.004`);
+    if (renderOnTopAttr) t.setAttribute("render-on-top", renderOnTopAttr);
     parent.appendChild(t);
   }
 }
-
-/* ===== Estimativa estável do width “unscaled” ===== */
 
 function estimateTextWidthUnscaled(text) {
   const len = String(text || "").length;
@@ -285,10 +284,7 @@ function estimateTextWidthUnscaled(text) {
   return clampNum(w, 1.6, 18.0);
 }
 
-/* ===== PNG size parser ===== */
-
 function parsePngSize(sizeStr, ringRadius) {
-  // default: baseado no círculo (diâmetro)
   const d = clampNum((Number(ringRadius) || 0.12) * 2.0, 0.12, 2.0);
   let w = d;
   let h = d;
@@ -305,13 +301,8 @@ function parsePngSize(sizeStr, ringRadius) {
     if (Number.isFinite(sizeStr.y)) h = Number(sizeStr.y);
   }
 
-  return {
-    w: clampNum(w, 0.05, 3.0),
-    h: clampNum(h, 0.05, 3.0)
-  };
+  return { w: clampNum(w, 0.05, 3.0), h: clampNum(h, 0.05, 3.0) };
 }
-
-/* ===== Utils ===== */
 
 function clampNum(v, a, b) {
   const n = Number(v);
@@ -329,7 +320,6 @@ function escapeText(s) {
   return String(s).replace(/;/g, ",").replace(/\n/g, " ");
 }
 
-// ✅ aceita true / "true" / 1 / "1"
 function truthy(v) {
   if (v === true) return true;
   if (typeof v === "number") return v !== 0;
@@ -337,7 +327,6 @@ function truthy(v) {
   return s === "true" || s === "1" || s === "yes" || s === "on";
 }
 
-// ✅ parse {x,y} | [x,y] | "x,y"
 function parseXY(v) {
   if (v == null) return null;
 
@@ -357,7 +346,6 @@ function parseXY(v) {
 
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
 
-  // limites "sãos" pra não sumir com a label sem querer
   x = clampNum(x, -2.0, 2.0);
   y = clampNum(y, -2.0, 2.0);
 
