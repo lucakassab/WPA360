@@ -53,17 +53,27 @@ export default class App {
     this._vrDebugEnabled = false;
     this._vrConsoleEl = null;
     this._vrConsoleVisible = true;
+
     this._vrWidgetEl = null;
     this._vrWidgetHandlers = null;
+    this._vrWidgetVisible = true;
 
     this._vrConsoleInputBound = false;
     this._onRightThumbstickDown = null;
 
-    // Loading
+    // ✅ Grip mapping (widget toggle)
+    this._vrGripBound = false;
+    this._onGripToggle = null;
+    this._lastGripToggleMs = 0;
+
+    // ✅ VR loading HUD (preso na câmera)
+    this._vrLoadingHudEl = null;
+
+    // Loading (DOM overlay)
     this._mediaLoading = false;
     this._loadingOverlayEl = null;
     this._loadingLabelEl = null;
-    this._loadingToken = 0; // ✅ token anti-stale
+    this._loadingToken = 0;
 
     // UI manager
     this.uiManager = new AppUI(this, this.ui);
@@ -125,7 +135,7 @@ export default class App {
     // init UI
     this.uiManager.init();
 
-    // ✅ loading overlay (DOM)
+    // loading overlay (DOM)
     this._createLoadingOverlay();
 
     // FOV from storage
@@ -176,6 +186,8 @@ export default class App {
       this.emit("vr:exit");
       this._destroyVrWidget();
       this._destroyVrConsole();
+      this._destroyVrLoadingHud();
+      this._unbindVrGripToggle();
     });
 
     // XR session lifecycle
@@ -192,15 +204,11 @@ export default class App {
     }
   }
 
-  // ---------------- loading overlay (fix definitivo) ----------------
+  // ---------------- loading overlay (DOM) ----------------
   _createLoadingOverlay() {
-    // ✅ se tiver algum overlay antigo teu, mata pra não conflitar
     const old = document.getElementById("loadingOverlay");
-    if (old) {
-      try { old.remove(); } catch {}
-    }
+    if (old) { try { old.remove(); } catch {} }
 
-    // ✅ id novo pra não bater com nada teu
     const existing = document.getElementById("mediaLoadingOverlay");
     if (existing) {
       this._loadingOverlayEl = existing;
@@ -218,10 +226,10 @@ export default class App {
       zIndex: "999999",
       background: "rgba(0,0,0,0.55)",
       backdropFilter: "blur(8px)",
-      display: "none",              // ✅ começa morto
+      display: "none",
       alignItems: "center",
       justifyContent: "center",
-      pointerEvents: "none",        // ✅ sem bloquear quando escondido
+      pointerEvents: "none",
       opacity: "0",
       transition: "opacity 120ms ease"
     });
@@ -251,9 +259,7 @@ export default class App {
     });
 
     const style = document.createElement("style");
-    style.textContent = `
-      @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
-    `;
+    style.textContent = `@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`;
     document.head.appendChild(style);
 
     const label = document.createElement("div");
@@ -270,50 +276,104 @@ export default class App {
   }
 
   _setLoading(loading, label = "Carregando…", token = null) {
-    // ✅ token: evita load velho prender overlay
     if (token != null && token !== this._loadingToken) return;
 
     const next = !!loading;
     this._mediaLoading = next;
 
+    // DOM overlay (desktop/mobile)
     const el = this._loadingOverlayEl;
     if (el) {
       if (next) {
         if (this._loadingLabelEl) this._loadingLabelEl.textContent = label || "Carregando…";
-
         el.style.display = "flex";
         el.style.pointerEvents = "auto";
         el.style.opacity = "1";
         el.setAttribute("aria-hidden", "false");
       } else {
-        // ✅ hard hide: some com blur/texto SEM depender de hidden/CSS
         el.style.opacity = "0";
         el.style.pointerEvents = "none";
         el.setAttribute("aria-hidden", "true");
-
-        // depois do fade curtinho, mata display
         setTimeout(() => {
-          // se outro loading começou nesse meio tempo, não mata
           if (this._mediaLoading) return;
           el.style.display = "none";
         }, 140);
-
         if (this._loadingLabelEl) this._loadingLabelEl.textContent = "";
       }
     }
 
-    // VR badge
+    // ✅ VR: HUD preso na câmera + badge do widget
+    this._ensureVrLoadingHud();
+    this._setVrLoadingHudVisible(this._mediaLoading, label);
     this._syncVrWidgetIfExists();
+  }
+
+  // ---------------- VR: loading HUD ----------------
+  _ensureVrLoadingHud() {
+    if (!this.sceneEl?.is?.("vr-mode")) return;
+    if (this._vrLoadingHudEl) return;
+
+    const hud = document.createElement("a-entity");
+    hud.setAttribute("id", "vrLoadingHud");
+    hud.setAttribute("visible", "false");
+    hud.setAttribute("position", "0 0 -0.65"); // na cara, mas não tapa tudo
+    this.cameraEl.appendChild(hud);
+
+    const bg = document.createElement("a-plane");
+    bg.setAttribute("width", "0.62");
+    bg.setAttribute("height", "0.14");
+    bg.setAttribute("material", "color:#000; opacity:0.72; transparent:true; shader:flat; depthTest:false; depthWrite:false");
+    bg.setAttribute("position", "0 0 0");
+    hud.appendChild(bg);
+
+    const txt = document.createElement("a-entity");
+    txt.setAttribute("text", [
+      "value:Carregando…",
+      "color:#fff",
+      "opacity:1",
+      "align:center",
+      "anchor:center",
+      "baseline:center",
+      "width:2.6",
+      "wrapCount:24"
+    ].join(";"));
+    // escala grande pra Quest
+    txt.setAttribute("scale", "0.085 0.085 0.085");
+    txt.setAttribute("position", "0 0 0.01");
+    hud.appendChild(txt);
+
+    // guarda refs
+    hud._bg = bg;
+    hud._txt = txt;
+
+    this._vrLoadingHudEl = hud;
+  }
+
+  _setVrLoadingHudVisible(v, label = "Carregando…") {
+    const hud = this._vrLoadingHudEl;
+    if (!hud) return;
+
+    const vis = !!v;
+    hud.setAttribute("visible", vis ? "true" : "false");
+    if (hud.object3D) hud.object3D.visible = vis;
+
+    if (vis && hud._txt) {
+      hud._txt.setAttribute("text", "value", label || "Carregando…");
+    }
+  }
+
+  _destroyVrLoadingHud() {
+    if (!this._vrLoadingHudEl) return;
+    try { this._vrLoadingHudEl.remove(); } catch {}
+    this._vrLoadingHudEl = null;
   }
 
   // ---------------- core: fov ----------------
   setFov(fov, { emit = true } = {}) {
     const v = Math.max(30, Math.min(140, Number(fov) || 80));
     this._fov = Math.round(v);
-
     try { localStorage.setItem(LS_FOV, String(this._fov)); } catch {}
 
-    // camera
     if (this.cameraEl) {
       this.cameraEl.setAttribute("camera", "fov", this._fov);
       const cam = this.cameraEl.getObject3D("camera");
@@ -325,10 +385,7 @@ export default class App {
   }
 
   // ---------------- core: tour switching ----------------
-  setCurrentTour(tourId) {
-    const ok = this._setCurrentTour(tourId, { emit: true });
-    return ok;
-  }
+  setCurrentTour(tourId) { return this._setCurrentTour(tourId, { emit: true }); }
 
   _setCurrentTour(tourId, { emit = true } = {}) {
     const tid = this._canonicalTourId(tourId);
@@ -392,14 +449,14 @@ export default class App {
     this._isTransitioning = true;
     this._queuedNav = null;
 
-    const loadToken = ++this._loadingToken; // ✅ novo token pro fluxo
+    const loadToken = ++this._loadingToken;
     const inVR = this.sceneEl.is("vr-mode");
     const panoComp = this.panoEl?.components?.["stereo-top-bottom"];
 
     this.hideTooltip();
     this._setHotspotsVisible(false);
 
-    // ✅ show loading
+    // ✅ VR feedback + DOM feedback
     this._setLoading(true, "Carregando mídia…", loadToken);
 
     try {
@@ -417,10 +474,9 @@ export default class App {
 
       if (pushHash) history.replaceState(null, "", `#${this.currentTourId}:${sceneId}`);
 
-      // ✅ espera o “done real” do pano (evento stereo-loaded ou promise do setSrc)
       await this._setPanoAndWait(scene.pano);
 
-      // ✅ pano carregou MESMO: já pode tirar overlay aqui (não espera fade/hotspot/etc)
+      // ✅ encerra loading assim que a mídia confirmou load
       this._setLoading(false, "", loadToken);
 
       this._applyViewForScene(scene, fromHotspot);
@@ -440,11 +496,8 @@ export default class App {
     } catch (e) {
       console.error("goToScene falhou:", e);
       this.toast("Falha ao carregar mídia.");
-
-      // ✅ garante remover overlay em erro também
       this._setLoading(false, "", loadToken);
     } finally {
-      // ✅ se algum caminho ainda deixou ligado, mata aqui (com token)
       this._setLoading(false, "", loadToken);
 
       this._isTransitioning = false;
@@ -659,17 +712,6 @@ export default class App {
     return null;
   }
 
-  // ---------------- helpers ----------------
-  getPanoUrlsForTour(tourId) {
-    const pack = this._scenesByTour.get(tourId);
-    const out = [];
-    for (const id of (pack?.sceneOrder ?? [])) {
-      const sc = pack.sceneById.get(id);
-      if (sc?.pano) out.push(new URL(sc.pano, window.location.href).toString());
-    }
-    return Array.from(new Set(out));
-  }
-
   // ---------------- VR lifecycle + console/widget ----------------
   _bindXRSessionLifecycle() {
     const xr = this.sceneEl?.renderer?.xr;
@@ -684,6 +726,8 @@ export default class App {
     const onEnd = () => {
       this._destroyVrWidget();
       this._destroyVrConsole();
+      this._destroyVrLoadingHud();
+      this._unbindVrGripToggle();
     };
 
     xr.addEventListener("sessionstart", onStart);
@@ -701,13 +745,23 @@ export default class App {
     const session = await this._waitXRSession(2000);
     if (!session) return;
 
+    // widget
     this._ensureVrWidget();
+    this._applyVrWidgetVisibility();
     this._syncVrWidgetIfExists();
 
+    // loading HUD (se estiver carregando)
+    this._ensureVrLoadingHud();
+    this._setVrLoadingHudVisible(this._mediaLoading, this._mediaLoading ? "Carregando mídia…" : "");
+
+    // console
     if (this._vrDebugEnabled) {
       this._ensureVrConsole({ forceShow: true });
       this._bindVrConsoleInputs();
     }
+
+    // ✅ grip toggle widget
+    this._bindVrGripToggle();
   }
 
   async _waitXRSession(timeoutMs = 2000) {
@@ -720,6 +774,7 @@ export default class App {
     return this.sceneEl?.renderer?.xr?.getSession?.() || null;
   }
 
+  // ---- VR Console (mantém o teu comportamento anterior) ----
   _ensureVrConsole({ forceShow = false } = {}) {
     if (!this._vrDebugEnabled) return;
 
@@ -797,12 +852,9 @@ export default class App {
     this._vrConsoleEl = null;
   }
 
+  // ---- VR Widget + visibilidade ----
   _ensureVrWidget() {
-    if (this._vrWidgetEl) {
-      this._vrWidgetEl.setAttribute("visible", "true");
-      if (this._vrWidgetEl.object3D) this._vrWidgetEl.object3D.visible = true;
-      return;
-    }
+    if (this._vrWidgetEl) return;
 
     const el = document.createElement("a-entity");
     el.setAttribute("id", "vrWidget");
@@ -853,6 +905,19 @@ export default class App {
     this._vrWidgetHandlers = { hPrev, hNext, hFov, hSelectTour, hSelectScene, hReqSync };
   }
 
+  _applyVrWidgetVisibility() {
+    const el = this._vrWidgetEl;
+    if (!el) return;
+    const v = !!this._vrWidgetVisible;
+    el.setAttribute("visible", v ? "true" : "false");
+    if (el.object3D) el.object3D.visible = v;
+  }
+
+  _toggleVrWidgetVisible() {
+    this._vrWidgetVisible = !this._vrWidgetVisible;
+    this._applyVrWidgetVisibility();
+  }
+
   _destroyVrWidget() {
     const el = this._vrWidgetEl;
     if (!el) return;
@@ -872,6 +937,7 @@ export default class App {
     try { el.remove(); } catch {}
     this._vrWidgetEl = null;
     this._vrWidgetHandlers = null;
+    this._vrWidgetVisible = true;
   }
 
   _syncVrWidgetIfExists() {
@@ -901,9 +967,61 @@ export default class App {
       hasMap,
       mapSrc: tour?.map_png ?? "",
       marker: hasMap ? marker : null,
-
       loading: this._mediaLoading
     }, false);
+  }
+
+  // ✅ Grip toggle bind
+  _bindVrGripToggle() {
+    if (this._vrGripBound) return;
+
+    const handler = () => {
+      const now = performance.now();
+      if (now - this._lastGripToggleMs < 250) return; // debounce
+      this._lastGripToggleMs = now;
+
+      if (!this.sceneEl.is("vr-mode")) return;
+      this._toggleVrWidgetVisible();
+    };
+
+    this._onGripToggle = handler;
+
+    const L = this.leftHandEl;
+    const R = this.rightHandEl;
+
+    // Meta Quest costuma emitir "gripdown" ou "squeezestart"
+    if (L) {
+      L.addEventListener("gripdown", handler);
+      L.addEventListener("squeezestart", handler);
+    }
+    if (R) {
+      R.addEventListener("gripdown", handler);
+      R.addEventListener("squeezestart", handler);
+    }
+
+    this._vrGripBound = true;
+  }
+
+  _unbindVrGripToggle() {
+    if (!this._vrGripBound) return;
+
+    const handler = this._onGripToggle;
+    const L = this.leftHandEl;
+    const R = this.rightHandEl;
+
+    if (handler) {
+      if (L) {
+        L.removeEventListener("gripdown", handler);
+        L.removeEventListener("squeezestart", handler);
+      }
+      if (R) {
+        R.removeEventListener("gripdown", handler);
+        R.removeEventListener("squeezestart", handler);
+      }
+    }
+
+    this._onGripToggle = null;
+    this._vrGripBound = false;
   }
 }
 
