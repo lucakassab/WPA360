@@ -9,7 +9,7 @@ import { registerVrWidget } from "./xr/vr_widget.js";
 import { initPWA } from "./pwa/pwa.js";
 
 window.addEventListener("DOMContentLoaded", async () => {
-  const DEBUG_HOTSPOTS = false;
+  const DEBUG_HOTSPOTS = true;
 
   // flag
   const VR_DEBUG = false; // muda pra false quando quiser

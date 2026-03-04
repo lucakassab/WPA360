@@ -55,7 +55,7 @@ export default class HotspotRenderer {
 
     const root = document.createElement("a-entity");
     root.setAttribute("position", `${position.x} ${position.y} ${position.z}`);
-    root.setAttribute("face-camera", "");
+    if (!inVR) root.setAttribute("face-camera", "");
 
     if (style.depthOnTop) root.setAttribute("render-on-top", ROT_TOP);
 

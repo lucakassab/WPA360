@@ -21,17 +21,36 @@
           },
           "hotspots": [
             {
-              "yaw": 156,
-              "pitch": 5,
+              "yaw": -126,
+              "pitch": -9,
               "to": "Banheiro_Col_1_Studio",
               "label": "Banheiro",
-              "override_hotspot_png": "./assets/ui/hotspot_pin_banheiro3.png",
+              "override_hotspot_png": "./assets/ui/hotspot_pin_banheiro4.png",
               "override_hotspot_png_size": "0.8,0.8",
-              "hidelabel": false,
+              "hidelabel": true,
               "labelposoffset": {
-                "x": 0.0,
+                "x": 0,
                 "y": -0.11
               }
+            },
+            {
+              "yaw": -22,
+              "pitch": -14,
+              "to": "Cozinha",
+              "label": "Cozinha",
+              "hidelabel": true,
+              "override_hotspot_png": "./assets/ui/kitchen_hotspot3.png",
+              "override_hotspot_png_size": "0.8,0.8",
+              "toYaw": -75
+            },
+            {
+              "yaw": 163,
+              "pitch": -5,
+              "to": "Varanda",
+              "label": "Varanda",
+              "hidelabel": true,
+              "override_hotspot_png": "./assets/ui/hotspot_pin_exit2.png",
+              "override_hotspot_png_size": "0.6,0.6"
             }
           ]
         },
@@ -74,7 +93,7 @@
               "override_hotspot_png": "./assets/ui/hotspot_pin_exit - Copy.png",
               "override_hotspot_png_size": "0.65,0.65",
               "labelposoffset": {
-                "x": 0.0,
+                "x": 0,
                 "y": -0.05
               }
             }
@@ -186,7 +205,78 @@
             "textOutlineWidth": 0.11,
             "textOutlineOpacity": 0.7
           },
-          "hotspots": []
+          "hotspots": [
+            {
+              "yaw": 115,
+              "pitch": 11,
+              "to": "COZINHA_COLUNA_03",
+              "label": "Cozinha"
+            },
+            {
+              "yaw": 180,
+              "pitch": 12,
+              "to": "Banheiro_Social_Col_3",
+              "label": "Banheiro"
+            }
+          ]
+        },
+        {
+          "id": "COZINHA_COLUNA_03",
+          "name": "COZINHA_COLUNA_03",
+          "pano": "./assets/Panoramas/Coluna_3/COZINHA_COLUNA_03.jpg",
+          "scene_map_position": "30,22",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": [
+            {
+              "yaw": -179,
+              "pitch": -3,
+              "to": "CORREDOR_COLUNA_03",
+              "label": "Corredor"
+            },
+            {
+              "yaw": -97,
+              "pitch": 11,
+              "to": "Apartamento_Col_3",
+              "label": "Apartamento"
+            }
+          ]
+        },
+        {
+          "id": "CORREDOR_COLUNA_03",
+          "name": "CORREDOR_COLUNA_03",
+          "pano": "./assets/Panoramas/Coluna_3/CORREDOR_COLUNA_03.jpg",
+          "scene_map_position": "25,36",
+          "yawOffset": 0,
+          "pitchOffset": 0,
+          "hotspotDistance": 4,
+          "hotspotStyle": {
+            "textSize": 0.12,
+            "textSizeStep": 3,
+            "textOutlineWidth": 0.11,
+            "textOutlineOpacity": 0.7
+          },
+          "hotspots": [
+            {
+              "yaw": 38,
+              "pitch": 8,
+              "to": "COZINHA_COLUNA_03",
+              "label": "Cozinha"
+            },
+            {
+              "yaw": -21,
+              "pitch": 16,
+              "to": "Apartamento_Col_3",
+              "label": "Apartamento"
+            }
+          ]
         },
         {
           "id": "Banheiro_Social_Col_3",
@@ -202,7 +292,14 @@
             "textOutlineWidth": 0.11,
             "textOutlineOpacity": 0.7
           },
-          "hotspots": []
+          "hotspots": [
+            {
+              "yaw": -114,
+              "pitch": -15,
+              "to": "Apartamento_Col_3",
+              "label": "Apartamento"
+            }
+          ]
         },
         {
           "id": "Banheiro_Suite_Col_3",

@@ -30,7 +30,8 @@ export default class App {
 
     this._vrAnchorRAF = 0;
     this._vrAnchorTmp = null;
-
+    this._vrRecenterTimer = 0;
+    this._vrRigBasePos = null;
     this._events = new EventTarget();
 
     // tours
@@ -171,18 +172,38 @@ export default class App {
 
     this.sceneEl.addEventListener("enter-vr", async () => {
       this.emit("vr:enter");
+      this._startVrRecenterLock();
       this._startVrAnchorFollow();
+
+      // ✅ re-render hotspots no contexto VR (importante!)
+      const sc = this.getCurrentScene?.();
+      if (sc) {
+        this._ensureHotspotAnchor();
+        this._renderHotspots(sc);
+        this._setHotspotsVisible(true);
+      }
+
       await this._ensureVrUiIfImmersive();
     });
 
     this.sceneEl.addEventListener("exit-vr", () => {
       this.emit("vr:exit");
+      this._stopVrRecenterLock();
       this._stopVrAnchorFollow();
+
+      // ✅ re-render hotspots de volta pro desktop
+      const sc = this.getCurrentScene?.();
+      if (sc) {
+        this._ensureHotspotAnchor();
+        this._renderHotspots(sc);
+        this._setHotspotsVisible(true);
+      }
+
       this._destroyVrWidget();
       this._destroyVrConsole();
       this._destroyVrLoadingHud();
       this._unbindVrGripToggle();
-      this._xrQualityApplied = false; // ✅ reseta
+      this._xrQualityApplied = false;
     });
 
     this._bindXRSessionLifecycle();
@@ -321,6 +342,92 @@ export default class App {
     this._ensureVrLoadingHud();
     this._setVrLoadingHudVisible(this._mediaLoading, label);
     this._syncVrWidgetIfExists();
+  }
+
+
+  _startVrRecenterLock() {
+    if (this._vrRecenterTimer) return;
+
+    const THREE = window.AFRAME?.THREE;
+    if (!THREE) return;
+
+    const rigEl = this.cameraRigEl;
+    const rig = rigEl?.object3D;
+    const cam = this.cameraEl?.object3D;
+    if (!rig || !cam) return;
+
+    // ✅ controles como filhos do RIG (nunca da camera/head)
+    if (this.leftHandEl && this.leftHandEl.parentElement !== rigEl) rigEl.appendChild(this.leftHandEl);
+    if (this.rightHandEl && this.rightHandEl.parentElement !== rigEl) rigEl.appendChild(this.rightHandEl);
+
+    this._vrRigBasePos = this._vrRigBasePos || new THREE.Vector3();
+    this._vrHmdBaseLocal = this._vrHmdBaseLocal || new THREE.Vector3();
+
+    const Y_OFFSET = 1.0;
+
+    // ✅ zona morta suave (agora vale pra X/Y/Z)
+    const DEADZONE_IN  = 0.005;
+    const DEADZONE_OUT = 0.012;
+
+    // ✅ suavização
+    const LERP_ALPHA = 0.55;
+
+    const intervalMs = 20;
+
+    // normaliza altura do rig (sem mexer na rotação)
+    rig.position.y -= (cam.position.y || 0);
+    rig.position.y += Y_OFFSET;
+
+    // referências iniciais
+    this._vrRigBasePos.copy(rig.position);
+    this._vrHmdBaseLocal.set(cam.position.x || 0, cam.position.y || 0, cam.position.z || 0);
+
+    // tmp pra não alocar sempre
+    const target = new THREE.Vector3();
+    const cur = new THREE.Vector3();
+
+    const softDeadzone = (v) => {
+      const a = Math.abs(v);
+      if (a <= DEADZONE_IN) return 0;
+
+      const t = Math.min(1, (a - DEADZONE_IN) / Math.max(1e-6, (DEADZONE_OUT - DEADZONE_IN)));
+      const eased = 1 - Math.pow(1 - t, 2);
+
+      return Math.sign(v) * (a * eased);
+    };
+
+    this._vrRecenterTimer = setInterval(() => {
+      if (!this.sceneEl?.is?.("vr-mode") || !this.sceneEl?.renderer?.xr?.isPresenting) return;
+
+      const cx = cam.position.x || 0;
+      const cy = cam.position.y || 0;
+      const cz = cam.position.z || 0;
+
+      let dx = cx - this._vrHmdBaseLocal.x;
+      let dy = cy - this._vrHmdBaseLocal.y;
+      let dz = cz - this._vrHmdBaseLocal.z;
+
+      // ✅ deadzone suave (evita snap) — AGORA EM XYZ
+      dx = softDeadzone(dx);
+      dy = softDeadzone(dy);
+      dz = softDeadzone(dz);
+
+      // ✅ alvo em XYZ (Y travado também)
+      target.set(
+        this._vrRigBasePos.x - dx,
+        this._vrRigBasePos.y - dy,
+        this._vrRigBasePos.z - dz
+      );
+
+      // ✅ lerp no rig
+      cur.copy(rig.position);
+      cur.lerp(target, LERP_ALPHA);
+      rig.position.copy(cur);
+    }, intervalMs);
+  }
+  _stopVrRecenterLock() {
+    if (this._vrRecenterTimer) clearInterval(this._vrRecenterTimer);
+    this._vrRecenterTimer = null;
   }
 
   // ---------------- VR: loading HUD ----------------
@@ -521,6 +628,48 @@ export default class App {
     }
   }
 
+
+  _getXrViewerWorldPosition(outVec3) {
+    const THREE = window.AFRAME?.THREE;
+    if (!THREE || !outVec3) return false;
+
+    const sceneEl = this.sceneEl;
+    const renderer = sceneEl?.renderer;
+    const baseCam = sceneEl?.camera;
+
+    // fallback (não-VR ou renderer não pronto)
+    if (!renderer || !baseCam) {
+      this.cameraEl?.object3D?.getWorldPosition?.(outVec3);
+      return true;
+    }
+
+    // VR: usa a XR camera real (array camera)
+    if (renderer.xr?.isPresenting) {
+      const xrCam = renderer.xr.getCamera(baseCam);
+      const cams = xrCam?.cameras;
+
+      if (Array.isArray(cams) && cams.length) {
+        const tmp = new THREE.Vector3();
+        outVec3.set(0, 0, 0);
+        for (const c of cams) {
+          tmp.setFromMatrixPosition(c.matrixWorld);
+          outVec3.add(tmp);
+        }
+        outVec3.multiplyScalar(1 / cams.length);
+        return true;
+      }
+
+      // fallback XR
+      outVec3.setFromMatrixPosition(xrCam.matrixWorld);
+      return true;
+    }
+
+    // não-VR
+    outVec3.setFromMatrixPosition(baseCam.matrixWorld);
+    return true;
+  }
+
+
   _setHotspotsVisible(v) {
     if (!this.hotspotsEl) return;
     this.hotspotsEl.setAttribute("visible", v ? "true" : "false");
@@ -583,24 +732,54 @@ export default class App {
 
     if (!this._vrAnchorTmp) this._vrAnchorTmp = new THREE.Vector3();
 
+    // ✅ origin só pros HOTSPOTS (não mexe no pano no DOM)
     if (!this.hotspotAnchorEl) {
       this.hotspotAnchorEl = document.createElement("a-entity");
       this.hotspotAnchorEl.setAttribute("id", "hotspotOrigin");
       this.sceneEl.appendChild(this.hotspotAnchorEl);
       this.hotspotAnchorEl.object3D.matrixAutoUpdate = true;
+    } else if (this.hotspotAnchorEl.parentElement !== this.sceneEl) {
+      this.sceneEl.appendChild(this.hotspotAnchorEl);
     }
 
+    // ✅ hotspots dentro do origin
     if (this.hotspotsEl && this.hotspotsEl.parentElement !== this.hotspotAnchorEl) {
       this.hotspotAnchorEl.appendChild(this.hotspotsEl);
     }
 
-    if (!this.sceneEl.is("vr-mode")) {
+    // ✅ origin nunca herda rotação/escala
+    this.hotspotAnchorEl.object3D.quaternion.identity();
+    this.hotspotAnchorEl.object3D.rotation.set(0, 0, 0);
+    this.hotspotAnchorEl.object3D.scale.set(1, 1, 1);
+
+    const inVR = this.sceneEl.is("vr-mode") && this.sceneEl?.renderer?.xr?.isPresenting;
+
+    // Desktop/mobile: tudo no 0 (e pano fica onde já está, sem mexer)
+    if (!inVR) {
       this.hotspotAnchorEl.object3D.position.set(0, 0, 0);
+      this.hotspotAnchorEl.setAttribute("position", "0 0 0");
+
+      // garante pano na origem (pra não ficar deslocado se saiu do VR)
+      if (this.panoEl?.object3D) {
+        this.panoEl.object3D.position.set(0, 0, 0);
+      }
       return;
     }
 
-    this.cameraEl.object3D.getWorldPosition(this._vrAnchorTmp);
-    this.hotspotAnchorEl.object3D.position.copy(this._vrAnchorTmp);
+    // VR: recentraliza pano + hotspots na posição do viewer (zera parallax)
+    const ok = this._getXrViewerWorldPosition(this._vrAnchorTmp);
+    if (!ok) return;
+
+    const p = this._vrAnchorTmp;
+
+    // hotspots origin segue a posição do viewer
+    this.hotspotAnchorEl.object3D.position.copy(p);
+    this.hotspotAnchorEl.setAttribute("position", `${p.x} ${p.y} ${p.z}`);
+
+    // ✅ pano também segue a posição do viewer (sem reparent)
+    if (this.panoEl?.object3D) {
+      this.panoEl.object3D.position.copy(p);
+    }
   }
 
   _renderHotspots(scene) {
@@ -615,12 +794,10 @@ export default class App {
       const distance = resolveDistance(hs, scene, 4.0);
       const dir = yawPitchToDirection(yaw, pitch);
 
-      const basePos = applyHotspotOffset(
-        { x: dir.x * distance, y: dir.y * distance, z: dir.z * distance },
-        hs
-      );
+      let pos = { x: dir.x * distance, y: dir.y * distance, z: dir.z * distance };
+      pos = applyHotspotOffset(pos, hs);
 
-      const el = this.hotspotRenderer.createHotspot({ hs, sceneStyle, position: basePos });
+      const el = this.hotspotRenderer.createHotspot({ hs, sceneStyle, position: pos });
       this.hotspotsEl.appendChild(el);
     }
   }
