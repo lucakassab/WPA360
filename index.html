@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0b2b33">
+    <title>WPA360 Virtual Tour</title>
+    <link rel="icon" href="data:,">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="stylesheet" href="./styles/app.css">
+  </head>
+  <body>
+    <noscript>This virtual tour requires JavaScript.</noscript>
+    <div id="app-root" class="app-shell">
+      <header class="app-topbar" aria-label="WPA360 controls">
+        <div class="brand-block">
+          <span class="brand-mark" aria-hidden="true">360</span>
+          <div>
+            <p class="eyebrow">WPA360</p>
+            <h1 id="app-title">Virtual Tour</h1>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <label class="tour-picker">
+            <span>Tour</span>
+            <select id="tour-select" aria-label="Select virtual tour"></select>
+          </label>
+          <div class="platform-toggle" aria-label="Platform switcher">
+            <button type="button" data-platform-switch="2D_platform" class="is-active">2D</button>
+            <button type="button" data-platform-switch="VR_platform">VR</button>
+          </div>
+        </div>
+      </header>
+
+      <main id="runtime-root" class="runtime-root" tabindex="-1" aria-live="polite"></main>
+
+      <aside id="minimap-slot" class="minimap-slot" aria-live="polite"></aside>
+      <section id="editor-root" class="editor-root" aria-live="polite"></section>
+      <div id="app-status" class="app-status" role="status">Starting WPA360...</div>
+    </div>
+    <script type="module" src="./src/bootstrap/main.js"></script>
+  </body>
+</html>

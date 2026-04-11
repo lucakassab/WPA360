@@ -1,0 +1,1259 @@
+{
+  "id": "coluna_3",
+  "title": "Coluna 3",
+  "initial_scene": "coluna-3-banheiro-social",
+  "media_type": "equirectangular-image",
+  "settings": {
+    "rotation": {
+      "yaw": 0,
+      "pitch": 0,
+      "roll": 0
+    },
+    "scale": 1,
+    "billboard": true
+  },
+  "scenes": [
+    {
+      "id": "coluna-3-banheiro-social",
+      "title": "Coluna 3 - Banheiro Social.jpg",
+      "media_type": "equirectangular-image",
+      "media": {
+        "type": "image",
+        "src": "./data/tours/coluna_3/Coluna 3 - Banheiro Social.jpg",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_3/mapa_padrao.png",
+      "hotspots": [
+        {
+          "id": "go-to-coluna-3-corredor",
+          "type": "scene_link",
+          "target_scene": "coluna-3-corredor",
+          "position": {
+            "x": 5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Ir para Coluna 3 - Corredor.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "go-to-coluna-3-varanda",
+          "type": "scene_link",
+          "target_scene": "coluna-3-varanda",
+          "position": {
+            "x": -5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": -24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Voltar para Coluna 3 - Varanda.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-banheiro-social-label",
+          "type": "annotation",
+          "position": {
+            "x": 0,
+            "y": 1.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 0.9,
+          "billboard": true,
+          "target_scene": null,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Banheiro Social.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 0.9,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-banheiro-social-scene-label",
+          "type": "annotation",
+          "target_scene": null,
+          "position": {
+            "x": 0,
+            "y": 1.75,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Banheiro Social.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "coluna-3-corredor",
+      "title": "Coluna 3 - Corredor.jpg",
+      "media_type": "equirectangular-image",
+      "media": {
+        "type": "image",
+        "src": "./data/tours/coluna_3/Coluna 3 - Corredor.jpg",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_3/mapa_padrao.png",
+      "hotspots": [
+        {
+          "id": "go-to-coluna-3-cozinha",
+          "type": "scene_link",
+          "target_scene": "coluna-3-cozinha",
+          "position": {
+            "x": 5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Ir para Coluna 3 - Cozinha.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "go-to-coluna-3-banheiro-social",
+          "type": "scene_link",
+          "target_scene": "coluna-3-banheiro-social",
+          "position": {
+            "x": -5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": -24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Voltar para Coluna 3 - Banheiro Social.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-corredor-label",
+          "type": "annotation",
+          "position": {
+            "x": 0,
+            "y": 1.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 0.9,
+          "billboard": true,
+          "target_scene": null,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Corredor.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 0.9,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-corredor-scene-label",
+          "type": "annotation",
+          "target_scene": null,
+          "position": {
+            "x": 0,
+            "y": 1.75,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Corredor.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "coluna-3-cozinha",
+      "title": "Coluna 3 - Cozinha.jpg",
+      "media_type": "equirectangular-image",
+      "media": {
+        "type": "image",
+        "src": "./data/tours/coluna_3/Coluna 3 - Cozinha.jpg",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_3/mapa_padrao.png",
+      "hotspots": [
+        {
+          "id": "go-to-coluna-3-quarto",
+          "type": "scene_link",
+          "target_scene": "coluna-3-quarto",
+          "position": {
+            "x": 5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Ir para Coluna 3 - Quarto.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "go-to-coluna-3-corredor",
+          "type": "scene_link",
+          "target_scene": "coluna-3-corredor",
+          "position": {
+            "x": -5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": -24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Voltar para Coluna 3 - Corredor.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-cozinha-label",
+          "type": "annotation",
+          "position": {
+            "x": 0,
+            "y": 1.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 0.9,
+          "billboard": true,
+          "target_scene": null,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Cozinha.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 0.9,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-cozinha-scene-label",
+          "type": "annotation",
+          "target_scene": null,
+          "position": {
+            "x": 0,
+            "y": 1.75,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Cozinha.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "coluna-3-quarto",
+      "title": "Coluna 3 - Quarto.jpg",
+      "media_type": "equirectangular-image",
+      "media": {
+        "type": "image",
+        "src": "./data/tours/coluna_3/Coluna 3 - Quarto.jpg",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_3/mapa_padrao.png",
+      "hotspots": [
+        {
+          "id": "go-to-coluna-3-sala",
+          "type": "scene_link",
+          "target_scene": "coluna-3-sala",
+          "position": {
+            "x": 5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Ir para Coluna 3 - Sala.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "go-to-coluna-3-cozinha",
+          "type": "scene_link",
+          "target_scene": "coluna-3-cozinha",
+          "position": {
+            "x": -5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": -24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Voltar para Coluna 3 - Cozinha.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-quarto-label",
+          "type": "annotation",
+          "position": {
+            "x": 0,
+            "y": 1.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 0.9,
+          "billboard": true,
+          "target_scene": null,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Quarto.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 0.9,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-quarto-scene-label",
+          "type": "annotation",
+          "target_scene": null,
+          "position": {
+            "x": 0,
+            "y": 1.75,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Quarto.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "coluna-3-sala",
+      "title": "Coluna 3 - Sala.jpg",
+      "media_type": "equirectangular-image",
+      "media": {
+        "type": "image",
+        "src": "./data/tours/coluna_3/Coluna 3 - Sala.jpg",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_3/mapa_padrao.png",
+      "hotspots": [
+        {
+          "id": "go-to-coluna-3-varanda",
+          "type": "scene_link",
+          "target_scene": "coluna-3-varanda",
+          "position": {
+            "x": 5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Ir para Coluna 3 - Varanda.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "go-to-coluna-3-quarto",
+          "type": "scene_link",
+          "target_scene": "coluna-3-quarto",
+          "position": {
+            "x": -5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": -24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Voltar para Coluna 3 - Quarto.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-sala-label",
+          "type": "annotation",
+          "position": {
+            "x": 0,
+            "y": 1.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 0.9,
+          "billboard": true,
+          "target_scene": null,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Sala.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 0.9,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-sala-scene-label",
+          "type": "annotation",
+          "target_scene": null,
+          "position": {
+            "x": 0,
+            "y": 1.75,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Sala.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "coluna-3-suite-banheiro",
+      "title": "Coluna 3 - Suite Banheiro.jpg",
+      "media_type": "equirectangular-image",
+      "media": {
+        "type": "image",
+        "src": "./data/tours/coluna_3/Coluna 3 - Suite Banheiro.jpg",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_3/mapa_padrao.png",
+      "hotspots": [
+        {
+          "id": "go-to-coluna-3-suite-quarto",
+          "type": "scene_link",
+          "target_scene": "coluna-3-suite-quarto",
+          "position": {
+            "x": 5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Ir para Coluna 3 - Suite Quarto.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-suite-banheiro-label",
+          "type": "annotation",
+          "position": {
+            "x": 0,
+            "y": 1.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 0.9,
+          "billboard": true,
+          "target_scene": null,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Suite Banheiro.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 0.9,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-suite-banheiro-scene-label",
+          "type": "annotation",
+          "target_scene": null,
+          "position": {
+            "x": 0,
+            "y": 1.75,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Suite Banheiro.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "coluna-3-suite-quarto",
+      "title": "Coluna 3 - Suite Quarto.jpg",
+      "media_type": "equirectangular-image",
+      "media": {
+        "type": "image",
+        "src": "./data/tours/coluna_3/Coluna 3 - Suite Quarto.jpg",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_3/mapa_padrao.png",
+      "hotspots": [
+        {
+          "id": "go-to-coluna-3-suite-banheiro",
+          "type": "scene_link",
+          "target_scene": "coluna-3-suite-banheiro",
+          "position": {
+            "x": 5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Ir para Coluna 3 - Suite Banheiro.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-suite-quarto-label",
+          "type": "annotation",
+          "position": {
+            "x": 0,
+            "y": 1.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 0.9,
+          "billboard": true,
+          "target_scene": null,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Suite Quarto.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 0.9,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-suite-quarto-scene-label",
+          "type": "annotation",
+          "target_scene": null,
+          "position": {
+            "x": 0,
+            "y": 1.75,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Suite Quarto.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "coluna-3-varanda",
+      "title": "Coluna 3 - Varanda.jpg",
+      "media_type": "equirectangular-image",
+      "media": {
+        "type": "image",
+        "src": "./data/tours/coluna_3/Coluna 3 - Varanda.jpg",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_3/mapa_padrao.png",
+      "hotspots": [
+        {
+          "id": "go-to-coluna-3-banheiro-social",
+          "type": "scene_link",
+          "target_scene": "coluna-3-banheiro-social",
+          "position": {
+            "x": 5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Ir para Coluna 3 - Banheiro Social.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "go-to-coluna-3-sala",
+          "type": "scene_link",
+          "target_scene": "coluna-3-sala",
+          "position": {
+            "x": -5,
+            "y": 0.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": -24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Voltar para Coluna 3 - Sala.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-varanda-label",
+          "type": "annotation",
+          "position": {
+            "x": 0,
+            "y": 1.25,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 0.9,
+          "billboard": true,
+          "target_scene": null,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Varanda.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 0.9,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "coluna-3-varanda-scene-label",
+          "type": "annotation",
+          "target_scene": null,
+          "position": {
+            "x": 0,
+            "y": 1.75,
+            "z": -8
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": false,
+          "label": {
+            "text": "Coluna 3 - Varanda.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        }
+      ]
+    }
+  ]
+}

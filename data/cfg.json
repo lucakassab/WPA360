@@ -1,0 +1,41 @@
+{
+  "app": {
+    "id": "wpa360",
+    "name": "WPA360",
+    "default_tour_id": "coluna_1",
+    "default_platform": "auto"
+  },
+  "features": {
+    "minimap_widget": true,
+    "vr": true,
+    "editor": true,
+    "service_worker": true
+  },
+  "ui": {
+    "title": "WPA360 Virtual Tour",
+    "hotspot_billboard": true,
+    "minimap_card_position": "bottom-right"
+  },
+  "platform": {
+    "allow_runtime_switch": true,
+    "two_d": {
+      "default_fov": 86,
+      "min_fov": 55,
+      "max_fov": 112,
+      "mouse_sensitivity": 0.12,
+      "touch_sensitivity": 0.18
+    },
+    "vr": {
+      "enabled": true,
+      "stereo_preview": true,
+      "spatial_lock": true,
+      "eye_yaw_offset": 3.2,
+      "gaze_selection_degrees": 9
+    }
+  },
+  "asset_cache": {
+    "preload_current_scene": true,
+    "preload_tour_scene_media": false,
+    "preload_minimap_images": true
+  }
+}

@@ -1,0 +1,47 @@
+﻿{
+    "version":  2,
+    "tours":  [
+                  {
+                      "id":  "coluna_1",
+                      "title":  "Coluna 1",
+                      "description":  "Tour independente Coluna 1.",
+                      "thumbnail":  "./data/tours/coluna_1/Coluna 1 - Studio Banheiro.jpg",
+                      "tour_json":  "./data/tours/coluna_1/tour.json"
+                  },
+                  {
+                      "id":  "coluna_2",
+                      "title":  "Coluna 2",
+                      "description":  "Tour independente Coluna 2.",
+                      "thumbnail":  "./data/tours/coluna_2/Coluna 2 - Studio Banheiro.jpg",
+                      "tour_json":  "./data/tours/coluna_2/tour.json"
+                  },
+                  {
+                      "id":  "coluna_3",
+                      "title":  "Coluna 3",
+                      "description":  "Tour independente Coluna 3.",
+                      "thumbnail":  "./data/tours/coluna_3/Coluna 3 - Banheiro Social.jpg",
+                      "tour_json":  "./data/tours/coluna_3/tour.json"
+                  },
+                  {
+                      "id":  "coluna_4",
+                      "title":  "Coluna 4",
+                      "description":  "Tour independente Coluna 4.",
+                      "thumbnail":  "./data/tours/coluna_4/Coluna 4 Direita - Studio Banheiro.jpg",
+                      "tour_json":  "./data/tours/coluna_4/tour.json"
+                  },
+                  {
+                      "id":  "coluna_5",
+                      "title":  "Coluna 5",
+                      "description":  "Tour independente Coluna 5.",
+                      "thumbnail":  "./data/tours/coluna_5/Coluna 5 - Apartamento.jpg",
+                      "tour_json":  "./data/tours/coluna_5/tour.json"
+                  },
+                  {
+                      "id":  "puc",
+                      "title":  "PUC",
+                      "description":  "Tour independente PUC.",
+                      "thumbnail":  "./data/tours/puc/PUC - Academia Banheiro.jpg",
+                      "tour_json":  "./data/tours/puc/tour.json"
+                  }
+              ]
+}

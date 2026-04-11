@@ -1,0 +1,13 @@
+{
+  "name": "wpa360",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Modular offline-first PWA foundation for JSON-driven virtual tours.",
+  "scripts": {
+    "check": "node --check src/bootstrap/main.js"
+  },
+  "dependencies": {
+    "three": "^0.183.2"
+  }
+}

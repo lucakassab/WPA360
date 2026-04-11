@@ -1,0 +1,304 @@
+Descrição atual do app
+
+O app é uma plataforma web de tours virtuais 360°, com suporte a visualização em 2D, modo VR imersivo via WebXR e editor embutido para criação, ajuste e organização de hotspots diretamente dentro da própria experiência.
+
+A aplicação é orientada a dados e estruturada a partir de manifesto, tours, cenas e hotspots, mantendo o conteúdo desacoplado da renderização. A lógica principal fica concentrada no carregamento de dados, estado da aplicação, navegação, interface, edição e comportamento de interação, enquanto a camada visual é construída sobre Three.js com integração a WebXR.
+
+A proposta do sistema é simples: o mesmo tour precisa funcionar de forma consistente no desktop, no navegador comum e no ambiente imersivo, sem virar uma colcha de retalhos maluca em cada plataforma.
+
+Estrutura funcional
+
+O sistema permite visualizar panoramas 360°, navegar entre cenas por hotspots, alternar entre tours, editar hotspots em runtime e operar a experiência tanto em 2D quanto em VR com controles físicos ou hand tracking.
+
+Os principais blocos do app são:
+
+runtime de visualização 360
+navegação entre tours e cenas
+sistema de hotspots e labels
+editor interno de hotspots
+suporte a VR imersivo via WebXR
+interação por controles e hand tracking
+funcionamento offline-first / PWA
+
+A base lógica é compartilhada entre os modos de execução, o que reduz divergência de comportamento e evita aquelas diferenças escrotas entre 2D e VR.
+
+Renderização
+
+A renderização é baseada em Three.js, que atua como núcleo visual do app. Essa camada é responsável por:
+
+cena
+câmera
+renderer
+materiais
+geometria
+texturas
+raycasting
+integração com WebXR
+composição de elementos 3D interativos no ambiente imersivo
+
+Com isso, o código do projeto fica focado no comportamento do produto, no fluxo do tour, na edição e na interação, em vez de reinventar infraestrutura gráfica na unha igual um filho da puta com tempo livre demais.
+
+Modelo de dados
+
+No modelo atual, hotspot é a entidade principal da cena.
+A label não existe como entidade independente e é tratada exclusivamente como componente visual associada ao hotspot.
+
+Isso significa:
+
+label não existe sozinha
+não há labels independentes da cena
+toda configuração de label fica consolidada dentro do hotspot
+o vínculo estrutural entre hotspot e label é obrigatório
+a label herda o contexto espacial do hotspot, mantendo suas próprias configurações visuais
+
+Cada hotspot pode possuir propriedades como:
+
+posição
+rotação
+billboard
+escala
+tipo
+visibilidade do marcador
+propriedades de navegação
+configurações visuais gerais
+
+A label associada ao hotspot possui controle próprio para:
+
+texto
+visibilidade
+offset de posição
+offset de rotação
+billboard independente
+escala
+profundidade de referência
+
+Na prática, a label fica ancorada no hotspot e seus offsets passam a ser aplicados a partir do referencial local do hotspot, com comportamento previsível em posição e rotação. Isso garante consistência estrutural, evita estados inválidos e mantém editor e runtime falando a mesma língua.
+
+Hotspots
+
+Os hotspots são o elemento central da navegação e da interação do app.
+
+Eles podem representar:
+
+links para outras cenas
+anotações visuais ou informativas
+
+A navegação do tour acontece a partir deles em 2D e em VR.
+Além da navegação em si, o hotspot também concentra a sua apresentação visual, incluindo a label, os comportamentos de billboard e os estados de destaque durante interação.
+
+Labels
+
+As labels fazem parte do hotspot e não existem isoladas no sistema.
+
+O comportamento atual das labels foi estruturado para que:
+
+fiquem ancoradas exatamente na posição do hotspot
+usem offsets locais de posição e rotação
+acompanhem corretamente a orientação-base do hotspot
+permitam combinações independentes entre billboard e rotação fixa
+
+Isso permite cenários como:
+
+hotspot com rotação fixa e label em billboard
+hotspot em billboard e label com rotação fixa
+hotspot e label com comportamentos visuais independentes, mas ainda estruturalmente vinculados
+
+Esse modelo elimina deslocamentos inconsistentes, rotação em pivô errado e ajustes em world space quando o esperado é ajuste local.
+
+Editor embutido
+
+O app possui um editor interno para manipulação de hotspots diretamente dentro do tour.
+
+Recursos atuais do editor
+Seleção de hotspots
+
+O editor trabalha com o hotspot selecionado da cena ativa.
+
+Reposicionamento por clique
+
+Existe o botão “Move Hotspot to Location”.
+Ao ativar esse modo, o próximo clique do usuário no panorama reposiciona o hotspot selecionado.
+
+Menu contextual com botão direito
+
+Ao clicar com o botão direito em um hotspot, abre um menu de edição rápida com ações diretas, sem depender do painel principal.
+
+Ações disponíveis
+mover hotspot
+selecionar no editor
+deletar hotspot
+Escopo sincronizado com a cena ativa
+
+O editor opera sempre sobre a cena atualmente visível.
+Hotspots de outras cenas não entram no fluxo de edição como se fossem da cena corrente.
+
+Consistência de configuração
+
+Toda configuração de label também fica consolidada dentro do hotspot no editor, acompanhando o mesmo modelo usado pelo runtime.
+
+Modo 2D
+
+No modo 2D, o app exibe o panorama 360° e permite interação direta com hotspots, labels e navegação entre cenas.
+
+Esse modo compartilha a mesma base estrutural do runtime com o modo VR, o que ajuda a manter:
+
+coerência de navegação
+consistência de posicionamento
+previsibilidade no comportamento dos hotspots
+menor divergência entre plataformas
+Modo VR
+
+O app possui suporte a VR imersivo real via WebXR.
+
+Quando o dispositivo é compatível, a experiência pode entrar corretamente em sessão imersiva, mantendo a navegação coerente com a lógica do tour.
+
+Comportamento no VR
+
+No modo imersivo:
+
+o usuário permanece coerente com o ponto de vista do panorama
+a navegação entre pontos do tour acontece por hotspots
+não existe deslocamento livre como em cena 3D aberta
+o foco é olhar em volta, apontar, selecionar e navegar entre cenas
+
+Ou seja: no VR o usuário explora o panorama e interage com os elementos do tour, mas não sai andando pelo ambiente como se aquilo fosse mapa livre. Isso mantém a experiência consistente com a natureza do conteúdo 360°.
+
+Controles VR
+
+O app suporta controles físicos compatíveis com WebXR, com representação visual no ambiente imersivo.
+
+Os controles:
+
+aparecem posicionados corretamente no espaço
+acompanham o tracking do usuário
+possuem ray visível quando ativos
+podem ser usados para apontar e selecionar elementos interativos
+participam do mesmo fluxo unificado de seleção usado pela retícula
+
+A interação por controle foi ajustada para operar com o mesmo sistema de alvo ativo usado nas demais formas de input, reduzindo conflito entre ray, retícula e seleção.
+
+Hand tracking
+
+O app também suporta hand tracking como alternativa aos controles físicos.
+
+Esse suporte inclui:
+
+detecção das mãos
+tracking espacial no ambiente VR
+representação visual 3D apropriada
+interação por gesto
+interação direta com menu de mão
+uso da mão direita como origem padrão da retícula
+
+As mãos não são tratadas como marcador simplório; o sistema usa representação adequada ao ambiente imersivo e integra isso com seleção, retícula e navegação.
+
+Sistema de seleção no VR
+
+A interação no VR foi organizada em um fluxo unificado de seleção.
+
+Isso significa que o sistema trabalha com uma única lógica de alvo ativo por frame, que alimenta:
+
+retícula
+destaque visual do hotspot
+seleção por controle
+seleção por hand tracking
+interação com menu de mão
+
+Esse fluxo evita concorrência entre múltiplos sistemas paralelos de seleção, reduzindo conflito entre raycast visível, retícula e hit-testing separado.
+
+Retícula e origem de interação
+
+O app possui um sistema de retícula que pode operar com origens diferentes de projeção.
+
+Atualmente, a experiência permite alternar dinamicamente entre:
+
+retícula por gaze
+retícula originada da mão direita
+
+O comportamento padrão foi orientado para o modelo baseado na mão direita, tornando a interação mais natural no hand tracking.
+
+Com isso:
+
+o usuário pode apontar usando a mão
+a retícula acompanha esse fluxo
+hotspots recebem feedback visual coerente com o alvo atual
+controles e hand tracking mantêm paridade funcional
+Seleção por pinch e interação direta
+
+No hand tracking, o sistema suporta seleção por gesto de pinça sobre o alvo atual da retícula.
+
+Além disso, quando a interação não está em modo gaze, o menu da palma pode ser operado de forma direta pela ponta do dedo indicador, sem depender exclusivamente de aim preciso ou gesto extra para acionar os botões.
+
+Isso melhora bastante a usabilidade do menu no VR e deixa a interação mais intuitiva.
+
+Menu de mão no VR
+
+Quando o hand tracking está ativo, o app exibe um menu ancorado acima da palma da mão esquerda.
+
+Esse menu:
+
+aparece apenas quando a mão esquerda está aberta
+aparece quando a palma está voltada para o usuário
+acompanha a mão de forma estável
+mantém orientação correta para leitura
+pode ser interagido por retícula, gesto e toque direto da ponta do dedo
+
+Os botões atuais incluem:
+
+avançar tour
+voltar tour
+avançar cena
+voltar cena
+alternar método de origem da retícula
+sair do VR
+
+Isso permite navegação rápida e ajuste do modo de interação sem depender exclusivamente dos hotspots da cena.
+
+Feedback visual no VR
+
+Os hotspots no ambiente imersivo possuem destaque visual quando entram em estado ativo ou selecionável.
+
+Esse feedback serve para deixar evidente qual elemento está sendo alvo da interação naquele momento, melhorando clareza e previsibilidade para o usuário.
+
+Tanto marker quanto label podem refletir esse estado visual dentro do fluxo imersivo.
+
+Visibilidade no ambiente imersivo
+
+Os modelos 3D das mãos, controles e elementos interativos usam materiais adequados ao ambiente VR, mantendo boa legibilidade mesmo em cenas sem iluminação tradicional.
+
+Isso ajuda a preservar visibilidade dos elementos de interface e dos instrumentos de interação em diferentes panoramas.
+
+Performance
+
+O runtime foi estruturado para operar bem em 2D e em VR, com organização do loop de renderização e separação mais controlada entre comportamento fora do XR e durante sessão imersiva.
+
+A arquitetura busca evitar trabalho desnecessário por frame, manter coerência entre modos de renderização e reduzir conflitos entre sistemas de input e atualização visual.
+
+Além disso, o projeto já possui instrumentação e capacidade de diagnóstico de performance voltadas ao ambiente VR, facilitando investigação de gargalos quando necessário.
+
+Offline / PWA
+
+O app possui comportamento offline-first, com suporte a PWA e cache via service worker.
+
+Isso ajuda no uso local, em dispositivos VR e em contextos com conectividade instável, permitindo que a experiência seja mais robusta mesmo fora de ambiente tradicional de hospedagem.
+
+Resumo direto
+
+Hoje o app é um player/editor de tours virtuais 360°, baseado em Three.js e WebXR, com:
+
+visualização em 2D
+execução em VR imersivo
+hotspots como base de navegação e interação
+labels estruturadas como componente interna do hotspot
+editor embutido de hotspots
+menu contextual de edição
+reposicionamento por clique
+modelo de dados consistente e sem labels independentes
+controles VR
+hand tracking
+retícula por gaze ou por mão direita
+seleção por pinch
+interação direta com menu da palma pela ponta do dedo
+menu de mão esquerda no VR
+feedback visual de hotspot ativo
+PWA / offline-first

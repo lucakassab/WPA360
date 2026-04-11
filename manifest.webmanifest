@@ -1,0 +1,11 @@
+{
+  "name": "WPA360 Virtual Tour",
+  "short_name": "WPA360",
+  "description": "Offline-first modular virtual tour foundation for 2D and VR experiences.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b2b33",
+  "theme_color": "#0b2b33",
+  "orientation": "any"
+}
