@@ -20,12 +20,12 @@
       "show_brand_name": false,
       "show_scene_select": true,
       "show_pwa_install_button": true,
-      "show_platform_badge": true,
-      "show_webxr_badge": true,
-      "show_pwa_badge": true,
-      "show_service_worker_badge": true,
-      "show_input_badge": true,
-      "show_standalone_badge": true
+      "show_platform_badge": false,
+      "show_webxr_badge": false,
+      "show_pwa_badge": false,
+      "show_service_worker_badge": false,
+      "show_input_badge": false,
+      "show_standalone_badge": false
     }
   },
   "platform": {
