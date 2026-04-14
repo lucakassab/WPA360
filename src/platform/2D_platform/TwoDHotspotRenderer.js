@@ -1,6 +1,7 @@
 import {
   getHotspotLabelRoll,
   getHotspotLabelScale,
+  getHotspotMarkerIconSrc,
   getHotspotLabelText,
   getHotspotLabelWorldPosition,
   getHotspotMarkerRoll,
@@ -17,64 +18,136 @@ export class TwoDHotspotRenderer {
     this.context = context;
     this.project = project;
     this.items = [];
+    this.itemsByKey = new Map();
+    this.interactionLocked = false;
+  }
+
+  setInteractionLocked(locked) {
+    this.interactionLocked = locked === true;
+    if (this.root) {
+      this.root.style.pointerEvents = this.interactionLocked ? "none" : "";
+      this.root.style.visibility = this.interactionLocked ? "hidden" : "";
+    }
   }
 
   render(scene) {
-    this.destroy();
+    const nextItems = [];
+    const seenKeys = new Set();
 
     for (const hotspot of scene.hotspots ?? []) {
       if (isHotspotMarkerVisible(hotspot)) {
-        this.items.push(this.createItem(hotspot, {
+        const item = this.syncItem(hotspot, {
           kind: "marker",
           position: hotspot.position,
           roll: getHotspotMarkerRoll(hotspot)
-        }));
+        });
+        nextItems.push(item);
+        seenKeys.add(item.key);
       }
 
       if (isHotspotLabelVisible(hotspot)) {
-        this.items.push(this.createItem(hotspot, {
+        const item = this.syncItem(hotspot, {
           kind: "label",
           position: getHotspotLabelWorldPosition(hotspot),
           roll: getHotspotLabelRoll(hotspot)
-        }));
+        });
+        nextItems.push(item);
+        seenKeys.add(item.key);
       }
     }
 
+    for (const [key, item] of this.itemsByKey.entries()) {
+      if (!seenKeys.has(key)) {
+        this.disposeItem(item);
+        this.itemsByKey.delete(key);
+      }
+    }
+
+    this.items = nextItems;
     this.updateProjection();
   }
 
-  createItem(hotspot, { kind, position, roll }) {
-    const navigable = isNavigableHotspot(hotspot);
-    const element = document.createElement(navigable ? "button" : "div");
-    element.className = `hotspot hotspot-${kind} ${navigable ? "is-linked" : ""}`;
+  syncItem(hotspot, { kind, position, roll }) {
+    const key = createItemKey(hotspot.id, kind);
+    let item = this.itemsByKey.get(key);
+    if (!item) {
+      item = this.createItem(hotspot, { key, kind, position, roll });
+      this.itemsByKey.set(key, item);
+    }
+
+    item.hotspot = hotspot;
+    item.position = position;
+    item.roll = roll;
+    this.updateItemElement(item);
+    return item;
+  }
+
+  createItem(hotspot, { key, kind, position, roll }) {
+    const element = document.createElement(isNavigableHotspot(hotspot) ? "button" : "div");
+    const item = {
+      key,
+      hotspot,
+      element,
+      kind,
+      position,
+      roll,
+      onPointerDown: stopPointerPropagation,
+      onClick: (event) => this.handleHotspotClick(event, item)
+    };
+
     element.dataset.hotspotId = hotspot.id;
     element.dataset.editorItemType = "hotspot";
     element.dataset.hotspotRole = kind;
-    element.title = getHotspotSelectLabel(hotspot);
-    element.addEventListener("pointerdown", stopPointerPropagation);
-
-    if (navigable) {
-      element.type = "button";
-      element.addEventListener("click", (event) => this.handleHotspotClick(event, hotspot));
-    }
-
-    if (kind === "marker") {
-      element.setAttribute("aria-label", getHotspotSelectLabel(hotspot));
-      const glyph = document.createElement("span");
-      glyph.className = "hotspot-marker__glyph";
-      element.append(glyph);
-    } else {
-      const label = document.createElement("span");
-      label.className = "hotspot-label-text";
-      label.textContent = getHotspotLabelText(hotspot);
-      element.append(label);
-    }
-
+    element.addEventListener("pointerdown", item.onPointerDown);
     this.root.append(element);
-    return { hotspot, element, kind, position, roll };
+    this.updateItemElement(item);
+    return item;
   }
 
-  handleHotspotClick(event, hotspot) {
+  updateItemElement(item) {
+    const { hotspot, element, kind } = item;
+    const label = getHotspotSelectLabel(hotspot);
+    const navigable = isNavigableHotspot(hotspot);
+    const tagName = navigable ? "BUTTON" : "DIV";
+    if (element.tagName !== tagName) {
+      const replacement = document.createElement(navigable ? "button" : "div");
+      replacement.addEventListener("pointerdown", item.onPointerDown);
+      element.replaceWith(replacement);
+      item.element = replacement;
+    }
+
+    const activeElement = item.element;
+    activeElement.className = `hotspot hotspot-${kind} ${navigable ? "is-linked" : ""}`;
+    activeElement.dataset.hotspotId = hotspot.id;
+    activeElement.dataset.editorItemType = "hotspot";
+    activeElement.dataset.hotspotRole = kind;
+    activeElement.title = label;
+
+    activeElement.removeEventListener("click", item.onClick);
+    if (navigable) {
+      activeElement.type = "button";
+      activeElement.setAttribute("aria-label", label);
+      activeElement.addEventListener("click", item.onClick);
+    } else {
+      activeElement.removeAttribute("type");
+      if (kind === "marker") {
+        activeElement.setAttribute("aria-label", label);
+      } else {
+        activeElement.removeAttribute("aria-label");
+      }
+    }
+
+    syncItemContent(activeElement, hotspot, kind);
+  }
+
+  handleHotspotClick(event, item) {
+    if (this.interactionLocked) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    const hotspot = item.hotspot;
     event.preventDefault();
     event.stopPropagation();
 
@@ -82,6 +155,7 @@ export class TwoDHotspotRenderer {
       platform: "2D_platform",
       hotspotId: hotspot.id,
       label: getHotspotLabelText(hotspot),
+      targetTour: hotspot.target_tour ?? null,
       targetScene: hotspot.target_scene
     });
 
@@ -93,7 +167,11 @@ export class TwoDHotspotRenderer {
       return;
     }
 
-    this.context.goToScene(hotspot.target_scene)
+    const navigate = typeof this.context.goToHotspotTarget === "function"
+      ? this.context.goToHotspotTarget(hotspot, { source: "2D_platform" })
+      : this.context.goToScene(hotspot.target_scene);
+
+    navigate
       ?.catch?.((error) => {
         console.error("[WPA360] hotspot navigation failed", error);
         this.context.setStatus?.(error.message, { hideAfterMs: 2400 });
@@ -115,12 +193,69 @@ export class TwoDHotspotRenderer {
     }
   }
 
+  disposeItem(item) {
+    item.element?.removeEventListener("pointerdown", item.onPointerDown);
+    item.element?.removeEventListener("click", item.onClick);
+    item.element?.remove();
+  }
+
   destroy() {
-    for (const { element } of this.items) {
-      element.remove();
+    for (const item of this.itemsByKey.values()) {
+      this.disposeItem(item);
     }
     this.items = [];
+    this.itemsByKey.clear();
     this.root?.replaceChildren();
+  }
+}
+
+function createItemKey(hotspotId, kind) {
+  return `${hotspotId}:${kind}`;
+}
+
+function syncItemContent(element, hotspot, kind) {
+  if (kind === "marker") {
+    const iconSrc = getHotspotMarkerIconSrc(hotspot);
+    let glyph = element.firstElementChild;
+    if (iconSrc) {
+      if (!glyph || !glyph.classList.contains("hotspot-marker__image")) {
+        element.replaceChildren();
+        glyph = document.createElement("img");
+        glyph.className = "hotspot-marker__image";
+        glyph.alt = "";
+        glyph.draggable = false;
+        glyph.style.width = "100%";
+        glyph.style.height = "100%";
+        glyph.style.objectFit = "contain";
+        glyph.style.display = "block";
+        glyph.style.pointerEvents = "none";
+        element.append(glyph);
+      }
+      if (glyph.getAttribute("src") !== iconSrc) {
+        glyph.setAttribute("src", iconSrc);
+      }
+      return;
+    }
+
+    if (!glyph || !glyph.classList.contains("hotspot-marker__glyph")) {
+      element.replaceChildren();
+      glyph = document.createElement("span");
+      glyph.className = "hotspot-marker__glyph";
+      element.append(glyph);
+    }
+    return;
+  }
+
+  let label = element.firstElementChild;
+  if (!label || !label.classList.contains("hotspot-label-text")) {
+    element.replaceChildren();
+    label = document.createElement("span");
+    label.className = "hotspot-label-text";
+    element.append(label);
+  }
+  const nextText = getHotspotLabelText(hotspot);
+  if (label.textContent !== nextText) {
+    label.textContent = nextText;
   }
 }
 

@@ -17,31 +17,33 @@
       "id": "coluna-2-studio-banheiro",
       "title": "Coluna 2 - Studio Banheiro.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Studio Banheiro.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Studio Banheiro.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-coluna-2-studio-cozinha",
           "type": "scene_link",
           "target_scene": "coluna-2-studio-cozinha",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": 3.605,
+            "y": -7.062,
+            "z": 1.064
           },
           "rotation": {
             "yaw": 24,
@@ -67,113 +69,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
-        },
-        {
-          "id": "go-to-coluna-2-studio-varanda",
-          "type": "scene_link",
-          "target_scene": "coluna-2-studio-varanda",
-          "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
           },
-          "rotation": {
-            "yaw": -24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
-          "marker_visible": true,
-          "label": {
-            "text": "Voltar para Coluna 2 - Studio Varanda.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-studio-banheiro-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Studio Banheiro.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-studio-banheiro-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "reference_depth": 8,
-          "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Studio Banheiro.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         }
       ]
     },
@@ -181,31 +81,33 @@
       "id": "coluna-2-studio-cozinha",
       "title": "Coluna 2 - Studio Cozinha.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Studio Cozinha.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Studio Cozinha.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-coluna-2-studio-quarto",
           "type": "scene_link",
           "target_scene": "coluna-2-studio-quarto",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": -0.943,
+            "y": -4.178,
+            "z": -6.757
           },
           "rotation": {
             "yaw": 24,
@@ -231,16 +133,20 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
           "id": "go-to-coluna-2-studio-banheiro",
           "type": "scene_link",
           "target_scene": "coluna-2-studio-banheiro",
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": 3.637,
+            "y": -6.82,
+            "z": -2.064
           },
           "rotation": {
             "yaw": -24,
@@ -266,51 +172,23 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
-          "id": "coluna-2-studio-cozinha-label",
-          "type": "annotation",
+          "id": "go-to-coluna-2-studio-varanda",
+          "type": "scene_link",
+          "target_tour": "coluna_2",
+          "target_scene": "coluna-2-studio-varanda",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Studio Cozinha.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-studio-cozinha-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": -1.407,
+            "y": -2.542,
+            "z": -7.454
           },
           "rotation": {
             "yaw": 0,
@@ -320,13 +198,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "Coluna 2 - Studio Cozinha.jpg",
+            "text": "Coluna 2 - Studio Varanda.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {
@@ -345,31 +223,33 @@
       "id": "coluna-2-studio-quarto",
       "title": "Coluna 2 - Studio Quarto.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Studio Quarto.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Studio Quarto.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-coluna-2-studio-varanda",
           "type": "scene_link",
           "target_scene": "coluna-2-studio-varanda",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": -2.129,
+            "y": -4.225,
+            "z": -6.451
           },
           "rotation": {
             "yaw": 24,
@@ -395,16 +275,20 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
           "id": "go-to-coluna-2-studio-cozinha",
           "type": "scene_link",
           "target_scene": "coluna-2-studio-cozinha",
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": 1.58,
+            "y": -4.368,
+            "z": 6.513
           },
           "rotation": {
             "yaw": -24,
@@ -430,51 +314,23 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
-          "id": "coluna-2-studio-quarto-label",
-          "type": "annotation",
+          "id": "coluna-2-studio-quarto-hotspot",
+          "type": "scene_link",
+          "target_tour": "coluna_2",
+          "target_scene": "coluna-2-studio-banheiro",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Studio Quarto.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-studio-quarto-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": 3.787,
+            "y": -4.604,
+            "z": 5.335
           },
           "rotation": {
             "yaw": 0,
@@ -484,13 +340,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "Coluna 2 - Studio Quarto.jpg",
+            "text": "Coluna 2 - Studio Banheiro.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {
@@ -509,31 +365,33 @@
       "id": "coluna-2-studio-varanda",
       "title": "Coluna 2 - Studio Varanda.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Studio Varanda.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Studio Varanda.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-coluna-2-studio-banheiro",
           "type": "scene_link",
           "target_scene": "coluna-2-studio-banheiro",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": 3.363,
+            "y": -3.802,
+            "z": 6.183
           },
           "rotation": {
             "yaw": 24,
@@ -559,27 +417,35 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
           "id": "go-to-coluna-2-studio-quarto",
           "type": "scene_link",
+          "target_tour": "coluna_2",
           "target_scene": "coluna-2-studio-quarto",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": 1.242,
+            "y": -4.264,
+            "z": 6.654
           },
           "rotation": {
-            "yaw": -24,
+            "yaw": 0,
             "pitch": 0,
             "roll": 0
           },
           "scale": 1,
+          "reference_depth": 8,
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Voltar para Coluna 2 - Studio Quarto.jpg",
+            "text": "Coluna 2 - Studio Quarto.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -597,48 +463,16 @@
           }
         },
         {
-          "id": "coluna-2-studio-varanda-label",
-          "type": "annotation",
+          "id": "go-to-coluna-2-studio-cozinha",
+          "type": "scene_link",
+          "target_tour": "coluna_2",
+          "target_scene": "coluna-2-studio-cozinha",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Studio Varanda.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-studio-varanda-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": 0.75,
+            "y": -1.931,
+            "z": 7.727
           },
           "rotation": {
             "yaw": 0,
@@ -648,13 +482,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "Coluna 2 - Studio Varanda.jpg",
+            "text": "Coluna 2 - Studio Cozinha.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {
@@ -673,22 +507,24 @@
       "id": "coluna-2-suite-banheiro-social",
       "title": "Coluna 2 - Suite Banheiro Social.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": true,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Suite Banheiro Social.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Suite Banheiro Social.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-coluna-2-suite-corredor",
@@ -723,7 +559,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
           "id": "go-to-coluna-2-suite-varanda",
@@ -758,78 +598,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-suite-banheiro-social-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
           },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Suite Banheiro Social.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-suite-banheiro-social-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "reference_depth": 8,
-          "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Suite Banheiro Social.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         }
       ]
     },
@@ -837,31 +610,33 @@
       "id": "coluna-2-suite-corredor",
       "title": "Coluna 2 - Suite Corredor.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Suite Corredor.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Suite Corredor.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-coluna-2-suite-cozinha",
           "type": "scene_link",
           "target_scene": "coluna-2-suite-cozinha",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": -7.454,
+            "y": -1.908,
+            "z": -2.191
           },
           "rotation": {
             "yaw": 24,
@@ -887,27 +662,35 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
-          "id": "go-to-coluna-2-suite-banheiro-social",
+          "id": "go-to-coluna-2-suite-banheiro-social-2",
           "type": "scene_link",
+          "target_tour": "coluna_2",
           "target_scene": "coluna-2-suite-banheiro-social",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": 3.245,
+            "y": -7.312,
+            "z": 0.064
           },
           "rotation": {
-            "yaw": -24,
+            "yaw": 0,
             "pitch": 0,
             "roll": 0
           },
           "scale": 1,
+          "reference_depth": 8,
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Voltar para Coluna 2 - Suite Banheiro Social.jpg",
+            "text": "Coluna 2 - Suite Banheiro Social.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -925,48 +708,16 @@
           }
         },
         {
-          "id": "coluna-2-suite-corredor-label",
-          "type": "annotation",
+          "id": "go-to-coluna-2-suite-sala",
+          "type": "scene_link",
+          "target_tour": "coluna_2",
+          "target_scene": "coluna-2-suite-sala",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Suite Corredor.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-suite-corredor-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": 1.177,
+            "y": -7.076,
+            "z": -3.542
           },
           "rotation": {
             "yaw": 0,
@@ -976,13 +727,52 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "Coluna 2 - Suite Corredor.jpg",
+            "text": "Coluna 2 - Suite Sala.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "go-to-coluna-2-suite-sala-2",
+          "type": "scene_link",
+          "target_tour": "coluna_2",
+          "target_scene": "coluna-2-suite-sala",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "position": {
+            "x": -6.249,
+            "y": -3.621,
+            "z": -3.441
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Coluna 2 - Suite Sala.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {
@@ -1001,31 +791,33 @@
       "id": "coluna-2-suite-cozinha",
       "title": "Coluna 2 - Suite Cozinha.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Suite Cozinha.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Suite Cozinha.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
         {
-          "id": "go-to-coluna-2-suite-quarto",
+          "id": "go-to-coluna-2-suite-sala",
           "type": "scene_link",
-          "target_scene": "coluna-2-suite-quarto",
+          "target_scene": "coluna-2-suite-sala",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": 4.614,
+            "y": -6.239,
+            "z": 1.945
           },
           "rotation": {
             "yaw": 24,
@@ -1036,7 +828,7 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Ir para Coluna 2 - Suite Quarto.jpg",
+            "text": "Coluna 2 - Suite Sala.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -1051,16 +843,20 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": "coluna_2",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
           "id": "go-to-coluna-2-suite-corredor",
           "type": "scene_link",
           "target_scene": "coluna-2-suite-corredor",
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": 7.346,
+            "y": -2.343,
+            "z": 2.131
           },
           "rotation": {
             "yaw": -24,
@@ -1071,7 +867,7 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Voltar para Coluna 2 - Suite Corredor.jpg",
+            "text": "Coluna 2 - Suite Corredor.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -1086,78 +882,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-suite-cozinha-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
           },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Suite Cozinha.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-suite-cozinha-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "reference_depth": 8,
-          "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Suite Cozinha.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
+          "target_tour": "coluna_2",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         }
       ]
     },
@@ -1165,22 +894,24 @@
       "id": "coluna-2-suite-quarto",
       "title": "Coluna 2 - Suite Quarto.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": true,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Suite Quarto.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Suite Quarto.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-coluna-2-suite-sala",
@@ -1215,7 +946,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
           "id": "go-to-coluna-2-suite-cozinha",
@@ -1250,78 +985,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-suite-quarto-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
           },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Suite Quarto.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-suite-quarto-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "reference_depth": 8,
-          "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Suite Quarto.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         }
       ]
     },
@@ -1329,31 +997,33 @@
       "id": "coluna-2-suite-sala",
       "title": "Coluna 2 - Suite Sala.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Suite Sala.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Suite Sala.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-coluna-2-suite-varanda",
           "type": "scene_link",
           "target_scene": "coluna-2-suite-varanda",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": 1.906,
+            "y": -4.8,
+            "z": -6.109
           },
           "rotation": {
             "yaw": 24,
@@ -1364,7 +1034,7 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Ir para Coluna 2 - Suite Varanda.jpg",
+            "text": "Coluna 2 - Suite Varanda.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -1379,16 +1049,20 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": "coluna_2",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
-          "id": "go-to-coluna-2-suite-quarto",
+          "id": "go-to-coluna-2-suite-corredor",
           "type": "scene_link",
-          "target_scene": "coluna-2-suite-quarto",
+          "target_scene": "coluna-2-suite-corredor",
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": 5.35,
+            "y": -3.531,
+            "z": 4.786
           },
           "rotation": {
             "yaw": -24,
@@ -1399,7 +1073,7 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Voltar para Coluna 2 - Suite Quarto.jpg",
+            "text": "Coluna 2 - Suite Corredor.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -1414,51 +1088,23 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": "coluna_2",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
-          "id": "coluna-2-suite-sala-label",
-          "type": "annotation",
+          "id": "go-to-coluna-2-suite-cozinha",
+          "type": "scene_link",
+          "target_tour": "coluna_2",
+          "target_scene": "coluna-2-suite-cozinha",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Suite Sala.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-suite-sala-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": -6.245,
+            "y": -4.509,
+            "z": 2.161
           },
           "rotation": {
             "yaw": 0,
@@ -1468,13 +1114,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "Coluna 2 - Suite Sala.jpg",
+            "text": "Coluna 2 - Suite Cozinha.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {
@@ -1493,66 +1139,33 @@
       "id": "coluna-2-suite-varanda",
       "title": "Coluna 2 - Suite Varanda.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/coluna_2/Coluna 2 - Suite Varanda.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/coluna_2/Coluna 2 - Suite Varanda.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/coluna_2/mapa_padrao.png",
       "hotspots": [
-        {
-          "id": "go-to-coluna-2-suite-banheiro-social",
-          "type": "scene_link",
-          "target_scene": "coluna-2-suite-banheiro-social",
-          "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
-          "marker_visible": true,
-          "label": {
-            "text": "Ir para Coluna 2 - Suite Banheiro Social.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
         {
           "id": "go-to-coluna-2-suite-sala",
           "type": "scene_link",
           "target_scene": "coluna-2-suite-sala",
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": -1.249,
+            "y": -3.069,
+            "z": 7.281
           },
           "rotation": {
             "yaw": -24,
@@ -1563,7 +1176,50 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Voltar para Coluna 2 - Suite Sala.jpg",
+            "text": "Coluna 2 - Suite Sala.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          },
+          "target_tour": "coluna_2",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
+        },
+        {
+          "id": "go-to-coluna-2-suite-cozinha",
+          "type": "scene_link",
+          "target_tour": "coluna_2",
+          "target_scene": "coluna-2-suite-cozinha",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "position": {
+            "x": -3.896,
+            "y": -2.537,
+            "z": 6.51
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "Coluna 2 - Suite Cozinha.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -1581,48 +1237,16 @@
           }
         },
         {
-          "id": "coluna-2-suite-varanda-label",
-          "type": "annotation",
+          "id": "go-to-coluna-2-suite-corredor",
+          "type": "scene_link",
+          "target_tour": "coluna_2",
+          "target_scene": "coluna-2-suite-corredor",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "Coluna 2 - Suite Varanda.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "coluna-2-suite-varanda-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": 3.101,
+            "y": -1.961,
+            "z": 7.109
           },
           "rotation": {
             "yaw": 0,
@@ -1632,13 +1256,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "Coluna 2 - Suite Varanda.jpg",
+            "text": "Coluna 2 - Suite Corredor.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {

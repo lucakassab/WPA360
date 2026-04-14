@@ -1,6 +1,7 @@
 import {
   getHotspotLabelRoll,
   getHotspotLabelScale,
+  getHotspotMarkerIconSrc,
   getHotspotLabelText,
   getHotspotLabelWorldPosition,
   getHotspotMarkerRoll,
@@ -16,13 +17,15 @@ export class VRHotspotRenderer {
     this.renderer = renderer;
     this.context = context;
     this.items = [];
+    this.itemsByKey = new Map();
     this.sceneItems = [];
     this.activeHotspotId = null;
   }
 
   render(scene) {
-    this.destroy();
     this.sceneItems = [...(scene.hotspots ?? [])];
+    const nextItems = [];
+    const seenKeys = new Set();
 
     for (const eyeName of ["left", "right"]) {
       const layer = eyeName === "left"
@@ -31,57 +34,114 @@ export class VRHotspotRenderer {
 
       for (const hotspot of scene.hotspots ?? []) {
         if (isHotspotMarkerVisible(hotspot)) {
-          this.items.push(this.createItem(layer, eyeName, hotspot, {
+          const item = this.syncItem(layer, eyeName, hotspot, {
             kind: "marker",
             position: hotspot.position,
             roll: getHotspotMarkerRoll(hotspot)
-          }));
+          });
+          nextItems.push(item);
+          seenKeys.add(item.key);
         }
 
         if (isHotspotLabelVisible(hotspot)) {
-          this.items.push(this.createItem(layer, eyeName, hotspot, {
+          const item = this.syncItem(layer, eyeName, hotspot, {
             kind: "label",
             position: getHotspotLabelWorldPosition(hotspot),
             roll: getHotspotLabelRoll(hotspot)
-          }));
+          });
+          nextItems.push(item);
+          seenKeys.add(item.key);
         }
       }
     }
 
+    for (const [key, item] of this.itemsByKey.entries()) {
+      if (!seenKeys.has(key)) {
+        this.disposeItem(item);
+        this.itemsByKey.delete(key);
+      }
+    }
+
+    this.items = nextItems;
     this.syncActiveStates();
     this.updateProjection();
   }
 
-  createItem(layer, eyeName, hotspot, { kind, position, roll }) {
+  syncItem(layer, eyeName, hotspot, { kind, position, roll }) {
+    const key = createItemKey(eyeName, hotspot.id, kind);
+    let item = this.itemsByKey.get(key);
+    if (!item) {
+      item = this.createItem(layer, eyeName, hotspot, { key, kind, position, roll });
+      this.itemsByKey.set(key, item);
+    }
+
+    item.hotspot = hotspot;
+    item.position = position;
+    item.roll = roll;
+    item.eyeName = eyeName;
+
+    if (item.layer !== layer) {
+      layer.append(item.element);
+      item.layer = layer;
+    }
+
+    this.updateItemElement(item);
+    return item;
+  }
+
+  createItem(layer, eyeName, hotspot, { key, kind, position, roll }) {
+    const element = document.createElement(isNavigableHotspot(hotspot) ? "button" : "div");
+    const item = {
+      key,
+      layer,
+      eyeName,
+      hotspot,
+      element,
+      kind,
+      position,
+      roll,
+      onPointerDown: stopPointerPropagation,
+      onClick: (event) => this.handleHotspotClick(event, item)
+    };
+
+    element.addEventListener("pointerdown", item.onPointerDown);
+    layer.append(element);
+    this.updateItemElement(item);
+    return item;
+  }
+
+  updateItemElement(item) {
+    const { hotspot, kind, eyeName } = item;
+    const label = getHotspotSelectLabel(hotspot);
     const navigable = isNavigableHotspot(hotspot);
-    const element = document.createElement(navigable ? "button" : "div");
+    const currentElement = item.element;
+    const requiredTagName = navigable ? "BUTTON" : "DIV";
+
+    if (currentElement.tagName !== requiredTagName) {
+      const replacement = document.createElement(navigable ? "button" : "div");
+      replacement.addEventListener("pointerdown", item.onPointerDown);
+      currentElement.replaceWith(replacement);
+      item.element = replacement;
+    }
+
+    const element = item.element;
     element.className = `hotspot hotspot-${kind} ${navigable ? "is-linked" : ""}`;
     element.dataset.hotspotId = hotspot.id;
     element.dataset.editorItemType = "hotspot";
     element.dataset.hotspotRole = kind;
     element.dataset.eye = eyeName;
-    element.title = getHotspotSelectLabel(hotspot);
-    element.setAttribute("aria-label", getHotspotSelectLabel(hotspot));
-    element.addEventListener("pointerdown", stopPointerPropagation);
+    element.title = label;
+    element.setAttribute("aria-label", label);
 
+    element.removeEventListener("click", item.onClick);
     if (navigable) {
       element.type = "button";
-      element.addEventListener("click", (event) => this.handleHotspotClick(event, hotspot, eyeName));
-    }
-
-    if (kind === "marker") {
-      const glyph = document.createElement("span");
-      glyph.className = "hotspot-marker__glyph";
-      element.append(glyph);
+      element.addEventListener("click", item.onClick);
     } else {
-      const label = document.createElement("span");
-      label.className = "hotspot-label-text";
-      label.textContent = getHotspotLabelText(hotspot);
-      element.append(label);
+      element.removeAttribute("type");
     }
 
-    layer.append(element);
-    return { hotspot, element, eyeName, kind, position, roll };
+    syncItemContent(element, hotspot, kind);
   }
 
   setActiveHotspot(hotspotId) {
@@ -103,7 +163,8 @@ export class VRHotspotRenderer {
     }
   }
 
-  handleHotspotClick(event, hotspot, eyeName) {
+  handleHotspotClick(event, item) {
+    const hotspot = item.hotspot;
     event.preventDefault();
     event.stopPropagation();
 
@@ -111,7 +172,7 @@ export class VRHotspotRenderer {
 
     this.context.debugLog?.("hotspot:click", {
       platform: "VR_platform",
-      eye: eyeName,
+      eye: item.eyeName,
       hotspotId: hotspot.id,
       label: getHotspotLabelText(hotspot),
       targetScene: hotspot.target_scene
@@ -120,7 +181,7 @@ export class VRHotspotRenderer {
     if (!hotspot.target_scene) {
       this.context.debugLog?.("hotspot:navigation-skipped:no-target", {
         platform: "VR_platform",
-        eye: eyeName,
+        eye: item.eyeName,
         hotspotId: hotspot.id
       });
       return;
@@ -182,15 +243,73 @@ export class VRHotspotRenderer {
     return false;
   }
 
+  disposeItem(item) {
+    item.element?.removeEventListener("pointerdown", item.onPointerDown);
+    item.element?.removeEventListener("click", item.onClick);
+    item.element?.remove();
+  }
+
   destroy() {
-    for (const { element } of this.items) {
-      element.remove();
+    for (const item of this.itemsByKey.values()) {
+      this.disposeItem(item);
     }
     this.items = [];
+    this.itemsByKey.clear();
     this.sceneItems = [];
     this.activeHotspotId = null;
     this.renderer?.leftEye?.hotspotLayer.replaceChildren();
     this.renderer?.rightEye?.hotspotLayer.replaceChildren();
+  }
+}
+
+function createItemKey(eyeName, hotspotId, kind) {
+  return `${eyeName}:${hotspotId}:${kind}`;
+}
+
+function syncItemContent(element, hotspot, kind) {
+  if (kind === "marker") {
+    const iconSrc = getHotspotMarkerIconSrc(hotspot);
+    let glyph = element.firstElementChild;
+    if (iconSrc) {
+      if (!glyph || !glyph.classList.contains("hotspot-marker__image")) {
+        element.replaceChildren();
+        glyph = document.createElement("img");
+        glyph.className = "hotspot-marker__image";
+        glyph.alt = "";
+        glyph.draggable = false;
+        glyph.style.width = "100%";
+        glyph.style.height = "100%";
+        glyph.style.objectFit = "contain";
+        glyph.style.display = "block";
+        glyph.style.pointerEvents = "none";
+        element.append(glyph);
+      }
+      if (glyph.getAttribute("src") !== iconSrc) {
+        glyph.setAttribute("src", iconSrc);
+      }
+      return;
+    }
+
+    if (!glyph || !glyph.classList.contains("hotspot-marker__glyph")) {
+      element.replaceChildren();
+      glyph = document.createElement("span");
+      glyph.className = "hotspot-marker__glyph";
+      element.append(glyph);
+    }
+    return;
+  }
+
+  let label = element.firstElementChild;
+  if (!label || !label.classList.contains("hotspot-label-text")) {
+    element.replaceChildren();
+    label = document.createElement("span");
+    label.className = "hotspot-label-text";
+    element.append(label);
+  }
+
+  const nextText = getHotspotLabelText(hotspot);
+  if (label.textContent !== nextText) {
+    label.textContent = nextText;
   }
 }
 

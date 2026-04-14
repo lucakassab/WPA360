@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -12,22 +12,36 @@
   <body>
     <noscript>This virtual tour requires JavaScript.</noscript>
     <div id="app-root" class="app-shell">
-      <header class="app-topbar" aria-label="WPA360 controls">
+      <header class="app-topbar" aria-label="Controles do tour virtual">
         <div class="brand-block">
-          <span class="brand-mark" aria-hidden="true">360</span>
-          <div>
-            <p class="eyebrow">WPA360</p>
+          <span class="brand-mark" data-ui-item="brand-mark" aria-hidden="true" title="Marca visual do aplicativo">360</span>
+          <div class="brand-copy">
+            <p class="eyebrow" data-ui-item="brand-name" title="Nome da plataforma">WPA360</p>
             <h1 id="app-title">Virtual Tour</h1>
           </div>
         </div>
         <div class="topbar-actions">
-          <label class="tour-picker">
-            <span>Tour</span>
-            <select id="tour-select" aria-label="Select virtual tour"></select>
+          <label class="topbar-picker" title="Escolha qual tour virtual abrir na interface.">
+            <span>Tour ativo</span>
+            <select id="tour-select" aria-label="Selecionar tour virtual" title="Escolha o tour virtual ativo."></select>
           </label>
-          <div class="platform-toggle" aria-label="Platform switcher">
-            <button type="button" data-platform-switch="2D_platform" class="is-active">2D</button>
-            <button type="button" data-platform-switch="VR_platform">VR</button>
+          <label class="topbar-picker" data-ui-item="scene-select" title="Troque rapidamente para outra cena do tour atual.">
+            <span>Cena ativa</span>
+            <select id="scene-select" aria-label="Selecionar cena" title="Escolha a cena ativa dentro do tour atual."></select>
+          </label>
+          <div class="platform-toggle" aria-label="Alternar modo de visualizacao" title="Troque entre a visualizacao em tela e a visualizacao voltada para VR.">
+            <button type="button" data-platform-switch="2D_platform" class="is-active" title="Ativar a visualizacao 2D do tour.">Modo 2D</button>
+            <button type="button" data-platform-switch="VR_platform" title="Ativar a visualizacao preparada para VR.">Modo VR</button>
+          </div>
+          <button id="xr-debug-download-button" class="topbar-button" type="button" hidden title="Baixar o log de debug XR da sessao atual para analise.">Download Log</button>
+          <button id="pwa-install-button" class="topbar-button" type="button" data-ui-item="pwa-install-button" hidden title="Instale o tour como aplicativo para abrir com mais rapidez e suporte offline.">Instalar PWA</button>
+          <div id="topbar-badges" class="badge-strip" aria-label="Recursos detectados do ambiente" title="Resumo do ambiente atual, com plataforma e recursos detectados.">
+            <span id="platform-badge" class="topbar-badge" data-ui-item="platform-badge" title="Plataforma atualmente em uso."></span>
+            <span id="webxr-badge" class="topbar-badge" data-ui-item="webxr-badge" title="Disponibilidade de WebXR imersivo no navegador."></span>
+            <span id="pwa-badge" class="topbar-badge" data-ui-item="pwa-badge" title="Estado atual da experiencia PWA."></span>
+            <span id="service-worker-badge" class="topbar-badge" data-ui-item="service-worker-badge" title="Suporte a service worker no navegador."></span>
+            <span id="input-badge" class="topbar-badge" data-ui-item="input-badge" title="Perfil de entrada detectado para a interface."></span>
+            <span id="standalone-badge" class="topbar-badge" data-ui-item="standalone-badge" title="Indica se o app esta rodando como PWA ou no navegador comum."></span>
           </div>
         </div>
       </header>

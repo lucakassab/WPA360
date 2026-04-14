@@ -35,10 +35,19 @@ export class TourLoaderShared {
     } = source;
     const media = typeof source.media === "string"
       ? { type: "image", src: source.media, projection: "equirectangular" }
-      : { type: "image", projection: "equirectangular", ...sourceMedia };
+      : {
+          type: "image",
+          projection: "equirectangular",
+          stereo_layout: "top-bottom",
+          eye_order: "left-right",
+          mono_eye: "left",
+          ...sourceMedia
+        };
 
     return {
       ...sceneRest,
+      scene_global_yaw: source.scene_global_yaw !== false,
+      flip_horizontally: source.flip_horizontally === true || sourceMedia?.flip_horizontally === true,
       media,
       media_type: source.media_type ?? tour.media_type ?? "equirectangular-image",
       scale: Number(source.scale ?? tour.settings?.scale ?? 1),

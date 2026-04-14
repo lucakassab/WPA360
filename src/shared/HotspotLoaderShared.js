@@ -14,13 +14,17 @@ export class HotspotLoaderShared {
       ...source,
       id: source.id ?? `hotspot-${index + 1}`,
       type,
+      target_tour: type === "scene_link" ? source.target_tour ?? null : null,
       target_scene: type === "scene_link" ? source.target_scene ?? null : null,
+      apply_hotspot_scene_yaw: source.apply_hotspot_scene_yaw === true,
+      hotspot_define_scene_yaw: toNumber(source.hotspot_define_scene_yaw, 0),
       position: this.normalizeVector(source.position, null, index),
       rotation: this.normalizeRotation(source.rotation),
       scale: toNumber(source.scale, 1),
       reference_depth: toNumber(source.reference_depth, 8),
       billboard: source.billboard !== false,
       marker_visible: source.marker_visible !== false,
+      marker_icon: this.normalizeMarkerIcon(source.marker_icon ?? source.marker_icon_src ?? null),
       label: this.normalizeLabelConfig(source.label, {
         fallbackText,
         defaultVisible: true,
@@ -28,9 +32,26 @@ export class HotspotLoaderShared {
         defaultRotationOffset: { yaw: 0, pitch: 0, roll: 0 },
         fallbackScale: 1,
         fallbackReferenceDepth: toNumber(source.reference_depth, 8),
+        defaultReferenceDepthLinked: source.label?.reference_depth == null,
         defaultBillboard: true
       }),
       raw: source
+    };
+  }
+
+  normalizeMarkerIcon(markerIcon) {
+    if (typeof markerIcon === "string") {
+      const src = markerIcon.trim();
+      return { src: src || null };
+    }
+
+    const source = isObject(markerIcon) ? markerIcon : {};
+    const src = typeof source.src === "string"
+      ? source.src.trim()
+      : null;
+    return {
+      ...source,
+      src: src || null
     };
   }
 
@@ -41,6 +62,7 @@ export class HotspotLoaderShared {
     defaultRotationOffset = { yaw: 0, pitch: 0, roll: 0 },
     fallbackScale = 1,
     fallbackReferenceDepth = 8,
+    defaultReferenceDepthLinked = true,
     defaultBillboard = true
   } = {}) {
     const source = isObject(label) ? label : {};
@@ -53,6 +75,7 @@ export class HotspotLoaderShared {
       rotation_offset: this.normalizeRotation(source.rotation_offset ?? defaultRotationOffset),
       scale: toNumber(source.scale, fallbackScale),
       reference_depth: toNumber(source.reference_depth, fallbackReferenceDepth),
+      reference_depth_linked: source.reference_depth_linked ?? (source.reference_depth == null ? defaultReferenceDepthLinked : false),
       billboard: source.billboard ?? defaultBillboard
     };
   }
@@ -109,6 +132,9 @@ function isObject(value) {
 }
 
 function toNumber(value, fallback) {
+  if (value == null || value === "") {
+    return fallback;
+  }
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }

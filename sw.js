@@ -1,4 +1,4 @@
-const CACHE_NAME = "wpa360-pwa-v14";
+const CACHE_NAME = "wpa360-pwa-v45";
 
 const APP_SHELL = [
   "./",

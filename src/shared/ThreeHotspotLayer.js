@@ -1,6 +1,7 @@
 import * as THREE from "../../vendor/three/three.module.js";
 import {
   getHotspotLabelText,
+  getHotspotMarkerIconSrc,
   getHotspotLabelWorldPosition,
   isHotspotLabelVisible,
   isHotspotMarkerVisible
@@ -11,8 +12,9 @@ const ACTIVE_TINT = new THREE.Color("#fff0c8");
 const IDLE_TINT = new THREE.Color("#ffffff");
 
 export class ThreeHotspotLayer {
-  constructor({ contentRoot }) {
+  constructor({ contentRoot, assetCache = null }) {
     this.contentRoot = contentRoot;
+    this.assetCache = assetCache;
     this.group = new THREE.Group();
     this.group.name = "wpa360-xr-hotspots";
     this.group.visible = false;
@@ -22,6 +24,7 @@ export class ThreeHotspotLayer {
     this.hotspotById = new Map();
     this.interactiveObjects = [];
     this.highlightedHotspotId = null;
+    this.markerIconTextureCache = new Map();
 
     this.tempVectors = {
       cameraPosition: new THREE.Vector3(),
@@ -32,9 +35,33 @@ export class ThreeHotspotLayer {
   }
 
   setHotspots(hotspots = []) {
-    this.clear();
-    this.entries = hotspots.map((hotspot) => this.createEntry(hotspot));
+    const previousEntriesById = new Map(this.entries.map((entry) => [entry.hotspot?.id, entry]));
+    const nextEntries = [];
+    const nextInteractiveObjects = [];
+
+    for (const hotspot of hotspots) {
+      const previousEntry = previousEntriesById.get(hotspot.id) ?? null;
+      const entry = previousEntry
+        ? this.updateEntry(previousEntry, hotspot)
+        : this.createEntry(hotspot);
+
+      previousEntriesById.delete(hotspot.id);
+      nextEntries.push(entry);
+      if (entry.marker) {
+        nextInteractiveObjects.push(entry.marker);
+      }
+      if (entry.label) {
+        nextInteractiveObjects.push(entry.label);
+      }
+    }
+
+    for (const entry of previousEntriesById.values()) {
+      this.disposeEntry(entry);
+    }
+
+    this.entries = nextEntries;
     this.hotspotById = new Map(hotspots.map((hotspot) => [hotspot.id, hotspot]));
+    this.interactiveObjects = nextInteractiveObjects;
     this.syncHighlightState();
   }
 
@@ -140,7 +167,12 @@ export class ThreeHotspotLayer {
       return null;
     }
 
-    const intersection = raycaster.intersectObjects(this.interactiveObjects, false)[0];
+    const candidates = this.interactiveObjects.filter((object) => object.visible);
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    const intersection = raycaster.intersectObjects(candidates, false)[0];
     if (!intersection) {
       return null;
     }
@@ -153,8 +185,7 @@ export class ThreeHotspotLayer {
 
   clear() {
     for (const entry of this.entries) {
-      disposeObjectTree(entry.marker);
-      disposeObjectTree(entry.label);
+      this.disposeEntry(entry);
     }
 
     this.group.clear();
@@ -162,6 +193,7 @@ export class ThreeHotspotLayer {
     this.hotspotById.clear();
     this.interactiveObjects = [];
     this.highlightedHotspotId = null;
+    this.clearMarkerIconTextureCache();
   }
 
   createEntry(hotspot) {
@@ -173,6 +205,8 @@ export class ThreeHotspotLayer {
       markerGlow: null,
       markerConfig: null,
       markerBaseSize: 1,
+      markerIconSrc: null,
+      markerIconRequestToken: null,
 
       label: null,
       labelGlow: null,
@@ -181,40 +215,95 @@ export class ThreeHotspotLayer {
       labelBaseHeight: 1
     };
 
-    if (isHotspotMarkerVisible(hotspot)) {
-      const markerSize = 0.7 * resolveScale(hotspot.scale, hotspot.reference_depth);
+    this.syncEntryMarker(entry, hotspot);
+    this.syncEntryLabel(entry, hotspot);
+
+    return entry;
+  }
+
+  updateEntry(entry, hotspot) {
+    entry.hotspot = hotspot;
+    entry.anchorPosition.copy(vectorFrom(hotspot.position));
+    this.syncEntryMarker(entry, hotspot);
+    this.syncEntryLabel(entry, hotspot);
+    return entry;
+  }
+
+  syncEntryMarker(entry, hotspot) {
+    if (!isHotspotMarkerVisible(hotspot)) {
+      this.removeEntryMarker(entry);
+      return;
+    }
+
+    if (!entry.marker) {
       const markerMaterial = createMarkerMaterial();
       const marker = new THREE.Mesh(MARKER_GEOMETRY, markerMaterial);
       const markerGlow = createMarkerHighlightMesh();
 
-      marker.position.copy(entry.anchorPosition);
-      marker.scale.set(markerSize, markerSize, 1);
-      marker.renderOrder = 2;
-      marker.userData.hotspotId = hotspot.id;
-      marker.userData.hotspotRole = "marker";
-
       markerGlow.visible = false;
       marker.add(markerGlow);
-
       this.group.add(marker);
-      this.interactiveObjects.push(marker);
 
       entry.marker = marker;
       entry.markerGlow = markerGlow;
-      entry.markerBaseSize = markerSize;
-      entry.markerConfig = {
-        billboard: hotspot.billboard !== false,
-        baseQuaternion: quaternionFromRotation(hotspot.rotation),
-        offsetQuaternion: new THREE.Quaternion()
-      };
     }
 
-    if (isHotspotLabelVisible(hotspot)) {
-      const labelTexture = createLabelTexture(
-        getHotspotLabelText(hotspot),
-        hotspot.type === "scene_link"
-      );
+    this.syncEntryMarkerIcon(entry, hotspot);
+    entry.markerBaseSize = 0.7 * resolveScale(hotspot.scale, hotspot.reference_depth);
+    entry.marker.position.copy(entry.anchorPosition);
+    entry.marker.userData.hotspotId = hotspot.id;
+    entry.marker.userData.hotspotRole = "marker";
+    entry.markerConfig = {
+      billboard: hotspot.billboard !== false,
+      baseQuaternion: quaternionFromRotation(hotspot.rotation),
+      offsetQuaternion: new THREE.Quaternion()
+    };
+  }
 
+  syncEntryMarkerIcon(entry, hotspot) {
+    const iconSrc = getHotspotMarkerIconSrc(hotspot);
+    if (entry.markerIconSrc === iconSrc) {
+      return;
+    }
+
+    entry.markerIconRequestToken = Symbol(iconSrc ?? "default");
+    this.releaseEntryMarkerIcon(entry);
+
+    if (!iconSrc) {
+      setMarkerMaterialMap(entry.marker.material, createDefaultMarkerTexture(), { shared: false });
+      entry.markerIconSrc = null;
+      return;
+    }
+
+    entry.markerIconSrc = iconSrc;
+    this.loadMarkerIconTexture(iconSrc, entry.markerIconRequestToken)
+      .then((texture) => {
+        if (!entry.marker || entry.markerIconRequestToken == null || entry.markerIconSrc !== iconSrc) {
+          this.releaseMarkerIconTexture(iconSrc);
+          return;
+        }
+
+        setMarkerMaterialMap(entry.marker.material, texture, { shared: true });
+      })
+      .catch(() => {
+        if (entry.marker && entry.markerIconSrc === iconSrc) {
+          setMarkerMaterialMap(entry.marker.material, createDefaultMarkerTexture(), { shared: false });
+        }
+      });
+  }
+
+  syncEntryLabel(entry, hotspot) {
+    if (!isHotspotLabelVisible(hotspot)) {
+      this.removeEntryLabel(entry);
+      return;
+    }
+
+    const labelText = getHotspotLabelText(hotspot);
+    const linked = hotspot.type === "scene_link";
+    const labelReferenceDepth = hotspot.label?.reference_depth ?? hotspot.reference_depth;
+
+    if (!entry.label) {
+      const labelTexture = createLabelTexture(labelText, linked);
       const labelMaterial = new THREE.MeshBasicMaterial({
         map: labelTexture,
         transparent: true,
@@ -223,41 +312,162 @@ export class ThreeHotspotLayer {
         side: THREE.DoubleSide,
         color: IDLE_TINT.clone()
       });
-
-      const labelSize = resolveLabelSize(
-        labelTexture.image.width,
-        labelTexture.image.height,
-        hotspot.label?.scale,
-        hotspot.label?.reference_depth ?? hotspot.reference_depth
-      );
-
       const label = new THREE.Mesh(MARKER_GEOMETRY, labelMaterial);
       const labelGlow = createLabelHighlightMesh();
 
-      label.position.copy(vectorFrom(getHotspotLabelWorldPosition(hotspot)));
-      label.scale.set(labelSize.width, labelSize.height, 1);
-      label.renderOrder = 3;
-      label.userData.hotspotId = hotspot.id;
-      label.userData.hotspotRole = "label";
-
       labelGlow.visible = false;
       label.add(labelGlow);
-
       this.group.add(label);
-      this.interactiveObjects.push(label);
 
       entry.label = label;
       entry.labelGlow = labelGlow;
-      entry.labelBaseWidth = labelSize.width;
-      entry.labelBaseHeight = labelSize.height;
-      entry.labelConfig = {
-        billboard: hotspot.label?.billboard !== false,
-        baseQuaternion: quaternionFromRotation(hotspot.rotation),
-        offsetQuaternion: quaternionFromRotation(hotspot.label?.rotation_offset)
-      };
+      entry.labelText = labelText;
+      entry.labelLinked = linked;
+    } else if (entry.labelText !== labelText || entry.labelLinked !== linked) {
+      entry.label.material.map?.dispose?.();
+      entry.label.material.map = createLabelTexture(labelText, linked);
+      entry.label.material.needsUpdate = true;
+      entry.labelText = labelText;
+      entry.labelLinked = linked;
     }
 
-    return entry;
+    const labelSize = resolveLabelSize(
+      entry.label.material.map.image.width,
+      entry.label.material.map.image.height,
+      hotspot.label?.scale,
+      labelReferenceDepth
+    );
+
+    entry.label.position.copy(vectorFrom(getHotspotLabelWorldPosition(hotspot)));
+    entry.label.userData.hotspotId = hotspot.id;
+    entry.label.userData.hotspotRole = "label";
+    entry.labelBaseWidth = labelSize.width;
+    entry.labelBaseHeight = labelSize.height;
+    entry.labelConfig = {
+      billboard: hotspot.label?.billboard !== false,
+      baseQuaternion: quaternionFromRotation(hotspot.rotation),
+      offsetQuaternion: quaternionFromRotation(hotspot.label?.rotation_offset)
+    };
+  }
+
+  removeEntryMarker(entry) {
+    if (!entry?.marker) {
+      return;
+    }
+    entry.markerIconRequestToken = null;
+    this.releaseEntryMarkerIcon(entry);
+    disposeMarkerObject(entry.marker);
+    entry.marker = null;
+    entry.markerGlow = null;
+    entry.markerConfig = null;
+    entry.markerBaseSize = 1;
+    entry.markerIconSrc = null;
+  }
+
+  async loadMarkerIconTexture(iconSrc, requestToken) {
+    const normalizedSrc = this.normalizeIconSrc(iconSrc);
+    if (!normalizedSrc || !this.assetCache) {
+      throw new Error("Marker icon asset cache unavailable.");
+    }
+
+    const cached = this.markerIconTextureCache.get(normalizedSrc);
+    if (cached) {
+      cached.refCount += 1;
+      return cached.texture;
+    }
+
+    const loadedAsset = await this.assetCache.loadImage(normalizedSrc, { optional: true });
+    if (!loadedAsset || requestToken == null) {
+      throw new Error(`Marker icon unavailable: ${normalizedSrc}`);
+    }
+
+    const existing = this.markerIconTextureCache.get(normalizedSrc);
+    if (existing) {
+      existing.refCount += 1;
+      return existing.texture;
+    }
+
+    const texture = new THREE.Texture(loadedAsset.image);
+    texture.needsUpdate = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = true;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    this.markerIconTextureCache.set(normalizedSrc, {
+      texture,
+      refCount: 1
+    });
+    return texture;
+  }
+
+  releaseEntryMarkerIcon(entry) {
+    if (!entry?.markerIconSrc) {
+      if (entry?.marker?.material) {
+        releaseMarkerMaterialMap(entry.marker.material);
+      }
+      return;
+    }
+
+    this.releaseMarkerIconTexture(entry.markerIconSrc);
+    if (entry?.marker?.material) {
+      entry.marker.material.userData.sharedMap = false;
+      entry.marker.material.map = null;
+    }
+  }
+
+  releaseMarkerIconTexture(iconSrc) {
+    const normalizedSrc = this.normalizeIconSrc(iconSrc);
+    if (!normalizedSrc) {
+      return;
+    }
+
+    const cached = this.markerIconTextureCache.get(normalizedSrc);
+    if (!cached) {
+      return;
+    }
+
+    cached.refCount -= 1;
+    if (cached.refCount > 0) {
+      return;
+    }
+
+    cached.texture.dispose?.();
+    this.markerIconTextureCache.delete(normalizedSrc);
+    this.assetCache?.releaseImage?.(normalizedSrc);
+  }
+
+  clearMarkerIconTextureCache() {
+    for (const [iconSrc, cached] of this.markerIconTextureCache.entries()) {
+      cached.texture.dispose?.();
+      this.assetCache?.releaseImage?.(iconSrc);
+    }
+    this.markerIconTextureCache.clear();
+  }
+
+  normalizeIconSrc(iconSrc) {
+    if (!iconSrc) {
+      return null;
+    }
+    return this.assetCache?.normalizeUrl?.(iconSrc) ?? String(iconSrc);
+  }
+
+  removeEntryLabel(entry) {
+    if (!entry?.label) {
+      return;
+    }
+    disposeObjectTree(entry.label);
+    entry.label = null;
+    entry.labelGlow = null;
+    entry.labelConfig = null;
+    entry.labelBaseWidth = 1;
+    entry.labelBaseHeight = 1;
+    entry.labelText = null;
+    entry.labelLinked = null;
+  }
+
+  disposeEntry(entry) {
+    this.removeEntryMarker(entry);
+    this.removeEntryLabel(entry);
   }
 
   syncHighlightState() {
@@ -325,6 +535,21 @@ function orientObject(object, cameraPosition, config) {
 }
 
 function createMarkerMaterial() {
+  return new THREE.MeshBasicMaterial({
+    map: createDefaultMarkerTexture(),
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+    color: IDLE_TINT.clone(),
+    opacity: 0.96,
+    userData: {
+      sharedMap: false
+    }
+  });
+}
+
+function createDefaultMarkerTexture() {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 256;
@@ -348,16 +573,7 @@ function createMarkerMaterial() {
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-
-  return new THREE.MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    depthWrite: false,
-    toneMapped: false,
-    side: THREE.DoubleSide,
-    color: IDLE_TINT.clone(),
-    opacity: 0.96
-  });
+  return texture;
 }
 
 function createMarkerHighlightMesh() {
@@ -523,6 +739,53 @@ function disposeObjectTree(object) {
   });
 
   object.removeFromParent();
+}
+
+function disposeMarkerObject(object) {
+  if (!object) {
+    return;
+  }
+
+  object.traverse?.((child) => {
+    if (child.material) {
+      if (Array.isArray(child.material)) {
+        for (const material of child.material) {
+          releaseMarkerMaterialMap(material);
+          material?.dispose?.();
+        }
+      } else {
+        releaseMarkerMaterialMap(child.material);
+        child.material?.dispose?.();
+      }
+    }
+  });
+
+  object.removeFromParent();
+}
+
+function setMarkerMaterialMap(material, texture, { shared = false } = {}) {
+  if (!material) {
+    return;
+  }
+
+  releaseMarkerMaterialMap(material);
+  material.map = texture;
+  material.userData = {
+    ...material.userData,
+    sharedMap: shared
+  };
+  material.needsUpdate = true;
+}
+
+function releaseMarkerMaterialMap(material) {
+  if (!material?.map) {
+    return;
+  }
+
+  if (material.userData?.sharedMap !== true) {
+    material.map.dispose?.();
+  }
+  material.map = null;
 }
 
 function roundRect(ctx, x, y, width, height, radius) {

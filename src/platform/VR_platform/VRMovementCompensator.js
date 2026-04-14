@@ -14,7 +14,7 @@ export class VRMovementCompensator {
 
   resetTranslationLock(headPosition = null) {
     this.translationOrigin = headPosition
-      ? normalizePosition(headPosition)
+      ? createTranslationOrigin(headPosition)
       : null;
   }
 
@@ -49,13 +49,17 @@ export class VRMovementCompensator {
 
     const current = normalizePosition(headPosition);
     if (!this.translationOrigin) {
-      this.translationOrigin = current;
+      this.translationOrigin = createTranslationOrigin(current);
     }
 
     return {
-      x: sanitizeDelta(this.translationOrigin.x - current.x),
-      y: sanitizeDelta(this.translationOrigin.y - current.y),
-      z: sanitizeDelta(this.translationOrigin.z - current.z)
+      // Keep the user's virtual viewpoint fixed by moving the panorama content
+      // along with the tracked headset translation, instead of against it.
+      x: sanitizeDelta(current.x - this.translationOrigin.x),
+      // Do not inherit the user's real-world entry height; keep VR eye level
+      // anchored to the authored tour space instead of the physical headset Y.
+      y: sanitizeDelta(current.y - this.translationOrigin.y),
+      z: sanitizeDelta(current.z - this.translationOrigin.z)
     };
   }
 }
@@ -73,6 +77,15 @@ function normalizePosition(position) {
     x: Number(position?.x ?? 0),
     y: Number(position?.y ?? 0),
     z: Number(position?.z ?? 0)
+  };
+}
+
+function createTranslationOrigin(position) {
+  const normalized = normalizePosition(position);
+  return {
+    x: normalized.x,
+    y: 0,
+    z: normalized.z
   };
 }
 

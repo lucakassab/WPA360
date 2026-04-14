@@ -1,16 +1,21 @@
 import { ThreePanoramaRenderer } from "../../shared/ThreePanoramaRenderer.js";
 
 export class TwoDRenderer {
-  constructor({ root, cfgProvider, assetCache }) {
+  constructor({ root, cfgProvider, assetCache, context = null }) {
     this.root = root;
     this.cfgProvider = cfgProvider;
     this.assetCache = assetCache;
+    this.context = context;
     this.listeners = new Set();
     this.view = {
       yaw: 0,
       pitch: 0,
       fov: 86
     };
+    this.appliedSceneYaw = 0;
+    this.lastSceneId = null;
+    this.lastSceneSrc = "";
+    this.interactionLocked = false;
 
     this.stage = document.createElement("div");
     this.stage.className = "twod-stage";
@@ -22,6 +27,7 @@ export class TwoDRenderer {
     this.panoramaRenderer = new ThreePanoramaRenderer({
       root: this.panorama,
       assetCache: this.assetCache,
+      xrDebug: this.context?.xrDebug ?? null,
       previewMode: "mono",
       xrEnabled: false
     });
@@ -42,16 +48,42 @@ export class TwoDRenderer {
     this.root.append(this.stage);
   }
 
-  async showScene(scene, tour) {
+  async showScene(scene, tour, options = {}) {
+    this.interactionLocked = true;
     const cfg = this.cfgProvider();
     const platformCfg = cfg?.platform?.two_d ?? {};
-    this.view.fov = Number(platformCfg.default_fov ?? this.view.fov);
-    this.view.yaw = 0;
-    this.view.pitch = 0;
+    const nextSceneId = scene?.id ?? null;
+    const nextSceneSrc = scene?.media?.src ?? "";
+    const shouldPreserveView =
+      Boolean(nextSceneId)
+      && nextSceneId === this.lastSceneId
+      && nextSceneSrc === this.lastSceneSrc;
+    const hasExplicitEntryYaw = Number.isFinite(Number(options?.entryYaw));
+    const preserveOrientation = options?.preserveOrientation === true
+      || (!hasExplicitEntryYaw && options?.preserveOrientation == null && scene?.scene_global_yaw === false);
+    const nextSceneYaw = hasExplicitEntryYaw
+      ? Number(options.entryYaw)
+      : (scene?.scene_global_yaw !== false ? Number(scene?.rotation?.yaw ?? 0) : 0);
 
-    await this.panoramaRenderer.setScene(scene, {
-      eye: scene.media?.mono_eye ?? "left"
+    if (!shouldPreserveView) {
+      this.view.fov = Number(platformCfg.default_fov ?? this.view.fov);
+      if (preserveOrientation) {
+        const effectiveYaw = wrapDegrees(this.view.yaw + this.appliedSceneYaw);
+        this.view.yaw = wrapDegrees(effectiveYaw - nextSceneYaw);
+      } else {
+        this.view.yaw = 0;
+        this.view.pitch = 0;
+      }
+    }
+
+    const sceneTransition = await this.panoramaRenderer.setScene(scene, {
+      eye: scene.media?.mono_eye ?? "left",
+      entryYawOverride: hasExplicitEntryYaw ? nextSceneYaw : null
     });
+    this.appliedSceneYaw = nextSceneYaw;
+
+    this.lastSceneId = nextSceneId;
+    this.lastSceneSrc = nextSceneSrc;
 
     if (scene.media?.src && scene.media_available !== false) {
       this.panorama.classList.remove("is-empty");
@@ -67,6 +99,16 @@ export class TwoDRenderer {
     this.caption.append(title, help);
 
     this.applyView();
+    return sceneTransition;
+  }
+
+  setInteractionLocked(locked) {
+    this.interactionLocked = locked === true;
+    this.stage.classList.toggle("is-interaction-locked", this.interactionLocked);
+  }
+
+  isInteractionLocked() {
+    return this.interactionLocked === true;
   }
 
   pan(deltaX, deltaY, pointerType = "mouse") {
@@ -99,7 +141,17 @@ export class TwoDRenderer {
   }
 
   screenToWorldFromEvent(event, { depth = 8 } = {}) {
-    return this.panoramaRenderer.screenToWorld(event, this.stage, depth, "center");
+    const position = this.panoramaRenderer.screenToWorld(event, this.stage, depth, "center");
+    this.context?.debugLog?.("editor:twod-renderer:screen-to-world", {
+      clientX: Number(event?.clientX ?? 0),
+      clientY: Number(event?.clientY ?? 0),
+      depth: Number(depth ?? 0),
+      view: this.getView(),
+      position: position ?? null,
+      sceneId: this.lastSceneId,
+      sceneSrc: this.lastSceneSrc
+    });
+    return position;
   }
 
   getView() {
@@ -113,6 +165,33 @@ export class TwoDRenderer {
 
   getPerformanceSnapshot() {
     return this.panoramaRenderer.getPerformanceSnapshot();
+  }
+
+  getRenderResourceStats() {
+    return this.panoramaRenderer.getRenderResourceStats();
+  }
+
+  async preloadSceneTextures(scenes = []) {
+    return this.panoramaRenderer.preloadSceneTextures(scenes);
+  }
+
+  compactSceneResources(scene) {
+    const preserveSrcs = [scene?.media?.src, scene?.minimap_image].filter(Boolean);
+    this.panoramaRenderer.setPinnedTextureSources(preserveSrcs);
+    this.panoramaRenderer.evictTextures(preserveSrcs);
+    this.assetCache?.setPinnedImages?.(preserveSrcs);
+    this.assetCache?.trimImageCache?.({
+      preserveUrls: preserveSrcs,
+      maxEntries: Math.max(2, preserveSrcs.length)
+    });
+  }
+
+  waitForScenePresentation(transitionId) {
+    return this.panoramaRenderer.waitForScenePresentation(transitionId);
+  }
+
+  getCurrentSceneTransition() {
+    return this.panoramaRenderer.getCurrentSceneTransition();
   }
 
   applyView() {

@@ -19,10 +19,15 @@ export function mountEditor({ root, context }) {
   panel.mount();
 
   return {
+    draftStore,
+    placementController,
+    rightClickMenu,
+    panel,
     destroy() {
       rightClickMenu.destroy();
       placementController.destroy();
       panel.destroy();
+      draftStore.destroy();
     }
   };
 }

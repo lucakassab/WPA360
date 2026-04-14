@@ -94,6 +94,10 @@ noscript {
   min-width: 0;
 }
 
+.brand-copy {
+  min-width: 0;
+}
+
 .brand-mark {
   display: grid;
   width: 3.2rem;
@@ -139,11 +143,12 @@ p {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.75rem;
   min-width: 0;
 }
 
-.tour-picker {
+.topbar-picker {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -152,7 +157,14 @@ p {
   font-weight: 700;
 }
 
-.tour-picker select,
+.topbar-picker[title],
+.topbar-badge[title],
+.editor-section h3[title],
+.editor-panel label[title] {
+  cursor: help;
+}
+
+.topbar-picker select,
 .editor-panel input,
 .editor-panel select,
 .editor-panel textarea {
@@ -163,9 +175,24 @@ p {
   outline: none;
 }
 
-.tour-picker select {
-  max-width: min(44vw, 18rem);
+.topbar-picker select {
+  min-width: 0;
+  max-width: min(32vw, 15rem);
   padding: 0.7rem 2rem 0.7rem 0.9rem;
+}
+
+.topbar-button {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  padding: 0.72rem 1rem;
+  color: #0b2b33;
+  background: linear-gradient(135deg, #fff1bf, var(--accent));
+  font-weight: 850;
+  box-shadow: 0 14px 36px rgba(240, 168, 93, 0.2);
+}
+
+.topbar-button[hidden] {
+  display: none !important;
 }
 
 .platform-toggle {
@@ -189,6 +216,45 @@ p {
 .platform-toggle button.is-active {
   color: #0b2b33;
   background: linear-gradient(135deg, #ffe2a7, var(--accent));
+}
+
+.badge-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.badge-strip[hidden] {
+  display: none !important;
+}
+
+.topbar-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 2.35rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(6, 18, 22, 0.7);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.topbar-badge[data-state="positive"] {
+  color: #0b2b33;
+  background: linear-gradient(135deg, #fff0c8, var(--accent));
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.topbar-badge[data-state="muted"] {
+  color: var(--muted);
+  background: rgba(6, 18, 22, 0.52);
 }
 
 .runtime-root {
@@ -298,6 +364,46 @@ p {
 .scene-caption p {
   margin: 0;
   color: var(--muted);
+}
+
+.vr-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.vr-loading-overlay.is-visible {
+  opacity: 1;
+}
+
+.vr-loading-card {
+  display: grid;
+  gap: 0.4rem;
+  min-width: min(28rem, calc(100% - 2rem));
+  max-width: min(32rem, calc(100% - 2rem));
+  padding: 1rem 1.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 22px;
+  background: rgba(7, 17, 22, 0.86);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+}
+
+.vr-loading-card strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.vr-loading-card span {
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .hotspot-layer,
@@ -581,6 +687,10 @@ p {
   font-weight: 700;
 }
 
+.editor-field-label {
+  display: block;
+}
+
 .editor-panel input,
 .editor-panel select,
 .editor-panel textarea {
@@ -727,16 +837,26 @@ p {
 
   .topbar-actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
-  .tour-picker {
-    flex: 1;
+  .topbar-picker {
+    width: 100%;
   }
 
-  .tour-picker select {
+  .topbar-picker select {
     width: 100%;
     max-width: none;
+  }
+
+  .platform-toggle,
+  .topbar-button,
+  .badge-strip {
+    width: 100%;
+  }
+
+  .badge-strip {
+    justify-content: flex-start;
   }
 
   .runtime-root {

@@ -7,6 +7,7 @@ import { HotspotLoaderShared } from "../shared/HotspotLoaderShared.js";
 import { SceneLoaderShared } from "../shared/SceneLoaderShared.js";
 import { TourLoaderShared } from "../shared/TourLoaderShared.js";
 import { TourRegistryShared } from "../shared/TourRegistryShared.js";
+import { XrDebugTimeline } from "../shared/XrDebugTimeline.js";
 import { MinimapWidget } from "../ui/MinimapWidget.js";
 import { TwoDPlatformLauncher } from "../platform/2D_platform/TwoDPlatformLauncher.js";
 import { VRPlatformLauncher } from "../platform/VR_platform/VRPlatformLauncher.js";
@@ -15,7 +16,12 @@ export class AppKernel {
   constructor(elements) {
     this.elements = elements;
     this.store = new AppStateStore();
-    this.assetCache = new AssetCacheShared();
+    this.xrDebugEnabled = new URLSearchParams(window.location.search).get("debug_xr") === "1";
+    this.xrDebug = new XrDebugTimeline({
+      enabled: this.xrDebugEnabled,
+      contextProvider: () => this.getXrDebugContext()
+    });
+    this.assetCache = new AssetCacheShared({ xrDebug: this.xrDebug });
     this.platformSelector = new PlatformSelector();
     this.cfgLoader = new CfgLoaderShared({ assetCache: this.assetCache });
     this.registry = new TourRegistryShared({ assetCache: this.assetCache });
@@ -25,27 +31,38 @@ export class AppKernel {
       hotspotLoader: this.hotspotLoader
     });
     this.navigationInFlight = null;
+    this.editorTourCatalogCache = new Map();
+    this.backgroundWarmJobs = new WeakMap();
     this.sceneLoader = new SceneLoaderShared({
       assetCache: this.assetCache,
       hotspotLoader: this.hotspotLoader
     });
+    this.editorModule = null;
+    this.deferredInstallPrompt = null;
+    this.webxrSupportPromise = null;
 
     this.context = {
       store: this.store,
       assetCache: this.assetCache,
       getInputProfile: () => this.platformSelector.getInputProfile(),
       goToScene: (sceneId) => this.goToScene(sceneId),
+      loadTour: (tourId, options) => this.loadTour(tourId, options),
       goToRelativeScene: (step) => this.goToRelativeScene(step),
       goToRelativeTour: (step) => this.goToRelativeTour(step),
       switchPlatform: (platformId, options) => this.switchPlatform(platformId, options),
       exitVrMode: () => this.exitVrMode(),
       updateTourSettings: (patch) => this.updateTourSettings(patch),
       applyEditorDraft: (tour, sceneId) => this.applyEditorDraft(tour, sceneId),
+      goToHotspotTarget: (hotspot, options) => this.goToHotspotTarget(hotspot, options),
+      getEditorTourCatalog: (tourId) => this.getEditorTourCatalog(tourId),
       rerender: () => this.platformCoordinator.renderCurrent(),
       screenToWorldFromEvent: (event, options) => this.platformCoordinator.screenToWorldFromEvent(event, options),
       getActiveRenderer: () => this.platformCoordinator.getActiveRenderer(),
+      getEditorBridge: () => this.getEditorBridge(),
+      isEditorEnabled: () => Boolean(this.getEditorBridge()),
       getRuntimeRoot: () => this.elements.runtimeRoot,
       debugLog: (...args) => this.debugLog(...args),
+      xrDebug: this.xrDebug,
       setStatus: (message, options) => this.setStatus(message, options)
     };
 
@@ -62,12 +79,19 @@ export class AppKernel {
       root: elements.minimapRoot,
       assetCache: this.assetCache
     });
+
+    this.handleBeforeInstallPrompt = this.handleBeforeInstallPrompt.bind(this);
+    this.handleAppInstalled = this.handleAppInstalled.bind(this);
+    this.handleStandaloneModeChange = this.handleStandaloneModeChange.bind(this);
   }
 
   async start() {
     this.assertDom();
     this.setStatus("Loading project configuration...");
     this.bindStaticUi();
+    this.initializeUiHints();
+    this.xrDebug.attachWindowEvents();
+    this.xrDebug.log("app-start");
 
     const [cfg, master] = await Promise.all([
       this.cfgLoader.load(),
@@ -76,22 +100,28 @@ export class AppKernel {
 
     this.store.patch({ cfg, master });
     this.applyDocumentTitle(cfg);
+    this.applyChromeConfig(cfg);
     this.populateTourSelect(master, cfg);
 
     const initialTourId = this.getInitialTourId(master, cfg);
     await this.loadTour(initialTourId);
+    await this.maybeLoadEditor(cfg);
 
     const initialPlatform = await this.platformSelector.detectInitialPlatform(cfg);
-    await this.platformCoordinator.switchPlatform(initialPlatform, { userInitiated: false });
+    await this.switchPlatform(initialPlatform, { userInitiated: false });
     this.updatePlatformButtons(initialPlatform);
 
     this.store.subscribe((state) => {
       this.minimapWidget.render(state);
       this.updatePlatformButtons(state.platformId);
+      this.syncSceneSelect(state.currentTour, state.currentSceneId);
+      this.updatePlatformBadge(state.platformId);
     });
 
     await this.maybeRegisterServiceWorker(cfg);
-    await this.maybeLoadEditor(cfg);
+    await this.refreshCapabilityBadges();
+    this.updateInstallButton();
+    this.updateXrDebugButton();
 
     this.setStatus("Ready", { hideAfterMs: 1600 });
   }
@@ -110,10 +140,70 @@ export class AppKernel {
       this.loadTour(event.target.value).catch((error) => this.handleError(error));
     });
 
+    this.elements.sceneSelect?.addEventListener("change", (event) => {
+      this.goToScene(event.target.value).catch((error) => this.handleError(error));
+    });
+
     for (const button of this.elements.platformButtons) {
       button.addEventListener("click", () => {
         this.switchPlatform(button.dataset.platformSwitch, { userInitiated: true }).catch((error) => this.handleError(error));
       });
+    }
+
+    this.elements.installButton?.addEventListener("click", () => {
+      this.installPwa().catch((error) => this.handleError(error));
+    });
+
+    this.elements.xrDebugDownloadButton?.addEventListener("click", () => {
+      this.downloadXrDebugLog().catch((error) => this.handleError(error));
+    });
+
+    window.addEventListener("beforeinstallprompt", this.handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", this.handleAppInstalled);
+    this.standaloneMediaQuery = window.matchMedia?.("(display-mode: standalone)") ?? null;
+    this.standaloneMediaQuery?.addEventListener?.("change", this.handleStandaloneModeChange);
+  }
+
+  initializeUiHints() {
+    this.setElementHint(this.elements.tourSelect, {
+      title: "Escolha o tour virtual ativo.",
+      ariaLabel: "Selecionar tour virtual"
+    });
+    this.setElementHint(this.elements.sceneSelect, {
+      title: "Escolha a cena ativa do tour atual.",
+      ariaLabel: "Selecionar cena ativa"
+    });
+    this.setElementHint(this.elements.installButton, {
+      title: "Instale o tour como aplicativo para abrir com mais rapidez e suporte offline.",
+      ariaLabel: "Instalar aplicativo PWA"
+    });
+    this.setElementHint(this.elements.xrDebugDownloadButton, {
+      title: "Baixe o log XR da sessao atual para analise.",
+      ariaLabel: "Baixar log XR"
+    });
+
+    for (const button of this.elements.platformButtons ?? []) {
+      const isVrButton = button.dataset.platformSwitch === PLATFORM_VR;
+      this.setElementHint(button, {
+        title: isVrButton
+          ? "Ativar a visualizacao preparada para VR."
+          : "Ativar a visualizacao 2D do tour.",
+        ariaLabel: isVrButton ? "Alternar para o modo VR" : "Alternar para o modo 2D"
+      });
+    }
+  }
+
+  setElementHint(element, { title, ariaLabel } = {}) {
+    if (!element) {
+      return;
+    }
+
+    if (title) {
+      element.title = title;
+    }
+
+    if (ariaLabel) {
+      element.setAttribute("aria-label", ariaLabel);
     }
   }
 
@@ -128,6 +218,81 @@ export class AppKernel {
         return option;
       })
     );
+    this.refreshTourSelectHint();
+  }
+
+  syncSceneSelect(tour, selectedSceneId) {
+    const select = this.elements.sceneSelect;
+    if (!select) {
+      return;
+    }
+
+    const scenes = tour?.scenes ?? [];
+    select.disabled = scenes.length === 0;
+
+    const options = scenes.map((scene) => ({
+      value: scene.id,
+      label: scene.title || scene.id
+    }));
+
+    const signature = JSON.stringify({
+      selectedSceneId,
+      options
+    });
+
+    if (select.dataset.signature !== signature && document.activeElement !== select) {
+      select.replaceChildren(
+        ...options.map((option) => {
+          const element = document.createElement("option");
+          element.value = option.value;
+          element.textContent = option.label;
+          return element;
+        })
+      );
+      select.dataset.signature = signature;
+    }
+
+    if (selectedSceneId) {
+      select.value = selectedSceneId;
+    } else if (options.length > 0) {
+      select.value = options[0].value;
+    }
+
+    this.refreshSceneSelectHint(tour, select.value || selectedSceneId);
+  }
+
+  refreshTourSelectHint() {
+    const select = this.elements.tourSelect;
+    if (!select) {
+      return;
+    }
+
+    const activeOption = select.selectedOptions?.[0];
+    const label = activeOption?.textContent?.trim();
+    const title = label
+      ? `Tour ativo: ${label}. Use este seletor para trocar de tour.`
+      : "Escolha qual tour virtual abrir.";
+    this.setElementHint(select, {
+      title,
+      ariaLabel: label ? `Tour ativo ${label}. Selecionar outro tour.` : "Selecionar tour virtual"
+    });
+  }
+
+  refreshSceneSelectHint(tour, selectedSceneId) {
+    const select = this.elements.sceneSelect;
+    if (!select) {
+      return;
+    }
+
+    const activeScene = tour?.scenes?.find((scene) => scene.id === selectedSceneId) ?? null;
+    const label = activeScene?.title || activeScene?.id || "";
+    const title = label
+      ? `Cena ativa: ${label}. Use este seletor para navegar entre as cenas do tour atual.`
+      : "Escolha a cena ativa do tour atual.";
+    this.setElementHint(select, {
+      title,
+      ariaLabel: label ? `Cena ativa ${label}. Selecionar outra cena.` : "Selecionar cena ativa"
+    });
   }
 
   getInitialTourId(master, cfg) {
@@ -139,7 +304,7 @@ export class AppKernel {
       ?? master.tours[0]?.id;
   }
 
-  async loadTour(tourId) {
+  async loadTour(tourId, { sceneId = null, navigationHotspot = null } = {}) {
     const state = this.store.getSnapshot();
     const entry = this.registry.findTour(state.master, tourId);
     if (!entry) {
@@ -148,31 +313,106 @@ export class AppKernel {
 
     this.setStatus(`Loading ${entry.title}...`);
     this.store.patch({ isLoading: true, error: null });
-
-    const tour = await this.tourLoader.load(entry);
-    await this.assetCache.preloadTourSceneMedia(tour, state.cfg);
-    const scene = await this.sceneLoader.loadScene(tour, tour.initial_scene, state.cfg);
-
-    this.elements.tourSelect.value = entry.id;
-    this.store.patch({
-      currentTourEntry: entry,
-      currentTour: tour,
-      currentScene: scene,
-      currentSceneId: scene.id,
-      isLoading: false
+    const activeRenderer = this.platformCoordinator.getActiveRenderer();
+    let handoffLoadingToRenderer = false;
+    let loadSucceeded = false;
+    activeRenderer?.setLoadingState?.({
+      visible: true,
+      title: "Carregando tour...",
+      detail: entry.title ?? entry.id ?? "Preparando tour"
     });
+    await activeRenderer?.flushLoadingUi?.();
 
-    this.applyTourTitle(tour, scene);
-    await this.platformCoordinator.renderCurrent();
+    try {
+      const tour = await this.tourLoader.load(entry);
+      const requestedSceneId = tour.scenes?.some((candidate) => candidate.id === sceneId)
+        ? sceneId
+        : tour.initial_scene;
+      await this.prepareTourAssets(tour, state.cfg, {
+        reason: "load-tour",
+        prioritySceneId: requestedSceneId
+      });
+      const shouldDeferMediaLoad = state.platformId === PLATFORM_2D;
+      const scene = await this.sceneLoader.loadScene(tour, requestedSceneId, state.cfg, {
+        preloadAssets: shouldDeferMediaLoad ? false : undefined
+      });
+      const renderOptions = resolveSceneOrientationOptions(scene, navigationHotspot);
+      this.xrDebug.log("navigation-scene-loaded", {
+        sceneId: scene.id,
+        src: scene?.media?.src ?? null,
+        details: {
+          reason: "load-tour"
+        }
+      });
+
+      this.elements.tourSelect.value = entry.id;
+      this.refreshTourSelectHint();
+      this.store.patch({
+        currentTourEntry: entry,
+        currentTour: tour,
+        currentScene: scene,
+        currentSceneId: scene.id
+      });
+      this.editorTourCatalogCache.set(entry.id, {
+        tourId: tour.id ?? entry.id,
+        title: tour.title ?? entry.title ?? entry.id,
+        scenes: (tour.scenes ?? []).map((candidate) => ({
+          id: candidate.id,
+          title: candidate.title || candidate.id
+        }))
+      });
+
+      this.syncSceneSelect(tour, scene.id);
+      this.applyTourTitle(tour, scene);
+      this.xrDebug.log("navigation-render-start", {
+        sceneId: scene.id,
+        src: scene?.media?.src ?? null,
+        details: {
+          reason: "load-tour",
+          orientationSource: renderOptions.orientationSource
+        }
+      });
+      const renderResult = await this.platformCoordinator.renderCurrent(renderOptions);
+      const presentationResult = await this.awaitRendererScenePresentation(activeRenderer, renderResult, {
+        reason: "load-tour",
+        sceneId: scene.id
+      });
+      this.xrDebug.log("navigation-render-complete", {
+        transitionId: renderResult?.transitionId ?? presentationResult?.transitionId ?? null,
+        sceneId: scene.id,
+        src: scene?.media?.src ?? null,
+        details: {
+          reason: "load-tour",
+          renderTransitionId: renderResult?.transitionId ?? null,
+          presentationState: presentationResult?.state ?? null
+        }
+      });
+      handoffLoadingToRenderer = Boolean(activeRenderer?.setLoadingState && presentationResult);
+      this.store.patch({ isLoading: false });
+      loadSucceeded = true;
+    } finally {
+      if (!loadSucceeded || !handoffLoadingToRenderer) {
+        activeRenderer?.setLoadingState?.({ visible: false });
+      }
+    }
   }
 
-  async goToScene(sceneId) {
+  async goToScene(sceneId, { navigationHotspot = null } = {}) {
     const state = this.store.getSnapshot();
     this.debugLog("navigation:request", {
       from: state.currentSceneId,
       to: sceneId,
       tour: state.currentTour?.id,
       platform: state.platformId
+    });
+    this.xrDebug.log("navigation-request", {
+      sceneId,
+      details: {
+        from: state.currentSceneId,
+        to: sceneId,
+        tourId: state.currentTour?.id ?? null,
+        platformId: state.platformId
+      }
     });
 
     if (!state.currentTour) {
@@ -202,27 +442,98 @@ export class AppKernel {
     }
 
     this.navigationInFlight = sceneId;
+    const activeRenderer = this.platformCoordinator.getActiveRenderer();
+    let handoffLoadingToRenderer = false;
+    let navigationSucceeded = false;
 
     try {
       this.setStatus(`Loading scene ${sceneId}...`);
-      const scene = await this.sceneLoader.loadScene(state.currentTour, sceneId, state.cfg);
+      const targetScene = state.currentTour.scenes?.find((scene) => scene.id === sceneId) ?? null;
+      const renderOptions = resolveSceneOrientationOptions(targetScene, navigationHotspot);
+      const shouldUseVrDeferredMediaLoad = this.shouldUseVrDeferredMediaLoad(state, targetScene);
+      if (shouldUseVrDeferredMediaLoad) {
+        activeRenderer?.setLoadingState?.({
+          visible: true,
+          title: "Carregando panorama...",
+          detail: targetScene?.title ?? sceneId
+        });
+        await activeRenderer?.flushLoadingUi?.();
+      }
+
+      const shouldDeferMediaLoad = shouldUseVrDeferredMediaLoad || state.platformId === PLATFORM_2D;
+      const scene = await this.sceneLoader.loadScene(
+        state.currentTour,
+        sceneId,
+        state.cfg,
+        { preloadAssets: shouldDeferMediaLoad ? false : undefined }
+      );
+      this.xrDebug.log("navigation-scene-loaded", {
+        sceneId: scene.id,
+        src: scene?.media?.src ?? null,
+        details: {
+          reason: "go-to-scene",
+          deferredMediaLoad: shouldUseVrDeferredMediaLoad
+        }
+      });
       this.store.patch({
         currentScene: scene,
         currentSceneId: scene.id
       });
 
+      this.syncSceneSelect(state.currentTour, scene.id);
       this.applyTourTitle(state.currentTour, scene);
-      await this.platformCoordinator.renderCurrent();
+      this.xrDebug.log("navigation-render-start", {
+        sceneId: scene.id,
+        src: scene?.media?.src ?? null,
+        details: {
+          reason: "go-to-scene",
+          orientationSource: renderOptions.orientationSource
+        }
+      });
+      const renderResult = await this.platformCoordinator.renderCurrent(renderOptions);
+      const presentationResult = await this.awaitRendererScenePresentation(activeRenderer, renderResult, {
+        reason: "go-to-scene",
+        sceneId: scene.id
+      });
+      this.xrDebug.log("navigation-render-complete", {
+        transitionId: renderResult?.transitionId ?? presentationResult?.transitionId ?? null,
+        sceneId: scene.id,
+        src: scene?.media?.src ?? null,
+        details: {
+          reason: "go-to-scene",
+          renderTransitionId: renderResult?.transitionId ?? null,
+          presentationState: presentationResult?.state ?? null
+        }
+      });
+      handoffLoadingToRenderer = Boolean(activeRenderer?.setLoadingState && presentationResult);
+      const preloadMode = this.getScenePreloadMode(state.cfg);
+      if (preloadMode === "selective" || preloadMode === "minimal" || preloadMode === "hybrid") {
+        this.prepareTourAssets(state.currentTour, state.cfg, {
+          reason: "scene-change",
+          prioritySceneId: scene.id
+        }).catch((preloadError) => {
+          console.warn("[WPA360] background scene preload failed", preloadError);
+        });
+      }
       this.debugLog("navigation:complete", {
         from: state.currentSceneId,
         to: scene.id,
-        title: scene.title
+        title: scene.title,
+        orientationSource: renderOptions.orientationSource,
+        entryYaw: renderOptions.entryYaw
       });
       this.setStatus(`Scene: ${scene.title ?? scene.id}`, { hideAfterMs: 1200 });
+      navigationSucceeded = true;
+      if (!handoffLoadingToRenderer) {
+        activeRenderer?.setLoadingState?.({ visible: false });
+      }
     } catch (error) {
       this.debugLog("navigation:error", { targetSceneId: sceneId, error });
       throw error;
     } finally {
+      if (!navigationSucceeded || !handoffLoadingToRenderer) {
+        activeRenderer?.setLoadingState?.({ visible: false });
+      }
       if (this.navigationInFlight === sceneId) {
         this.navigationInFlight = null;
       }
@@ -265,6 +576,55 @@ export class AppKernel {
     await this.loadTour(nextTour.id);
   }
 
+  async goToHotspotTarget(hotspot, { source = "runtime" } = {}) {
+    const targetSceneId = String(hotspot?.target_scene ?? "").trim();
+    if (!targetSceneId) {
+      this.debugLog("navigation:blocked:no-hotspot-target-scene", {
+        source,
+        hotspotId: hotspot?.id ?? null
+      });
+      return;
+    }
+
+    const state = this.store.getSnapshot();
+    const currentTourId = state.currentTourEntry?.id ?? state.currentTour?.id ?? null;
+    const targetTourId = String(hotspot?.target_tour ?? currentTourId ?? "").trim() || currentTourId;
+
+    this.debugLog("navigation:hotspot-target", {
+      source,
+      hotspotId: hotspot?.id ?? null,
+      targetTourId,
+      targetSceneId,
+      applyHotspotSceneYaw: hotspot?.apply_hotspot_scene_yaw === true,
+      hotspotSceneYaw: Number(hotspot?.hotspot_define_scene_yaw ?? 0)
+    });
+    this.xrDebug.log("hotspot-activate", {
+      sceneId: targetSceneId,
+      details: {
+        source,
+        hotspotId: hotspot?.id ?? null,
+        hotspotLabel: hotspot?.label?.text ?? null,
+        targetTourId,
+        targetSceneId,
+        applyHotspotSceneYaw: hotspot?.apply_hotspot_scene_yaw === true
+      }
+    });
+
+    if (!targetTourId || targetTourId === currentTourId) {
+      await this.goToScene(targetSceneId, { navigationHotspot: hotspot });
+      return;
+    }
+
+    const targetEntry = state.master?.tours?.find((candidate) => candidate.id === targetTourId) ?? null;
+    if (!targetEntry) {
+      const message = `Hotspot target tour not found: ${targetTourId}`;
+      this.setStatus(message, { hideAfterMs: 2400 });
+      throw new Error(message);
+    }
+
+    await this.loadTour(targetEntry.id, { sceneId: targetSceneId, navigationHotspot: hotspot });
+  }
+
   async exitVrMode() {
     const renderer = this.platformCoordinator.getActiveRenderer();
     if (renderer?.isPresenting?.() && renderer?.exitImmersive) {
@@ -287,7 +647,21 @@ export class AppKernel {
     }
 
     this.setStatus(`Switching to ${platformId}...`);
-    await this.platformCoordinator.switchPlatform(platformId, { userInitiated });
+    await this.platformCoordinator.switchPlatform(platformId, {
+      userInitiated,
+      deferRender: true
+    });
+    const state = this.store.getSnapshot();
+    await this.prepareActiveRendererForTour(state.currentTour, state.cfg, {
+      reason: platformId === PLATFORM_VR ? "enter-vr" : `switch-${platformId}`,
+      prioritySceneId: state.currentSceneId
+    });
+    const activeRenderer = this.platformCoordinator.getActiveRenderer();
+    const renderResult = await this.platformCoordinator.renderCurrent({ userInitiated });
+    await this.awaitRendererScenePresentation(activeRenderer, renderResult, {
+      reason: "switch-platform",
+      sceneId: state.currentSceneId
+    });
     this.setStatus(`${platformId} active`, { hideAfterMs: 1200 });
   }
 
@@ -317,17 +691,51 @@ export class AppKernel {
       return;
     }
 
+    const targetSceneId = sceneId ?? tour.initial_scene;
+    const currentSceneId = state.currentSceneId;
+    const isCurrentSceneDraftUpdate = currentSceneId && targetSceneId === currentSceneId;
+
+    if (isCurrentSceneDraftUpdate) {
+      const requestedScene = tour.scenes?.find((candidate) => candidate.id === targetSceneId) ?? null;
+      if (requestedScene) {
+        const nextScene = {
+          ...requestedScene,
+          hotspots: this.hotspotLoader.normalizeHotspots(requestedScene.hotspots, requestedScene),
+          minimap_image: requestedScene.minimap_image || null,
+          media_available: state.currentScene?.media_available ?? true
+        };
+
+        this.store.patch({
+          currentTour: tour,
+          currentScene: nextScene,
+          currentSceneId: nextScene.id
+        });
+        this.syncSceneSelect(tour, nextScene.id);
+        this.applyTourTitle(tour, nextScene);
+        await this.platformCoordinator.renderCurrent();
+        return;
+      }
+    }
+
+    this.editorDraftApplyToken = (this.editorDraftApplyToken ?? 0) + 1;
+    const applyToken = this.editorDraftApplyToken;
+
     const nextScene = await this.sceneLoader.loadScene(
       tour,
-      sceneId ?? tour.initial_scene,
+      targetSceneId,
       state.cfg
     );
+
+    if (applyToken !== this.editorDraftApplyToken) {
+      return;
+    }
 
     this.store.patch({
       currentTour: tour,
       currentScene: nextScene,
       currentSceneId: nextScene.id
     });
+    this.syncSceneSelect(tour, nextScene.id);
     this.applyTourTitle(tour, nextScene);
     await this.platformCoordinator.renderCurrent();
   }
@@ -345,8 +753,34 @@ export class AppKernel {
 
   updatePlatformButtons(platformId) {
     for (const button of this.elements.platformButtons) {
-      button.classList.toggle("is-active", button.dataset.platformSwitch === platformId);
+      const isActive = button.dataset.platformSwitch === platformId;
+      const isVrButton = button.dataset.platformSwitch === PLATFORM_VR;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      button.title = isActive
+        ? `${isVrButton ? "Modo VR" : "Modo 2D"} ativo.`
+        : `Alternar para ${isVrButton ? "o modo VR" : "o modo 2D"}.`;
     }
+  }
+
+  updatePlatformBadge(platformId) {
+    const badge = this.elements.platformBadge;
+    if (!badge || badge.dataset.uiEnabled === "false") {
+      return;
+    }
+
+    const label = platformId === PLATFORM_VR
+      ? "Plataforma: VR"
+      : platformId === PLATFORM_2D
+        ? "Plataforma: 2D"
+        : "Plataforma: Auto";
+
+    badge.textContent = label;
+    badge.title = `${label}. Informa qual plataforma de execucao esta ativa agora.`;
+    badge.setAttribute("aria-label", label);
+    badge.hidden = false;
+    badge.dataset.state = platformId === PLATFORM_VR ? "positive" : "neutral";
+    this.updateBadgeStripVisibility();
   }
 
   async maybeRegisterServiceWorker(cfg) {
@@ -361,17 +795,330 @@ export class AppKernel {
     }
   }
 
+  applyChromeConfig(cfg) {
+    const chrome = cfg?.ui?.chrome ?? {};
+    this.setUiItemVisibility("brand-mark", chrome.show_brand_mark !== false);
+    this.setUiItemVisibility("brand-name", chrome.show_brand_name !== false);
+    this.setUiItemVisibility("scene-select", chrome.show_scene_select !== false);
+    this.setUiItemVisibility("pwa-install-button", chrome.show_pwa_install_button !== false);
+    this.primeBadgeItem(this.elements.platformBadge, chrome.show_platform_badge !== false);
+    this.primeBadgeItem(this.elements.webxrBadge, chrome.show_webxr_badge !== false);
+    this.primeBadgeItem(this.elements.pwaBadge, chrome.show_pwa_badge !== false);
+    this.primeBadgeItem(this.elements.serviceWorkerBadge, chrome.show_service_worker_badge !== false);
+    this.primeBadgeItem(this.elements.inputBadge, chrome.show_input_badge !== false);
+    this.primeBadgeItem(this.elements.standaloneBadge, chrome.show_standalone_badge !== false);
+    this.updateInstallButton();
+    this.updateBadgeStripVisibility();
+  }
+
+  setUiItemVisibility(itemName, isVisible) {
+    const item = this.elements.uiItems?.find((candidate) => candidate.dataset.uiItem === itemName);
+    if (!item) {
+      return;
+    }
+    item.hidden = !isVisible;
+  }
+
+  primeBadgeItem(item, isEnabled) {
+    if (!item) {
+      return;
+    }
+
+    item.dataset.uiEnabled = isEnabled ? "true" : "false";
+    if (!isEnabled) {
+      item.hidden = true;
+      item.textContent = "";
+      item.title = "";
+      item.removeAttribute("aria-label");
+      return;
+    }
+
+    if (!String(item.textContent ?? "").trim()) {
+      item.hidden = true;
+    }
+  }
+
+  handleBeforeInstallPrompt(event) {
+    event.preventDefault();
+    this.deferredInstallPrompt = event;
+    this.updateInstallButton();
+    this.refreshCapabilityBadges().catch((error) => {
+      console.warn("[WPA360] capability refresh failed after beforeinstallprompt", error);
+    });
+  }
+
+  handleAppInstalled() {
+    this.deferredInstallPrompt = null;
+    this.updateInstallButton();
+    this.refreshCapabilityBadges().catch((error) => {
+      console.warn("[WPA360] capability refresh failed after appinstalled", error);
+    });
+  }
+
+  handleStandaloneModeChange() {
+    this.updateInstallButton();
+    this.refreshCapabilityBadges().catch((error) => {
+      console.warn("[WPA360] capability refresh failed after display-mode change", error);
+    });
+  }
+
+  async installPwa() {
+    if (!this.deferredInstallPrompt) {
+      this.setStatus("A instalacao PWA nao esta disponivel neste momento.", { hideAfterMs: 1800 });
+      return;
+    }
+
+    const installPrompt = this.deferredInstallPrompt;
+    this.deferredInstallPrompt = null;
+    this.updateInstallButton();
+
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice.catch(() => null);
+
+    if (choice?.outcome === "accepted") {
+      this.setStatus("Instalacao do app iniciada.", { hideAfterMs: 1800 });
+    } else {
+      this.setStatus("Instalacao do app cancelada.", { hideAfterMs: 1800 });
+    }
+
+    await this.refreshCapabilityBadges();
+    this.updateInstallButton();
+  }
+
+  updateInstallButton() {
+    const button = this.elements.installButton;
+    const cfg = this.store.getSnapshot().cfg;
+    if (!button) {
+      return;
+    }
+
+    const visibleByConfig = cfg?.ui?.chrome?.show_pwa_install_button !== false;
+    const canInstall = visibleByConfig && this.canInstallPwa();
+
+    button.hidden = !canInstall;
+    button.disabled = !canInstall;
+    button.title = canInstall
+      ? "Instale o tour como aplicativo para abrir mais rapido e usar melhor o modo offline."
+      : "A instalacao PWA nao esta disponivel no ambiente atual.";
+    button.setAttribute("aria-label", canInstall ? "Instalar aplicativo PWA" : "Instalacao PWA indisponivel");
+  }
+
+  updateXrDebugButton() {
+    const button = this.elements.xrDebugDownloadButton;
+    if (!button) {
+      return;
+    }
+
+    const enabled = this.xrDebug?.isEnabled?.() === true;
+    button.hidden = !enabled;
+    button.disabled = !enabled;
+    button.title = enabled
+      ? "Baixar o log XR da sessao atual para compartilhar na analise."
+      : "O download do log XR so fica disponivel quando ?debug_xr=1 esta ativo.";
+    button.setAttribute("aria-label", enabled ? "Baixar log XR" : "Download de log XR indisponivel");
+  }
+
+  async downloadXrDebugLog() {
+    if (!this.xrDebug?.isEnabled?.()) {
+      this.setStatus("Ative ?debug_xr=1 para baixar o log XR.", { hideAfterMs: 1800 });
+      return;
+    }
+
+    const dump = this.xrDebug.dump();
+    const payload = JSON.stringify(dump, null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const state = this.store.getSnapshot();
+    anchor.href = url;
+    anchor.download = `wpa360-xr-debug-${sanitizeFileToken(state.currentTour?.id ?? "tour")}-${sanitizeFileToken(state.currentSceneId ?? "scene")}-${createFileTimestamp()}.json`;
+    anchor.rel = "noopener";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    this.setStatus("Log XR baixado.", { hideAfterMs: 1800 });
+  }
+
+  canInstallPwa() {
+    return Boolean(this.deferredInstallPrompt) && !this.isRunningStandalone();
+  }
+
+  isRunningStandalone() {
+    return Boolean(
+      this.standaloneMediaQuery?.matches
+      || window.navigator?.standalone === true
+    );
+  }
+
+  async refreshCapabilityBadges() {
+    const cfg = this.store.getSnapshot().cfg;
+    if (!cfg) {
+      return;
+    }
+
+    const inputProfile = this.platformSelector.getInputProfile();
+    const webxrSupported = await this.detectWebxrSupport();
+
+    this.updateCapabilityBadge(this.elements.webxrBadge, cfg?.ui?.chrome?.show_webxr_badge !== false, {
+      label: webxrSupported ? "WebXR pronto" : "Sem WebXR",
+      state: webxrSupported ? "positive" : "muted",
+      title: webxrSupported
+        ? "WebXR imersivo detectado e pronto para uso neste navegador."
+        : "Este navegador ou dispositivo nao expôs suporte a WebXR imersivo."
+    });
+
+    this.updateCapabilityBadge(this.elements.pwaBadge, cfg?.ui?.chrome?.show_pwa_badge !== false, {
+      label: this.isRunningStandalone()
+        ? "PWA ativo"
+        : this.canInstallPwa()
+          ? "PWA instalavel"
+          : "PWA web",
+      state: this.isRunningStandalone() || this.canInstallPwa() ? "positive" : "neutral",
+      title: this.isRunningStandalone()
+        ? "O tour esta rodando como aplicativo instalado."
+        : this.canInstallPwa()
+          ? "O tour pode ser instalado como aplicativo PWA neste dispositivo."
+          : "O tour esta rodando apenas no navegador, sem instalacao disponivel agora."
+    });
+
+    this.updateCapabilityBadge(this.elements.serviceWorkerBadge, cfg?.ui?.chrome?.show_service_worker_badge !== false, {
+      label: "serviceWorker" in navigator ? "SW suportado" : "Sem SW",
+      state: "serviceWorker" in navigator ? "positive" : "muted",
+      title: "serviceWorker" in navigator
+        ? "O navegador suporta service worker para cache e funcionamento offline."
+        : "O navegador atual nao suporta service worker."
+    });
+
+    this.updateCapabilityBadge(this.elements.inputBadge, cfg?.ui?.chrome?.show_input_badge !== false, {
+      label: inputProfile.coarse ? "Input touch" : "Input mouse",
+      state: "neutral",
+      title: inputProfile.coarse
+        ? "Perfil de entrada detectado: toque ou dispositivo com ponteiro impreciso."
+        : "Perfil de entrada detectado: mouse ou ponteiro preciso."
+    });
+
+    this.updateCapabilityBadge(this.elements.standaloneBadge, cfg?.ui?.chrome?.show_standalone_badge !== false, {
+      label: this.isRunningStandalone() ? "Modo app" : "Modo browser",
+      state: this.isRunningStandalone() ? "positive" : "neutral",
+      title: this.isRunningStandalone()
+        ? "A interface esta aberta como aplicativo independente."
+        : "A interface esta aberta no navegador."
+    });
+
+    this.updateBadgeStripVisibility();
+  }
+
+  async detectWebxrSupport() {
+    if (!this.webxrSupportPromise) {
+      this.webxrSupportPromise = navigator.xr?.isSessionSupported
+        ? navigator.xr.isSessionSupported("immersive-vr").catch(() => false)
+        : Promise.resolve(false);
+    }
+
+    return this.webxrSupportPromise;
+  }
+
+  updateCapabilityBadge(element, isEnabled, { label, state = "neutral", title = "" }) {
+    if (!element) {
+      return;
+    }
+
+    element.dataset.uiEnabled = isEnabled ? "true" : "false";
+    element.hidden = !isEnabled;
+    if (!isEnabled) {
+      element.textContent = "";
+      element.title = "";
+      element.removeAttribute("aria-label");
+      return;
+    }
+
+    element.textContent = label;
+    element.title = title || label;
+    element.setAttribute("aria-label", label);
+    element.hidden = false;
+    element.dataset.state = state;
+  }
+
+  updateBadgeStripVisibility() {
+    const root = this.elements.badgesRoot;
+    if (!root) {
+      return;
+    }
+
+    const hasVisibleBadge = Array.from(root.children).some((child) => {
+      return !child.hidden && String(child.textContent ?? "").trim().length > 0;
+    });
+    root.hidden = !hasVisibleBadge;
+  }
+
   async maybeLoadEditor(cfg) {
     const params = new URLSearchParams(window.location.search);
     if (params.get("editor") !== "1" || cfg?.features?.editor === false) {
       return;
     }
 
+    if (this.editorModule) {
+      return this.editorModule;
+    }
+
     const { mountEditor } = await import("../editor/EditorModule.js");
-    mountEditor({
+    this.editorModule = mountEditor({
       root: this.elements.editorRoot,
       context: this.context
     });
+    return this.editorModule;
+  }
+
+  getEditorBridge() {
+    if (!this.editorModule) {
+      return null;
+    }
+
+    return {
+      draftStore: this.editorModule.draftStore,
+      placementController: this.editorModule.placementController
+    };
+  }
+
+  async getEditorTourCatalog(tourId) {
+    const state = this.store.getSnapshot();
+    const normalizedTourId = String(tourId ?? "").trim();
+    if (!normalizedTourId) {
+      return null;
+    }
+
+    if (state.currentTour && (state.currentTour.id === normalizedTourId || state.currentTourEntry?.id === normalizedTourId)) {
+      return {
+        tourId: state.currentTour.id ?? normalizedTourId,
+        title: state.currentTour.title ?? normalizedTourId,
+        scenes: (state.currentTour.scenes ?? []).map((scene) => ({
+          id: scene.id,
+          title: scene.title || scene.id
+        }))
+      };
+    }
+
+    if (this.editorTourCatalogCache.has(normalizedTourId)) {
+      return this.editorTourCatalogCache.get(normalizedTourId);
+    }
+
+    const entry = state.master?.tours?.find((candidate) => candidate.id === normalizedTourId) ?? null;
+    if (!entry) {
+      return null;
+    }
+
+    const tour = await this.tourLoader.load(entry);
+    const catalog = {
+      tourId: tour.id ?? entry.id,
+      title: tour.title ?? entry.title ?? entry.id,
+      scenes: (tour.scenes ?? []).map((scene) => ({
+        id: scene.id,
+        title: scene.title || scene.id
+      }))
+    };
+    this.editorTourCatalogCache.set(normalizedTourId, catalog);
+    return catalog;
   }
 
   setStatus(message, { hideAfterMs = 0 } = {}) {
@@ -395,6 +1142,359 @@ export class AppKernel {
     console.debug("[WPA360]", eventName, payload);
   }
 
+  async prepareTourAssets(tour, cfg, { reason = "runtime", prioritySceneId = null } = {}) {
+    const preloadMode = this.getScenePreloadMode(cfg);
+    const platformId = this.store.getSnapshot().platformId ?? null;
+    const allowDecodedScenePreload = platformId !== PLATFORM_2D && platformId != null;
+    const preloadScenes = this.resolvePreloadScenesForTour(tour, prioritySceneId, cfg);
+    if (!tour?.scenes?.length) {
+      return {
+        preloadMode,
+        imageCount: 0,
+        failedSceneCount: 0,
+        textureCount: 0
+      };
+    }
+
+    if (preloadMode === "hybrid") {
+      this.startBackgroundTourWarm(tour, cfg, { reason });
+    }
+
+    this.assetCache.setPinnedImages(
+      allowDecodedScenePreload
+        ? this.collectPinnedAssetSources(preloadScenes, cfg)
+        : []
+    );
+    this.debugLog("scene-preload:start", {
+      reason,
+      tourId: tour.id ?? null,
+      prioritySceneId,
+      preloadMode,
+      sceneIds: preloadScenes.map((scene) => scene.id),
+      strategy: allowDecodedScenePreload ? "decoded-preload" : "network-only"
+    });
+
+    if (preloadMode === "none" || preloadScenes.length === 0 || !allowDecodedScenePreload) {
+      const textureResults = await this.prepareActiveRendererForTour(tour, cfg, {
+        reason,
+        prioritySceneId
+      });
+      this.debugLog("scene-preload:complete", {
+        reason,
+        tourId: tour.id ?? null,
+        sceneCount: 0,
+        failedSceneCount: 0,
+        preloadMode,
+        strategy: allowDecodedScenePreload ? "decoded-preload" : "network-only"
+      });
+      return {
+        preloadMode,
+        imageCount: 0,
+        failedSceneCount: 0,
+        textureCount: textureResults.length
+      };
+    }
+
+    let scenePreloadErrors = [];
+    try {
+      scenePreloadErrors = await this.sceneLoader.preloadScenes(
+        tour,
+        preloadScenes.map((scene) => scene.id),
+        cfg,
+        { prioritySceneId }
+      );
+      this.debugLog("scene-preload:complete", {
+        reason,
+        tourId: tour.id ?? null,
+        sceneCount: preloadScenes.length,
+        failedSceneCount: scenePreloadErrors.length,
+        preloadMode
+      });
+    } catch (error) {
+      console.warn("[WPA360] scene preload failed", error);
+      this.debugLog("scene-preload:error", {
+        reason,
+        tourId: tour.id ?? null,
+        preloadMode,
+        error: error?.message ?? String(error)
+      });
+      throw error;
+    }
+
+    const textureResults = await this.prepareActiveRendererForTour(tour, cfg, {
+      reason,
+      prioritySceneId
+    });
+    return {
+      preloadMode,
+      imageCount: this.collectSceneMediaSources(preloadScenes).length,
+      failedSceneCount: scenePreloadErrors.length,
+      textureCount: textureResults.length
+    };
+  }
+
+  async prepareActiveRendererForTour(tour, cfg, { reason = "runtime", prioritySceneId = null } = {}) {
+    const renderer = this.platformCoordinator.getActiveRenderer();
+    if (!renderer?.preloadSceneTextures || !tour?.scenes?.length) {
+      return [];
+    }
+
+    const platformId = this.store.getSnapshot().platformId ?? null;
+    if (platformId === PLATFORM_2D && reason === "scene-change") {
+      this.debugLog("renderer-texture-preload:skipped", {
+        reason,
+        tourId: tour.id ?? null,
+        platformId,
+        skipReason: "2d-scene-change-background-preload"
+      });
+      return [];
+    }
+
+    const preloadMode = this.getScenePreloadMode(cfg);
+    const scenes = this.resolvePreloadScenesForTour(tour, prioritySceneId, cfg);
+
+    this.debugLog("renderer-texture-preload:start", {
+      reason,
+      tourId: tour.id ?? null,
+      platformId,
+      sceneCount: scenes.length,
+      preloadMode,
+      sceneIds: scenes.map((scene) => scene.id)
+    });
+
+    const results = await renderer.preloadSceneTextures(scenes);
+    this.debugLog("renderer-texture-preload:complete", {
+      reason,
+      tourId: tour.id ?? null,
+      preloadMode,
+      readyTextureCount: results.filter((result) => result?.status === "ready").length,
+      skippedTextureCount: results.filter((result) => result?.status !== "ready").length
+    });
+    return results;
+  }
+
+  getScenePreloadMode(cfg) {
+    const configuredMode = String(cfg?.asset_cache?.preload_mode ?? "").trim().toLowerCase();
+    if (
+      configuredMode === "full"
+      || configuredMode === "selective"
+      || configuredMode === "minimal"
+      || configuredMode === "hybrid"
+      || configuredMode === "none"
+    ) {
+      return configuredMode;
+    }
+
+    return cfg?.asset_cache?.preload_tour_scene_media === true ? "full" : "none";
+  }
+
+  shouldUseVrDeferredMediaLoad(state, scene) {
+    return state?.platformId === PLATFORM_VR && isStereoMediaScene(scene);
+  }
+
+  async awaitRendererScenePresentation(renderer, renderResult, { reason = "runtime", sceneId = null } = {}) {
+    if (!renderer?.waitForScenePresentation) {
+      return null;
+    }
+
+    const transitionId = renderResult?.transitionId
+      ?? renderer.getCurrentSceneTransition?.()?.transitionId
+      ?? null;
+    if (!transitionId) {
+      return null;
+    }
+
+    this.xrDebug.log("scene-presentation-wait-start", {
+      transitionId,
+      sceneId,
+      details: {
+        reason
+      }
+    });
+    const result = await renderer.waitForScenePresentation(transitionId);
+    this.debugLog("scene-presentation:complete", {
+      reason,
+      platform: this.store.getSnapshot().platformId ?? null,
+      sceneId: result?.sceneId ?? sceneId ?? null,
+      transitionId,
+      state: result?.state ?? null,
+      presented: result?.presented === true,
+      frameSource: result?.frameSource ?? null
+    });
+    this.xrDebug.log("scene-presentation-wait-complete", {
+      transitionId,
+      sceneId: result?.sceneId ?? sceneId ?? null,
+      src: result?.src ?? null,
+      details: {
+        reason,
+        state: result?.state ?? null,
+        presented: result?.presented === true,
+        frameSource: result?.frameSource ?? null
+      }
+    });
+    return result;
+  }
+
+  resolvePreloadScenesForTour(tour, currentSceneId = null, cfg = null) {
+    const scenes = tour?.scenes ?? [];
+    if (scenes.length === 0) {
+      return [];
+    }
+
+    const preloadMode = this.getScenePreloadMode(cfg);
+    if (preloadMode === "full") {
+      return [...scenes];
+    }
+
+    if (preloadMode === "none") {
+      return [];
+    }
+
+    const currentScene = scenes.find((scene) => scene.id === currentSceneId) ?? scenes[0] ?? null;
+    if (!currentScene) {
+      return [];
+    }
+
+    const nextSceneIds = this.collectLinkedSceneIdsForPreload(currentScene, tour);
+    const linkedSceneLimit = preloadMode === "minimal"
+      ? 1
+      : preloadMode === "hybrid"
+        ? Math.max(0, this.getHybridResidentSceneLimit(cfg) - 1)
+        : nextSceneIds.length;
+    const limitedLinkedSceneIds = nextSceneIds.slice(0, linkedSceneLimit);
+    const orderedSceneIds = [currentScene.id, ...limitedLinkedSceneIds];
+    const seenIds = new Set();
+
+    return orderedSceneIds
+      .filter((sceneId) => {
+        if (!sceneId || seenIds.has(sceneId)) {
+          return false;
+        }
+        seenIds.add(sceneId);
+        return true;
+      })
+      .map((sceneId) => scenes.find((scene) => scene.id === sceneId) ?? null)
+      .filter(Boolean);
+  }
+
+  getHybridResidentSceneLimit(cfg) {
+    const configuredLimit = Number(cfg?.asset_cache?.hybrid_resident_scene_limit ?? 3);
+    if (!Number.isFinite(configuredLimit)) {
+      return 3;
+    }
+    return Math.max(1, Math.min(8, Math.floor(configuredLimit)));
+  }
+
+  getHybridWarmConcurrency(cfg) {
+    const configuredConcurrency = Number(cfg?.asset_cache?.hybrid_download_concurrency ?? 2);
+    if (!Number.isFinite(configuredConcurrency)) {
+      return 2;
+    }
+    return Math.max(1, Math.min(4, Math.floor(configuredConcurrency)));
+  }
+
+  collectLinkedSceneIdsForPreload(scene, tour) {
+    const availableSceneIds = new Set((tour?.scenes ?? []).map((candidate) => candidate.id));
+    const currentTourId = String(tour?.id ?? "").trim();
+    const linkedSceneIds = [];
+
+    for (const hotspot of scene?.hotspots ?? []) {
+      if (hotspot?.type !== "scene_link") {
+        continue;
+      }
+
+      const targetSceneId = String(hotspot?.target_scene ?? "").trim();
+      if (!targetSceneId || !availableSceneIds.has(targetSceneId)) {
+        continue;
+      }
+
+      const targetTourId = String(hotspot?.target_tour ?? currentTourId).trim() || currentTourId;
+      if (targetTourId !== currentTourId) {
+        continue;
+      }
+
+      linkedSceneIds.push(targetSceneId);
+    }
+
+    return Array.from(new Set(linkedSceneIds));
+  }
+
+  startBackgroundTourWarm(tour, cfg, { reason = "runtime" } = {}) {
+    if (!tour?.scenes?.length || this.getScenePreloadMode(cfg) !== "hybrid") {
+      return null;
+    }
+
+    const existingJob = this.backgroundWarmJobs.get(tour);
+    if (existingJob) {
+      return existingJob;
+    }
+
+    const urls = this.collectPinnedAssetSources(tour.scenes ?? [], cfg);
+    const concurrency = this.getHybridWarmConcurrency(cfg);
+    this.debugLog("scene-network-warm:start", {
+      reason,
+      tourId: tour.id ?? null,
+      urlCount: urls.length,
+      concurrency
+    });
+
+    const warmJob = this.assetCache.warmAssets(urls, {
+      optional: true,
+      concurrency
+    })
+      .then((results = []) => {
+        const warmedCount = results.filter((result) => result?.status === "fulfilled" && result?.value).length;
+        const failedCount = results.filter((result) => result?.status === "rejected").length;
+        this.debugLog("scene-network-warm:complete", {
+          reason,
+          tourId: tour.id ?? null,
+          warmedCount,
+          failedCount
+        });
+        return results;
+      })
+      .catch((error) => {
+        console.warn("[WPA360] scene network warm failed", error);
+        this.debugLog("scene-network-warm:error", {
+          reason,
+          tourId: tour.id ?? null,
+          error: error?.message ?? String(error)
+        });
+        throw error;
+      })
+      .finally(() => {
+        if (this.backgroundWarmJobs.get(tour) === warmJob) {
+          this.backgroundWarmJobs.delete(tour);
+        }
+      });
+
+    this.backgroundWarmJobs.set(tour, warmJob);
+    return warmJob;
+  }
+
+  collectPinnedAssetSources(scenes, cfg) {
+    const sources = [...this.collectSceneMediaSources(scenes)];
+    if (cfg?.asset_cache?.preload_minimap_images !== false) {
+      for (const scene of scenes ?? []) {
+        if (scene?.minimap_image) {
+          sources.push(scene.minimap_image);
+        }
+      }
+    }
+    return sources;
+  }
+
+  collectSceneMediaSources(source) {
+    const scenes = Array.isArray(source)
+      ? source
+      : (source?.scenes ?? []);
+    return Array.from(new Set(
+      scenes
+        .map((scene) => scene?.media?.src)
+        .filter(Boolean)
+    ));
+  }
+
   getDebugSnapshot() {
     const state = this.store.getSnapshot();
     const renderer = this.platformCoordinator.getActiveRenderer();
@@ -404,12 +1504,38 @@ export class AppKernel {
       tourId: state.currentTour?.id ?? null,
       sceneId: state.currentSceneId ?? null,
       presenting: renderer?.isPresenting?.() ?? false,
-      performance: renderer?.getPerformanceSnapshot?.() ?? null
+      preloadMode: this.getScenePreloadMode(state.cfg),
+      caches: this.assetCache.getStats(),
+      performance: renderer?.getPerformanceSnapshot?.() ?? null,
+      rendererResources: renderer?.getRenderResourceStats?.() ?? null
+    };
+  }
+
+  getXrDebugContext() {
+    const state = this.store.getSnapshot();
+    const renderer = this.platformCoordinator.getActiveRenderer();
+    const transition = renderer?.getCurrentSceneTransition?.() ?? null;
+    const loadingState = renderer?.getLoadingDebugState?.() ?? null;
+
+    return {
+      platformId: state.platformId ?? null,
+      sceneId: state.currentSceneId ?? transition?.sceneId ?? null,
+      src: transition?.src ?? state.currentScene?.media?.src ?? null,
+      transitionId: transition?.transitionId ?? null,
+      presenting: renderer?.isPresenting?.() ?? false,
+      overlayVisible: loadingState?.visible === true,
+      focus: document.hasFocus(),
+      visibility: document.visibilityState
     };
   }
 
   handleError(error) {
     console.error("[WPA360]", error);
+    this.xrDebug.log("app-error", {
+      details: {
+        message: error?.message ?? String(error)
+      }
+    });
     this.store.patch({ error, isLoading: false });
     this.setStatus(error.message);
   }
@@ -417,4 +1543,64 @@ export class AppKernel {
 
 function modulo(value, length) {
   return ((value % length) + length) % length;
+}
+
+function resolveSceneOrientationOptions(scene, hotspot = null) {
+  if (hotspot?.apply_hotspot_scene_yaw === true) {
+    return {
+      preserveOrientation: false,
+      entryYaw: safeNumber(hotspot?.hotspot_define_scene_yaw, 0),
+      orientationSource: "hotspot"
+    };
+  }
+
+  if (scene?.scene_global_yaw !== false) {
+    return {
+      preserveOrientation: false,
+      entryYaw: safeNumber(scene?.rotation?.yaw, 0),
+      orientationSource: "scene"
+    };
+  }
+
+  return {
+    preserveOrientation: true,
+    entryYaw: null,
+    orientationSource: "preserve"
+  };
+}
+
+function safeNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function sanitizeFileToken(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[^a-z0-9_-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    || "item";
+}
+
+function createFileTimestamp() {
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
+}
+
+function isStereoMediaScene(scene) {
+  const layout = String(scene?.media?.stereo_layout ?? "").trim().toLowerCase();
+  return layout === "top-bottom"
+    || layout === "topdown"
+    || layout === "top-down"
+    || layout === "side-by-side"
+    || layout === "sidebyside"
+    || layout === "sbs"
+    || layout === "left-right"
+    || layout === "right-left";
 }

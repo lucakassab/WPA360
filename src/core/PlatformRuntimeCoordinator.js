@@ -8,12 +8,15 @@ export class PlatformRuntimeCoordinator {
   }
 
   async switchPlatform(platformId, options = {}) {
+    const deferRender = options.deferRender === true;
     if (!this.launchers[platformId]) {
       throw new Error(`Unknown platform: ${platformId}`);
     }
 
     if (this.activePlatformId === platformId && this.activePlatform) {
-      await this.renderCurrent(options);
+      if (!deferRender) {
+        await this.renderCurrent(options);
+      }
       return;
     }
 
@@ -33,7 +36,9 @@ export class PlatformRuntimeCoordinator {
     this.context.store.patch({ platformId });
 
     this.activePlatform.mount(options);
-    await this.renderCurrent(options);
+    if (!deferRender) {
+      await this.renderCurrent(options);
+    }
   }
 
   async renderCurrent(options = {}) {

@@ -6,8 +6,10 @@ const MENU_ACTIONS = [
   { id: "tour-next", label: "Avancar Tour", position: [0.07, 0.055, 0] },
   { id: "scene-prev", label: "Voltar Cena", position: [-0.07, 0.005, 0] },
   { id: "scene-next", label: "Avancar Cena", position: [0.07, 0.005, 0] },
-  { id: "toggle-reticle-origin", label: "Mira: Mao Dir.", position: [0, -0.05, 0] },
-  { id: "exit-vr", label: "Sair do VR", position: [0, -0.105, 0] }
+  { id: "toggle-hotspot-editor", label: "Editor Hotspot", position: [0, -0.045, 0] },
+  { id: "toggle-dev-controls", label: "Dev Controls", position: [0, -0.095, 0] },
+  { id: "toggle-reticle-origin", label: "Mira: Mao Dir.", position: [-0.07, -0.145, 0] },
+  { id: "exit-vr", label: "Sair do VR", position: [0.07, -0.145, 0] }
 ];
 
 export class VRHandMenu {
@@ -51,6 +53,12 @@ export class VRHandMenu {
 
     this.entries = MENU_ACTIONS.map((action) => this.createButton(action));
     this.reticleToggleEntry = this.entries.find((entry) => entry.action.id === "toggle-reticle-origin") || null;
+    this.editorToggleEntry = this.entries.find((entry) => entry.action.id === "toggle-hotspot-editor") || null;
+    this.devControlsEntry = this.entries.find((entry) => entry.action.id === "toggle-dev-controls") || null;
+    this.syncEditorToggleVisibility();
+    this.syncEditorToggleLabel();
+    this.syncDevControlsVisibility();
+    this.syncDevControlsLabel();
     this.syncReticleToggleLabel();
   }
 
@@ -80,6 +88,10 @@ export class VRHandMenu {
   }
 
   update(leftHandState, headPosition) {
+    this.syncEditorToggleVisibility();
+    this.syncEditorToggleLabel();
+    this.syncDevControlsVisibility();
+    this.syncDevControlsLabel();
     this.syncReticleToggleLabel();
 
     const shouldShowPose = leftHandState
@@ -117,7 +129,7 @@ export class VRHandMenu {
     if (!this.group.visible) {
       return [];
     }
-    return this.entries.map((entry) => entry.mesh);
+    return this.entries.filter((entry) => entry.mesh.visible).map((entry) => entry.mesh);
   }
 
   getActionByObject(object) {
@@ -146,6 +158,10 @@ export class VRHandMenu {
     let bestScore = Number.POSITIVE_INFINITY;
 
     for (const entry of this.entries) {
+      if (!entry.mesh.visible) {
+        continue;
+      }
+
       const { mesh } = entry;
       const halfWidth = (BUTTON_GEOMETRY.parameters.width * mesh.scale.x) * 0.5;
       const halfHeight = (BUTTON_GEOMETRY.parameters.height * mesh.scale.y) * 0.5;
@@ -206,6 +222,12 @@ export class VRHandMenu {
       case "scene-next":
         return this.context.goToRelativeScene?.(1);
 
+      case "toggle-hotspot-editor":
+        return this.toggleHotspotEditor();
+
+      case "toggle-dev-controls":
+        return this.toggleDevControls();
+
       case "toggle-reticle-origin":
         return this.toggleReticleOrigin();
 
@@ -255,6 +277,25 @@ export class VRHandMenu {
     return result;
   }
 
+  toggleHotspotEditor() {
+    if (!this.isEditorAvailable()) {
+      this.context.setStatus?.("Entre em VR com ?editor=1 para abrir o editor de hotspots.", { hideAfterMs: 1800 });
+      return false;
+    }
+
+    const result = this.context.toggleVrHotspotEditor?.();
+    this.syncEditorToggleLabel();
+    return result;
+  }
+
+  isEditorAvailable() {
+    return Boolean(this.context.isVrHotspotEditorEnabled?.());
+  }
+
+  isEditorOpen() {
+    return Boolean(this.context.isVrHotspotEditorOpen?.());
+  }
+
   getReticleOrigin() {
     const rawValue =
       (typeof this.context.getReticleProjectionOrigin === "function"
@@ -298,6 +339,49 @@ export class VRHandMenu {
     this.updateEntryLabel(this.reticleToggleEntry, nextLabel);
   }
 
+  syncEditorToggleVisibility() {
+    if (!this.editorToggleEntry) {
+      return;
+    }
+
+    const isVisible = this.isEditorAvailable();
+    this.editorToggleEntry.mesh.visible = isVisible;
+    if (!isVisible && this.highlightedActionId === this.editorToggleEntry.action.id) {
+      this.setHighlightedAction(null);
+    }
+  }
+
+  syncDevControlsVisibility() {
+    if (!this.devControlsEntry) {
+      return;
+    }
+
+    const isVisible = this.isEditorAvailable();
+    this.devControlsEntry.mesh.visible = isVisible;
+    if (!isVisible && this.highlightedActionId === this.devControlsEntry.action.id) {
+      this.setHighlightedAction(null);
+    }
+  }
+
+  syncEditorToggleLabel() {
+    if (!this.editorToggleEntry || !this.isEditorAvailable()) {
+      return;
+    }
+
+    const nextLabel = this.isEditorOpen() ? "Fechar Editor" : "Editor Hotspot";
+    this.updateEntryLabel(this.editorToggleEntry, nextLabel);
+  }
+
+  syncDevControlsLabel() {
+    if (!this.devControlsEntry || !this.isEditorAvailable()) {
+      return;
+    }
+
+    const isEnabled = Boolean(this.context.isVrDevControlsEnabled?.());
+    const nextLabel = isEnabled ? "Dev Ctrl: On" : "Dev Controls";
+    this.updateEntryLabel(this.devControlsEntry, nextLabel);
+  }
+
   updateEntryLabel(entry, nextLabel) {
     if (!entry || entry.action.label === nextLabel) {
       return;
@@ -315,6 +399,17 @@ export class VRHandMenu {
       ? entry.activeTexture
       : entry.idleTexture;
     entry.mesh.material.needsUpdate = true;
+  }
+
+  toggleDevControls() {
+    if (!this.isEditorAvailable()) {
+      this.context.setStatus?.("Entre em VR com ?editor=1 para usar Dev Controls.", { hideAfterMs: 1800 });
+      return false;
+    }
+
+    const result = this.context.toggleVrDevControls?.() ?? false;
+    this.syncDevControlsLabel();
+    return result;
   }
 
   computePose(leftHandState, headPosition) {

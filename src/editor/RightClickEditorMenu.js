@@ -50,38 +50,54 @@ export class RightClickEditorMenu {
     this.menu = document.createElement("div");
     this.menu.className = "editor-context-menu";
     this.menu.setAttribute("role", "menu");
+    this.menu.setAttribute("aria-label", "Menu rapido do hotspot");
 
     const title = document.createElement("p");
     title.className = "editor-context-menu__title";
-    title.textContent = hotspotId;
+    title.textContent = `Hotspot: ${hotspotId}`;
+    title.title = "Menu com acoes rapidas para o hotspot selecionado.";
 
-    const moveButton = this.createButton("Move Hotspot to Location", () => {
+    const moveButton = this.createButton(
+      "Reposicionar hotspot no panorama",
+      "Ativa o modo de clique para escolher uma nova posicao para o hotspot no panorama atual.",
+      () => {
       this.close();
       this.placementController.startHotspotPlacement({ sceneId, hotspotId });
-    });
+      }
+    );
 
-    const selectButton = this.createButton("Select in Editor", () => {
+    const selectButton = this.createButton(
+      "Selecionar hotspot no editor",
+      "Mantem este hotspot como item ativo no painel principal do editor.",
+      () => {
       this.close();
       this.context.setStatus?.("Hotspot selecionado no editor.", { hideAfterMs: 1200 });
-    });
+      }
+    );
 
-    const deleteButton = this.createButton("Delete Hotspot", () => {
+    const deleteButton = this.createButton(
+      "Excluir hotspot da cena",
+      "Remove o hotspot selecionado da cena atual no draft.",
+      () => {
       this.close();
       this.draftStore.deleteHotspot();
       this.context.debugLog?.("editor:right-click-menu:delete-hotspot", { sceneId, hotspotId });
       this.context.setStatus?.("Hotspot removido.", { hideAfterMs: 1200 });
-    });
+      }
+    );
 
     this.menu.append(title, moveButton, selectButton, deleteButton);
     document.body.append(this.menu);
     this.positionMenu(event.clientX, event.clientY);
   }
 
-  createButton(label, handler) {
+  createButton(label, tooltip, handler) {
     const button = document.createElement("button");
     button.type = "button";
     button.setAttribute("role", "menuitem");
     button.textContent = label;
+    button.title = tooltip || label;
+    button.setAttribute("aria-label", tooltip ? `${label}. ${tooltip}` : label);
     button.addEventListener("click", handler);
     return button;
   }

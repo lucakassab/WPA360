@@ -21,7 +21,7 @@ class XRHandMeshModel {
 	 * @param {?Loader} [loader=null] - The loader. If not provided, an instance of `GLTFLoader` will be used to load models.
 	 * @param {?Function} [onLoad=null] - A callback that is executed when a controller model has been loaded.
 	 */
-	constructor( handModel, controller, path, handedness, loader = null, onLoad = null ) {
+	constructor( handModel, controller, path, handedness, loader = null, onLoad = null, connectionToken = 0 ) {
 
 		/**
 		 * The WebXR controller.
@@ -36,6 +36,7 @@ class XRHandMeshModel {
 		 * @type {XRHandModel}
 		 */
 		this.handModel = handModel;
+		this.connectionToken = connectionToken;
 
 		/**
 		 * An array of bones representing the bones
@@ -54,7 +55,18 @@ class XRHandMeshModel {
 
 		loader.load( `${handedness}.glb`, gltf => {
 
+			if (
+				this.handModel.connectionToken !== this.connectionToken
+				|| this.handModel.motionController !== this
+			) {
+
+				disposeLoadedHandScene( gltf.scene );
+				return;
+
+			}
+
 			const object = gltf.scene.children[ 0 ];
+			this.handModel.clear();
 			this.handModel.add( object );
 
 			const mesh = object.getObjectByProperty( 'type', 'SkinnedMesh' );
@@ -145,6 +157,52 @@ class XRHandMeshModel {
 		}
 
 	}
+
+}
+
+function disposeLoadedHandScene( scene ) {
+
+	scene?.traverse?.( ( child ) => {
+
+		if ( child.geometry ) {
+
+			child.geometry.dispose?.();
+
+		}
+
+		if ( Array.isArray( child.material ) ) {
+
+			for ( const material of child.material ) {
+
+				disposeMaterial( material );
+
+			}
+
+		} else {
+
+			disposeMaterial( child.material );
+
+		}
+
+	} );
+
+}
+
+function disposeMaterial( material ) {
+
+	if ( ! material ) {
+
+		return;
+
+	}
+
+	for ( const key of [ 'map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'alphaMap' ] ) {
+
+		material[ key ]?.dispose?.();
+
+	}
+
+	material.dispose?.();
 
 }
 

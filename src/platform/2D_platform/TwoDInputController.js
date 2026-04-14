@@ -20,6 +20,10 @@ export class TwoDInputController {
   }
 
   onPointerDown(event) {
+    if (this.renderer?.isInteractionLocked?.()) {
+      return;
+    }
+
     if (isInteractiveTarget(event.target)) {
       return;
     }
@@ -38,6 +42,10 @@ export class TwoDInputController {
   }
 
   onPointerMove(event) {
+    if (this.renderer?.isInteractionLocked?.()) {
+      return;
+    }
+
     if (!this.drag || event.pointerId !== this.drag.pointerId) {
       return;
     }
@@ -59,6 +67,10 @@ export class TwoDInputController {
   }
 
   onWheel(event) {
+    if (this.renderer?.isInteractionLocked?.()) {
+      return;
+    }
+
     event.preventDefault();
     this.renderer.zoom(Math.sign(event.deltaY) * 5);
   }

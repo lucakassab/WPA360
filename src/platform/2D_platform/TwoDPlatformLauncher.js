@@ -13,7 +13,7 @@ export class TwoDPlatformLauncher extends BasePlatformLauncher {
   }
 
   async render(state, options = {}) {
-    await this.sceneController?.render(state, options);
+    return this.sceneController?.render(state, options);
   }
 
   screenToWorldFromEvent(event, options) {

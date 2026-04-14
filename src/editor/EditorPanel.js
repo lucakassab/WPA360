@@ -31,7 +31,8 @@ export class EditorPanel {
     header.className = "editor-panel__header";
 
     const title = document.createElement("h2");
-    title.textContent = "Editor";
+    title.textContent = "Editor do tour";
+    title.title = "Painel principal para revisar e editar tours, cenas, hotspots e labels.";
 
     this.controls.status = document.createElement("span");
     this.controls.status.className = "editor-status";
@@ -41,16 +42,16 @@ export class EditorPanel {
   }
 
   createTourSection() {
-    const section = this.createSection("Tour");
-    this.controls.tourId = this.createInput("Tour ID");
-    this.controls.tourTitle = this.createInput("Titulo");
-    this.controls.tourMediaType = this.createInput("Tipo de midia");
-    this.controls.initialScene = this.createSelect("Cena inicial");
-    this.controls.tourYaw = this.createNumberInput("Yaw global");
-    this.controls.tourPitch = this.createNumberInput("Pitch global");
-    this.controls.tourRoll = this.createNumberInput("Roll global");
-    this.controls.tourScale = this.createNumberInput("Escala global", 0.1);
-    this.controls.tourBillboard = this.createCheckbox("Billboard global");
+    const section = this.createSection("Dados do tour", "Informacoes gerais e transformacoes globais aplicadas ao tour inteiro.");
+    this.controls.tourId = this.createInput(FIELD_META.tourId);
+    this.controls.tourTitle = this.createInput(FIELD_META.tourTitle);
+    this.controls.tourMediaType = this.createInput(FIELD_META.tourMediaType);
+    this.controls.initialScene = this.createSelect(FIELD_META.initialScene);
+    this.controls.tourYaw = this.createNumberInput(FIELD_META.tourYaw);
+    this.controls.tourPitch = this.createNumberInput(FIELD_META.tourPitch);
+    this.controls.tourRoll = this.createNumberInput(FIELD_META.tourRoll);
+    this.controls.tourScale = this.createNumberInput(FIELD_META.tourScale, 0.1);
+    this.controls.tourBillboard = this.createCheckbox(FIELD_META.tourBillboard);
 
     this.bindInput(this.controls.tourId.input, () => this.draftStore.updateTourField("id", this.controls.tourId.input.value), "change");
     this.bindInput(this.controls.tourTitle.input, () => this.draftStore.updateTourField("title", this.controls.tourTitle.input.value));
@@ -79,35 +80,50 @@ export class EditorPanel {
   }
 
   createSceneSection() {
-    const section = this.createSection("Cenas");
-    this.controls.sceneSelect = this.createSelect("Cena selecionada");
-    this.controls.sceneId = this.createInput("Scene ID");
-    this.controls.sceneTitle = this.createInput("Titulo da cena");
-    this.controls.sceneMediaSrc = this.createInput("Imagem / media.src");
-    this.controls.sceneProjection = this.createInput("Projection");
-    this.controls.sceneStereoLayout = this.createSelect("Stereo layout", [
-      ["top-bottom", "top-bottom"],
-      ["mono", "mono"]
+    const section = this.createSection("Cenas do tour", "Gerencie a estrutura das cenas e os dados de midia de cada panorama.");
+    this.controls.sceneSelect = this.createSelect(FIELD_META.sceneSelect);
+    this.controls.sceneId = this.createInput(FIELD_META.sceneId);
+    this.controls.sceneTitle = this.createInput(FIELD_META.sceneTitle);
+    this.controls.sceneMediaSrc = this.createInput(FIELD_META.sceneMediaSrc);
+    this.controls.sceneProjection = this.createInput(FIELD_META.sceneProjection);
+    this.controls.sceneStereoLayout = this.createSelect(FIELD_META.sceneStereoLayout, [
+      ["top-bottom", "Stereo top-bottom"],
+      ["side-by-side", "Stereo side-by-side"],
+      ["mono", "Mono"]
     ]);
-    this.controls.sceneEyeOrder = this.createSelect("Eye order", [
-      ["left-right", "left/right"],
-      ["right-left", "right/left"]
+    this.controls.sceneEyeOrder = this.createSelect(FIELD_META.sceneEyeOrder, [
+      ["left-right", "Esquerdo / direito"],
+      ["right-left", "Direito / esquerdo"]
     ]);
-    this.controls.sceneMonoEye = this.createSelect("Olho usado no 2D", [
-      ["left", "left/top"],
-      ["right", "right/bottom"]
+    this.controls.sceneMonoEye = this.createSelect(FIELD_META.sceneMonoEye, [
+      ["left", "Esquerdo / parte superior"],
+      ["right", "Direito / parte inferior"]
     ]);
-    this.controls.sceneMinimap = this.createInput("Minimap image");
-    this.controls.sceneYaw = this.createNumberInput("Yaw");
-    this.controls.scenePitch = this.createNumberInput("Pitch");
-    this.controls.sceneRoll = this.createNumberInput("Roll");
-    this.controls.sceneScale = this.createNumberInput("Escala", 0.1);
-    this.controls.sceneBillboard = this.createCheckbox("Billboard");
+    this.controls.sceneGlobalYaw = this.createCheckbox(FIELD_META.sceneGlobalYaw);
+    this.controls.sceneFlipHorizontally = this.createCheckbox(FIELD_META.sceneFlipHorizontally);
+    this.controls.sceneMinimap = this.createInput(FIELD_META.sceneMinimap);
+    this.controls.sceneYaw = this.createNumberInput(FIELD_META.sceneYaw);
+    this.controls.scenePitch = this.createNumberInput(FIELD_META.scenePitch);
+    this.controls.sceneRoll = this.createNumberInput(FIELD_META.sceneRoll);
+    this.controls.sceneScale = this.createNumberInput(FIELD_META.sceneScale, 0.1);
+    this.controls.sceneBillboard = this.createCheckbox(FIELD_META.sceneBillboard);
 
     const actions = this.createActions([
-      ["Adicionar cena", () => this.draftStore.addScene()],
-      ["Duplicar cena", () => this.draftStore.duplicateScene()],
-      ["Remover cena", () => this.draftStore.deleteScene()]
+      {
+        label: "Adicionar cena",
+        help: "Cria uma nova cena vazia no draft do tour.",
+        handler: () => this.draftStore.addScene()
+      },
+      {
+        label: "Duplicar cena atual",
+        help: "Cria uma copia da cena selecionada para acelerar a montagem de panoramas parecidos.",
+        handler: () => this.draftStore.duplicateScene()
+      },
+      {
+        label: "Remover cena atual",
+        help: "Exclui a cena atualmente selecionada do draft.",
+        handler: () => this.draftStore.deleteScene()
+      }
     ]);
 
     this.bindInput(this.controls.sceneSelect.input, () => this.draftStore.setSelectedScene(this.controls.sceneSelect.input.value), "change");
@@ -118,6 +134,8 @@ export class EditorPanel {
     this.bindInput(this.controls.sceneStereoLayout.input, () => this.draftStore.updateSceneField("media.stereo_layout", this.controls.sceneStereoLayout.input.value), "change");
     this.bindInput(this.controls.sceneEyeOrder.input, () => this.draftStore.updateSceneField("media.eye_order", this.controls.sceneEyeOrder.input.value), "change");
     this.bindInput(this.controls.sceneMonoEye.input, () => this.draftStore.updateSceneField("media.mono_eye", this.controls.sceneMonoEye.input.value), "change");
+    this.bindInput(this.controls.sceneGlobalYaw.input, () => this.draftStore.updateSceneField("scene_global_yaw", this.controls.sceneGlobalYaw.input.checked), "change");
+    this.bindInput(this.controls.sceneFlipHorizontally.input, () => this.draftStore.updateSceneField("flip_horizontally", this.controls.sceneFlipHorizontally.input.checked), "change");
     this.bindInput(this.controls.sceneMinimap.input, () => this.draftStore.updateSceneField("minimap_image", this.controls.sceneMinimap.input.value || null));
     this.bindInput(this.controls.sceneYaw.input, () => this.draftStore.updateSceneField("rotation.yaw", readNumber(this.controls.sceneYaw.input)));
     this.bindInput(this.controls.scenePitch.input, () => this.draftStore.updateSceneField("rotation.pitch", readNumber(this.controls.scenePitch.input)));
@@ -137,6 +155,8 @@ export class EditorPanel {
         this.controls.sceneEyeOrder.label,
         this.controls.sceneMonoEye.label
       ),
+      this.controls.sceneGlobalYaw.label,
+      this.controls.sceneFlipHorizontally.label,
       this.controls.sceneMinimap.label,
       this.createFieldGrid(
         this.controls.sceneYaw.label,
@@ -150,30 +170,48 @@ export class EditorPanel {
   }
 
   createHotspotSection() {
-    const section = this.createSection("Hotspots");
-    this.controls.hotspotSelect = this.createSelect("Hotspot selecionado");
-    this.controls.hotspotId = this.createInput("Hotspot ID");
-    this.controls.hotspotType = this.createSelect("Tipo", [
-      ["scene_link", "scene_link"],
-      ["annotation", "annotation"]
+    const section = this.createSection("Hotspots da cena", "Crie, selecione e ajuste os hotspots da cena atualmente em edicao.");
+    this.controls.hotspotSelect = this.createSelect(FIELD_META.hotspotSelect);
+    this.controls.hotspotId = this.createInput(FIELD_META.hotspotId);
+    this.controls.hotspotType = this.createSelect(FIELD_META.hotspotType, [
+      ["scene_link", "Navegacao entre cenas"],
+      ["annotation", "Anotacao informativa"]
     ]);
-    this.controls.hotspotTargetScene = this.createSelect("Target scene");
-    this.controls.hotspotMarkerVisible = this.createCheckbox("Marker visivel");
-    this.controls.hotspotX = this.createNumberInput("X", 0.01);
-    this.controls.hotspotY = this.createNumberInput("Y", 0.01);
-    this.controls.hotspotZ = this.createNumberInput("Z", 0.01);
-    this.controls.hotspotYaw = this.createNumberInput("Yaw");
-    this.controls.hotspotPitch = this.createNumberInput("Pitch");
-    this.controls.hotspotRoll = this.createNumberInput("Roll");
-    this.controls.hotspotScale = this.createNumberInput("Escala", 0.1);
-    this.controls.hotspotReferenceDepth = this.createNumberInput("Reference depth", 0.1);
-    this.controls.hotspotBillboard = this.createCheckbox("Billboard do hotspot");
+    this.controls.hotspotTargetScene = this.createSelect(FIELD_META.hotspotTargetScene);
+    this.controls.hotspotMarkerVisible = this.createCheckbox(FIELD_META.hotspotMarkerVisible);
+    this.controls.hotspotX = this.createNumberInput(FIELD_META.hotspotX, 0.01);
+    this.controls.hotspotY = this.createNumberInput(FIELD_META.hotspotY, 0.01);
+    this.controls.hotspotZ = this.createNumberInput(FIELD_META.hotspotZ, 0.01);
+    this.controls.hotspotYaw = this.createNumberInput(FIELD_META.hotspotYaw);
+    this.controls.hotspotPitch = this.createNumberInput(FIELD_META.hotspotPitch);
+    this.controls.hotspotRoll = this.createNumberInput(FIELD_META.hotspotRoll);
+    this.controls.hotspotScale = this.createNumberInput(FIELD_META.hotspotScale, 0.1);
+    this.controls.hotspotReferenceDepth = this.createNumberInput(FIELD_META.hotspotReferenceDepth, 0.1);
+    this.controls.hotspotBillboard = this.createCheckbox(FIELD_META.hotspotBillboard);
+    this.controls.hotspotApplySceneYaw = this.createCheckbox(FIELD_META.hotspotApplySceneYaw);
+    this.controls.hotspotDefineSceneYaw = this.createNumberInput(FIELD_META.hotspotDefineSceneYaw, 0.1);
 
     const actions = this.createActions([
-      ["Adicionar navegacao", () => this.draftStore.addHotspot("scene_link")],
-      ["Adicionar anotacao", () => this.draftStore.addHotspot("annotation")],
-      ["Move Hotspot to Location", () => this.placementController.startHotspotPlacement()],
-      ["Remover hotspot", () => this.draftStore.deleteHotspot()]
+      {
+        label: "Adicionar hotspot de navegacao",
+        help: "Cria um hotspot do tipo scene_link para levar o usuario a outra cena.",
+        handler: () => this.draftStore.addHotspot("scene_link")
+      },
+      {
+        label: "Adicionar hotspot de anotacao",
+        help: "Cria um hotspot informativo do tipo annotation na cena atual.",
+        handler: () => this.draftStore.addHotspot("annotation")
+      },
+      {
+        label: "Reposicionar hotspot no panorama",
+        help: "Ativa o modo de clique no panorama para gravar uma nova posicao para o hotspot selecionado.",
+        handler: () => this.placementController.startHotspotPlacement()
+      },
+      {
+        label: "Remover hotspot selecionado",
+        help: "Exclui o hotspot selecionado do draft da cena atual.",
+        handler: () => this.draftStore.deleteHotspot()
+      }
     ]);
 
     this.bindInput(this.controls.hotspotSelect.input, () => this.draftStore.setSelectedHotspot(this.controls.hotspotSelect.input.value), "change");
@@ -190,6 +228,8 @@ export class EditorPanel {
     this.bindInput(this.controls.hotspotScale.input, () => this.draftStore.updateHotspotField("scale", readNumber(this.controls.hotspotScale.input, 1)));
     this.bindInput(this.controls.hotspotReferenceDepth.input, () => this.draftStore.updateHotspotField("reference_depth", readNumber(this.controls.hotspotReferenceDepth.input, 8)));
     this.bindInput(this.controls.hotspotBillboard.input, () => this.draftStore.updateHotspotField("billboard", this.controls.hotspotBillboard.input.checked), "change");
+    this.bindInput(this.controls.hotspotApplySceneYaw.input, () => this.draftStore.updateHotspotField("apply_hotspot_scene_yaw", this.controls.hotspotApplySceneYaw.input.checked), "change");
+    this.bindInput(this.controls.hotspotDefineSceneYaw.input, () => this.draftStore.updateHotspotField("hotspot_define_scene_yaw", readNumber(this.controls.hotspotDefineSceneYaw.input, 0)));
 
     section.append(
       this.controls.hotspotSelect.label,
@@ -199,27 +239,28 @@ export class EditorPanel {
       this.createFieldGrid(this.controls.hotspotMarkerVisible.label, this.controls.hotspotBillboard.label),
       this.createFieldGrid(this.controls.hotspotX.label, this.controls.hotspotY.label, this.controls.hotspotZ.label),
       this.createFieldGrid(this.controls.hotspotYaw.label, this.controls.hotspotPitch.label, this.controls.hotspotRoll.label, this.controls.hotspotScale.label),
-      this.controls.hotspotReferenceDepth.label
+      this.controls.hotspotReferenceDepth.label,
+      this.createFieldGrid(this.controls.hotspotApplySceneYaw.label, this.controls.hotspotDefineSceneYaw.label)
     );
     return section;
   }
 
   createHotspotLabelSection() {
-    const section = this.createSection("Label do hotspot");
+    const section = this.createSection("Label vinculada", "Ajuste o texto e a apresentacao visual da label associada ao hotspot selecionado.");
     this.controls.labelScope = document.createElement("p");
     this.controls.labelScope.className = "editor-help-text";
 
-    this.controls.labelText = this.createInput("Texto");
-    this.controls.labelVisible = this.createCheckbox("Label visivel");
-    this.controls.labelOffsetX = this.createNumberInput("Offset X", 0.01);
-    this.controls.labelOffsetY = this.createNumberInput("Offset Y", 0.01);
-    this.controls.labelOffsetZ = this.createNumberInput("Offset Z", 0.01);
-    this.controls.labelYaw = this.createNumberInput("Offset yaw");
-    this.controls.labelPitch = this.createNumberInput("Offset pitch");
-    this.controls.labelRoll = this.createNumberInput("Offset roll");
-    this.controls.labelScale = this.createNumberInput("Escala da label", 0.1);
-    this.controls.labelReferenceDepth = this.createNumberInput("Reference depth", 0.1);
-    this.controls.labelBillboard = this.createCheckbox("Billboard da label");
+    this.controls.labelText = this.createInput(FIELD_META.labelText);
+    this.controls.labelVisible = this.createCheckbox(FIELD_META.labelVisible);
+    this.controls.labelOffsetX = this.createNumberInput(FIELD_META.labelOffsetX, 0.01);
+    this.controls.labelOffsetY = this.createNumberInput(FIELD_META.labelOffsetY, 0.01);
+    this.controls.labelOffsetZ = this.createNumberInput(FIELD_META.labelOffsetZ, 0.01);
+    this.controls.labelYaw = this.createNumberInput(FIELD_META.labelYaw);
+    this.controls.labelPitch = this.createNumberInput(FIELD_META.labelPitch);
+    this.controls.labelRoll = this.createNumberInput(FIELD_META.labelRoll);
+    this.controls.labelScale = this.createNumberInput(FIELD_META.labelScale, 0.1);
+    this.controls.labelReferenceDepth = this.createNumberInput(FIELD_META.labelReferenceDepth, 0.1);
+    this.controls.labelBillboard = this.createCheckbox(FIELD_META.labelBillboard);
 
     this.bindInput(this.controls.labelText.input, () => this.draftStore.updateHotspotLabelField("text", this.controls.labelText.input.value));
     this.bindInput(this.controls.labelVisible.input, () => this.draftStore.updateHotspotLabelField("visible", this.controls.labelVisible.input.checked), "change");
@@ -245,12 +286,24 @@ export class EditorPanel {
   }
 
   createJsonSection() {
-    const section = this.createSection("Exportacao");
-    this.controls.jsonEditor = this.createTextarea("tour.json final");
+    const section = this.createSection("Importacao e exportacao", "Aplique, copie ou baixe o JSON consolidado do draft atual.");
+    this.controls.jsonEditor = this.createTextarea(FIELD_META.jsonEditor);
     const actions = this.createActions([
-      ["Aplicar JSON", () => this.draftStore.importJson(this.controls.jsonEditor.input.value)],
-      ["Copiar JSON", () => this.copyJson()],
-      ["Baixar tour.json", () => this.downloadJson()]
+      {
+        label: "Aplicar JSON ao draft",
+        help: "Substitui o draft atual usando o JSON informado abaixo.",
+        handler: () => this.draftStore.importJson(this.controls.jsonEditor.input.value)
+      },
+      {
+        label: "Copiar JSON exportado",
+        help: "Copia para a area de transferencia o JSON consolidado do draft atual.",
+        handler: () => this.copyJson()
+      },
+      {
+        label: "Baixar arquivo tour.json",
+        help: "Gera e baixa um arquivo tour.json com o estado atual do draft.",
+        handler: () => this.downloadJson()
+      }
     ]);
 
     section.append(this.controls.jsonEditor.label, actions);
@@ -280,20 +333,20 @@ export class EditorPanel {
 
   getStatusText(state, hotspot) {
     if (state.selectedSceneId && state.activeSceneId && state.selectedSceneId !== state.activeSceneId) {
-      return `Editando ${state.selectedSceneId}; visivel ${state.activeSceneId}`;
+      return `Editando a cena ${state.selectedSceneId}; cena visivel no runtime: ${state.activeSceneId}`;
     }
 
     if (hotspot?.id) {
       return state.dirty
-        ? `Draft editado: ${state.activeSceneId} / ${hotspot.id}`
-        : `Cena ativa: ${state.activeSceneId} / ${hotspot.id}`;
+        ? `Draft com alteracoes: ${state.activeSceneId} / hotspot ${hotspot.id}`
+        : `Cena ativa: ${state.activeSceneId} / hotspot ${hotspot.id}`;
     }
 
     if (state.activeSceneId) {
-      return state.dirty ? `Draft editado: ${state.activeSceneId}` : `Cena ativa: ${state.activeSceneId}`;
+      return state.dirty ? `Draft com alteracoes na cena ${state.activeSceneId}` : `Cena ativa: ${state.activeSceneId}`;
     }
 
-    return state.dirty ? "Draft editado" : "Sincronizado";
+    return state.dirty ? "Draft com alteracoes" : "Editor sincronizado";
   }
 
   syncTourControls(draft) {
@@ -314,9 +367,11 @@ export class EditorPanel {
     this.setValue(this.controls.sceneTitle.input, scene?.title);
     this.setValue(this.controls.sceneMediaSrc.input, scene?.media?.src);
     this.setValue(this.controls.sceneProjection.input, scene?.media?.projection);
-    this.setOptions(this.controls.sceneStereoLayout.input, [["top-bottom", "top-bottom"], ["mono", "mono"]], scene?.media?.stereo_layout ?? "top-bottom");
-    this.setOptions(this.controls.sceneEyeOrder.input, [["left-right", "left/right"], ["right-left", "right/left"]], scene?.media?.eye_order ?? "left-right");
-    this.setOptions(this.controls.sceneMonoEye.input, [["left", "left/top"], ["right", "right/bottom"]], scene?.media?.mono_eye ?? "left");
+    this.setOptions(this.controls.sceneStereoLayout.input, [["top-bottom", "Stereo top-bottom"], ["side-by-side", "Stereo side-by-side"], ["mono", "Mono"]], scene?.media?.stereo_layout ?? "top-bottom");
+    this.setOptions(this.controls.sceneEyeOrder.input, [["left-right", "Esquerdo / direito"], ["right-left", "Direito / esquerdo"]], scene?.media?.eye_order ?? "left-right");
+    this.setOptions(this.controls.sceneMonoEye.input, [["left", "Esquerdo / parte superior"], ["right", "Direito / parte inferior"]], scene?.media?.mono_eye ?? "left");
+    this.controls.sceneGlobalYaw.input.checked = scene?.scene_global_yaw !== false;
+    this.controls.sceneFlipHorizontally.input.checked = scene?.flip_horizontally === true || scene?.media?.flip_horizontally === true;
     this.setValue(this.controls.sceneMinimap.input, scene?.minimap_image ?? "");
     this.setValue(this.controls.sceneYaw.input, scene?.rotation?.yaw);
     this.setValue(this.controls.scenePitch.input, scene?.rotation?.pitch);
@@ -329,7 +384,7 @@ export class EditorPanel {
     const hotspots = scene?.hotspots ?? [];
     this.setOptions(this.controls.hotspotSelect.input, hotspots.map((candidate) => [candidate.id, getHotspotDisplayName(candidate)]), selectedHotspotId);
     this.setOptions(this.controls.hotspotTargetScene.input, [["", "Sem destino"], ...draft.scenes.map((candidate) => [candidate.id, candidate.title || candidate.id])], hotspot?.target_scene ?? "");
-    this.setOptions(this.controls.hotspotType.input, [["scene_link", "scene_link"], ["annotation", "annotation"]], hotspot?.type ?? "scene_link");
+    this.setOptions(this.controls.hotspotType.input, [["scene_link", "Navegacao entre cenas"], ["annotation", "Anotacao informativa"]], hotspot?.type ?? "scene_link");
     this.setValue(this.controls.hotspotId.input, hotspot?.id ?? "");
     this.setValue(this.controls.hotspotX.input, hotspot?.position?.x ?? "");
     this.setValue(this.controls.hotspotY.input, hotspot?.position?.y ?? "");
@@ -341,6 +396,8 @@ export class EditorPanel {
     this.setValue(this.controls.hotspotReferenceDepth.input, hotspot?.reference_depth ?? 8);
     this.controls.hotspotMarkerVisible.input.checked = hotspot?.marker_visible !== false;
     this.controls.hotspotBillboard.input.checked = hotspot?.billboard !== false;
+    this.controls.hotspotApplySceneYaw.input.checked = hotspot?.apply_hotspot_scene_yaw === true;
+    this.setValue(this.controls.hotspotDefineSceneYaw.input, hotspot?.hotspot_define_scene_yaw ?? 0);
 
     const controls = [
       this.controls.hotspotId,
@@ -355,7 +412,9 @@ export class EditorPanel {
       this.controls.hotspotRoll,
       this.controls.hotspotScale,
       this.controls.hotspotReferenceDepth,
-      this.controls.hotspotBillboard
+      this.controls.hotspotBillboard,
+      this.controls.hotspotApplySceneYaw,
+      this.controls.hotspotDefineSceneYaw
     ];
 
     for (const control of controls) {
@@ -363,13 +422,16 @@ export class EditorPanel {
     }
 
     this.controls.hotspotTargetScene.input.disabled = !hotspot || hotspot.type !== "scene_link";
+    this.controls.hotspotApplySceneYaw.input.disabled = !hotspot || hotspot.type !== "scene_link";
+    this.controls.hotspotDefineSceneYaw.input.disabled = !hotspot || hotspot.type !== "scene_link" || hotspot?.apply_hotspot_scene_yaw !== true;
   }
 
   syncHotspotLabelControls(hotspot) {
     const label = hotspot?.label ?? null;
     this.controls.labelScope.textContent = hotspot
-      ? `Editando a label vinculada ao hotspot ${hotspot.id}.`
-      : "Selecione um hotspot para editar sua label.";
+      ? `Editando a label vinculada ao hotspot ${hotspot.id}. Toda alteracao abaixo afeta apenas esse hotspot.`
+      : "Selecione um hotspot para liberar os controles da label vinculada.";
+    this.controls.labelScope.title = this.controls.labelScope.textContent;
 
     this.setValue(this.controls.labelText.input, label?.text ?? "");
     this.controls.labelVisible.input.checked = label?.visible !== false;
@@ -400,11 +462,14 @@ export class EditorPanel {
     }
   }
 
-  createSection(titleText) {
+  createSection(titleText, helpText = "") {
     const section = document.createElement("section");
     section.className = "editor-section";
     const title = document.createElement("h3");
     title.textContent = titleText;
+    if (helpText) {
+      title.title = helpText;
+    }
     section.append(title);
     return section;
   }
@@ -440,11 +505,24 @@ export class EditorPanel {
     return this.wrapControl(labelText, input);
   }
 
-  wrapControl(labelText, input) {
+  wrapControl(meta, input) {
+    const normalizedMeta = normalizeControlMeta(meta);
     const label = document.createElement("label");
-    label.textContent = labelText;
+    const caption = document.createElement("span");
+    caption.textContent = normalizedMeta.label;
+    caption.className = "editor-field-label";
+    label.title = normalizedMeta.help || normalizedMeta.label;
+    caption.title = normalizedMeta.help || normalizedMeta.label;
+    input.title = normalizedMeta.help || normalizedMeta.label;
+    input.setAttribute(
+      "aria-label",
+      normalizedMeta.help
+        ? `${normalizedMeta.label}. ${normalizedMeta.help}`
+        : normalizedMeta.label
+    );
+    label.append(caption);
     label.append(input);
-    return { label, input };
+    return { label, input, caption, help: normalizedMeta.help };
   }
 
   createFieldGrid(...children) {
@@ -457,11 +535,19 @@ export class EditorPanel {
   createActions(actions) {
     const group = document.createElement("div");
     group.className = "editor-actions";
-    for (const [label, handler] of actions) {
+    for (const action of actions) {
+      const normalizedAction = normalizeActionMeta(action);
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = label;
-      button.addEventListener("click", handler, { signal: this.abortController.signal });
+      button.textContent = normalizedAction.label;
+      button.title = normalizedAction.help || normalizedAction.label;
+      button.setAttribute(
+        "aria-label",
+        normalizedAction.help
+          ? `${normalizedAction.label}. ${normalizedAction.help}`
+          : normalizedAction.label
+      );
+      button.addEventListener("click", normalizedAction.handler, { signal: this.abortController.signal });
       group.append(button);
     }
     return group;
@@ -528,7 +614,6 @@ export class EditorPanel {
   destroy() {
     this.unsubscribe?.();
     this.abortController?.abort();
-    this.draftStore.destroy();
     this.root.replaceChildren();
   }
 }
@@ -550,3 +635,242 @@ function readNumber(input, fallback = 0) {
   const value = Number(input.value);
   return Number.isFinite(value) ? value : fallback;
 }
+
+function normalizeControlMeta(meta) {
+  if (typeof meta === "string") {
+    return { label: meta, help: "" };
+  }
+
+  return {
+    label: meta?.label ?? "",
+    help: meta?.help ?? ""
+  };
+}
+
+function normalizeActionMeta(action) {
+  if (Array.isArray(action)) {
+    const [label, handler] = action;
+    return { label, handler, help: "" };
+  }
+
+  return {
+    label: action?.label ?? "",
+    handler: action?.handler ?? (() => {}),
+    help: action?.help ?? ""
+  };
+}
+
+const FIELD_META = {
+  tourId: {
+    label: "ID do tour",
+    help: "Identificador interno usado para localizar e exportar o tour."
+  },
+  tourTitle: {
+    label: "Nome do tour",
+    help: "Titulo principal exibido na interface para este tour."
+  },
+  tourMediaType: {
+    label: "Tipo de midia",
+    help: "Informe o tipo de midia esperado pelo runtime para o tour."
+  },
+  initialScene: {
+    label: "Cena inicial",
+    help: "Define qual cena deve abrir primeiro quando o tour for carregado."
+  },
+  tourYaw: {
+    label: "Yaw global",
+    help: "Rotacao horizontal aplicada ao tour inteiro."
+  },
+  tourPitch: {
+    label: "Pitch global",
+    help: "Rotacao vertical global aplicada ao tour inteiro."
+  },
+  tourRoll: {
+    label: "Roll global",
+    help: "Rotacao de inclinacao aplicada ao tour inteiro."
+  },
+  tourScale: {
+    label: "Escala global",
+    help: "Multiplicador de escala aplicado ao tour inteiro."
+  },
+  tourBillboard: {
+    label: "Billboard global",
+    help: "Quando ativo, o tour usa o comportamento global de billboard configurado no draft."
+  },
+  sceneSelect: {
+    label: "Cena em edicao",
+    help: "Escolha qual cena do draft deseja editar agora."
+  },
+  sceneId: {
+    label: "ID da cena",
+    help: "Identificador interno da cena selecionada."
+  },
+  sceneTitle: {
+    label: "Nome da cena",
+    help: "Titulo apresentado para a cena selecionada."
+  },
+  sceneMediaSrc: {
+    label: "Arquivo de midia",
+    help: "Caminho da imagem ou arquivo de midia usado pelo panorama da cena."
+  },
+  sceneProjection: {
+    label: "Projecao da midia",
+    help: "Tipo de projecao da imagem panoramica, como equirectangular."
+  },
+  sceneStereoLayout: {
+    label: "Layout estereo",
+    help: "Organizacao dos olhos na textura estereo da cena."
+  },
+  sceneEyeOrder: {
+    label: "Ordem dos olhos",
+    help: "Define qual olho aparece primeiro no arquivo estereo."
+  },
+  sceneMonoEye: {
+    label: "Olho exibido no 2D",
+    help: "Escolhe qual metade da imagem sera usada quando a visualizacao for mono."
+  },
+  sceneGlobalYaw: {
+    label: "Scene Global Yaw",
+    help: "Quando ativo, a cena abre aplicando o yaw configurado nela. Quando desligado, a navegacao preserva a orientacao atual da camera."
+  },
+  sceneFlipHorizontally: {
+    label: "Flip horizontally",
+    help: "Inverte horizontalmente o panorama da cena. Em imagens estereo, tambem ajusta os canais left/right para preservar o 3D."
+  },
+  sceneMinimap: {
+    label: "Imagem do minimapa",
+    help: "Arquivo opcional mostrado no widget de minimapa da cena."
+  },
+  sceneYaw: {
+    label: "Yaw da cena",
+    help: "Rotacao horizontal especifica da cena."
+  },
+  scenePitch: {
+    label: "Pitch da cena",
+    help: "Rotacao vertical especifica da cena."
+  },
+  sceneRoll: {
+    label: "Roll da cena",
+    help: "Inclinacao especifica da cena."
+  },
+  sceneScale: {
+    label: "Escala da cena",
+    help: "Escala aplicada apenas a cena selecionada."
+  },
+  sceneBillboard: {
+    label: "Billboard da cena",
+    help: "Controla se a cena usa o comportamento de billboard configurado para ela."
+  },
+  hotspotSelect: {
+    label: "Hotspot em edicao",
+    help: "Escolha qual hotspot da cena atual deseja editar."
+  },
+  hotspotId: {
+    label: "ID do hotspot",
+    help: "Identificador interno do hotspot selecionado."
+  },
+  hotspotType: {
+    label: "Tipo do hotspot",
+    help: "Define se o hotspot navega para outra cena ou funciona como anotacao."
+  },
+  hotspotTargetScene: {
+    label: "Cena de destino",
+    help: "Cena aberta quando um hotspot de navegacao for ativado."
+  },
+  hotspotMarkerVisible: {
+    label: "Marcador visivel",
+    help: "Mostra ou oculta o marker principal do hotspot."
+  },
+  hotspotX: {
+    label: "Posicao X",
+    help: "Coordenada horizontal local do hotspot."
+  },
+  hotspotY: {
+    label: "Posicao Y",
+    help: "Coordenada vertical do hotspot."
+  },
+  hotspotZ: {
+    label: "Posicao Z",
+    help: "Coordenada de profundidade local do hotspot."
+  },
+  hotspotYaw: {
+    label: "Yaw do hotspot",
+    help: "Rotacao horizontal do hotspot selecionado."
+  },
+  hotspotPitch: {
+    label: "Pitch do hotspot",
+    help: "Rotacao vertical do hotspot selecionado."
+  },
+  hotspotRoll: {
+    label: "Roll do hotspot",
+    help: "Inclinacao do hotspot selecionado."
+  },
+  hotspotScale: {
+    label: "Escala do hotspot",
+    help: "Tamanho geral do hotspot selecionado."
+  },
+  hotspotReferenceDepth: {
+    label: "Profundidade de referencia",
+    help: "Profundidade usada para ancorar o hotspot no espaco da cena."
+  },
+  hotspotBillboard: {
+    label: "Billboard do hotspot",
+    help: "Controla se o hotspot acompanha a orientacao do usuario."
+  },
+  hotspotApplySceneYaw: {
+    label: "Aplicar yaw de entrada",
+    help: "Quando ativo, este hotspot define o yaw inicial da cena de destino durante a transicao."
+  },
+  hotspotDefineSceneYaw: {
+    label: "Yaw de entrada do hotspot",
+    help: "Yaw aplicado na cena de destino quando o toggle de yaw do hotspot estiver ativo."
+  },
+  labelText: {
+    label: "Texto da label",
+    help: "Conteudo exibido pela label vinculada ao hotspot."
+  },
+  labelVisible: {
+    label: "Label visivel",
+    help: "Mostra ou oculta a label vinculada ao hotspot."
+  },
+  labelOffsetX: {
+    label: "Offset X da label",
+    help: "Deslocamento lateral da label em relacao ao hotspot."
+  },
+  labelOffsetY: {
+    label: "Offset Y da label",
+    help: "Deslocamento vertical da label em relacao ao hotspot."
+  },
+  labelOffsetZ: {
+    label: "Offset Z da label",
+    help: "Deslocamento de profundidade da label em relacao ao hotspot."
+  },
+  labelYaw: {
+    label: "Yaw da label",
+    help: "Rotacao horizontal adicional da label."
+  },
+  labelPitch: {
+    label: "Pitch da label",
+    help: "Rotacao vertical adicional da label."
+  },
+  labelRoll: {
+    label: "Roll da label",
+    help: "Inclinacao adicional da label."
+  },
+  labelScale: {
+    label: "Escala da label",
+    help: "Tamanho geral da label vinculada."
+  },
+  labelReferenceDepth: {
+    label: "Profundidade ref. da label",
+    help: "Profundidade de referencia usada para a label."
+  },
+  labelBillboard: {
+    label: "Billboard da label",
+    help: "Controla se a label acompanha a orientacao do usuario."
+  },
+  jsonEditor: {
+    label: "JSON final do tour",
+    help: "Visualize, importe ou revise manualmente o JSON consolidado do draft atual."
+  }
+};

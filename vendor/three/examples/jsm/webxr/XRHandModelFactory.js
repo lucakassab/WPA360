@@ -57,6 +57,14 @@ class XRHandModel extends Object3D {
 		 */
 		this.mesh = null;
 
+		/**
+		 * Monotonic token used to ignore stale async hand model loads after reconnects.
+		 *
+		 * @type {number}
+		 * @default 0
+		 */
+		this.connectionToken = 0;
+
 	}
 
 	/**
@@ -160,20 +168,22 @@ class XRHandModelFactory {
 
 			if ( xrInputSource.hand && ! handModel.motionController ) {
 
+				handModel.connectionToken ++;
 				handModel.xrInputSource = xrInputSource;
+				const connectionToken = handModel.connectionToken;
 
 				// @todo Detect profile if not provided
 				if ( profile === undefined || profile === 'spheres' ) {
 
-					handModel.motionController = new XRHandPrimitiveModel( handModel, controller, this.path, xrInputSource.handedness, { primitive: 'sphere' } );
+					handModel.motionController = new XRHandPrimitiveModel( handModel, controller, this.path, xrInputSource.handedness, { primitive: 'sphere' }, connectionToken );
 
 				} else if ( profile === 'boxes' ) {
 
-					handModel.motionController = new XRHandPrimitiveModel( handModel, controller, this.path, xrInputSource.handedness, { primitive: 'box' } );
+					handModel.motionController = new XRHandPrimitiveModel( handModel, controller, this.path, xrInputSource.handedness, { primitive: 'box' }, connectionToken );
 
 				} else if ( profile === 'mesh' ) {
 
-					handModel.motionController = new XRHandMeshModel( handModel, controller, this.path, xrInputSource.handedness, this.gltfLoader, this.onLoad );
+					handModel.motionController = new XRHandMeshModel( handModel, controller, this.path, xrInputSource.handedness, this.gltfLoader, this.onLoad, connectionToken );
 
 				}
 
@@ -183,6 +193,7 @@ class XRHandModelFactory {
 
 		controller.addEventListener( 'disconnected', () => {
 
+			handModel.connectionToken ++;
 			handModel.clear();
 			handModel.motionController = null;
 

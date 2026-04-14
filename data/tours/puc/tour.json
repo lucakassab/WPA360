@@ -17,66 +17,33 @@
       "id": "puc-academia-banheiro",
       "title": "PUC - Academia Banheiro.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/puc/PUC - Academia Banheiro.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Academia Banheiro.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
       "hotspots": [
         {
-          "id": "go-to-puc-academia",
+          "id": "go-to-puc-pergolado-inferior",
           "type": "scene_link",
-          "target_scene": "puc-academia",
+          "target_scene": "puc-pergolado-inferior",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
-          "marker_visible": true,
-          "label": {
-            "text": "Ir para PUC - Academia.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "go-to-puc-vista-meio-salao",
-          "type": "scene_link",
-          "target_scene": "puc-vista-meio-salao",
-          "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": -0.207,
+            "y": -1.2,
+            "z": -7.907
           },
           "rotation": {
             "yaw": -24,
@@ -87,7 +54,50 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Voltar para PUC - Vista Meio Salao.jpg",
+            "text": "PUC - Pergolado Inferior.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          },
+          "target_tour": "puc",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
+        },
+        {
+          "id": "go-to-puc-hall-de-elevador",
+          "type": "scene_link",
+          "target_tour": "puc",
+          "target_scene": "puc-hall-de-elevador",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "position": {
+            "x": 2.728,
+            "y": -3.019,
+            "z": -6.888
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "PUC - Hall de Elevador.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -105,48 +115,16 @@
           }
         },
         {
-          "id": "puc-academia-banheiro-label",
-          "type": "annotation",
+          "id": "puc-academia-banheiro-hotspot",
+          "type": "scene_link",
+          "target_tour": "puc",
+          "target_scene": "puc-academia",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Academia Banheiro.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-academia-banheiro-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": -7.503,
+            "y": -2.769,
+            "z": -0.216
           },
           "rotation": {
             "yaw": 0,
@@ -156,13 +134,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "PUC - Academia Banheiro.jpg",
+            "text": "PUC - Academia.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {
@@ -181,31 +159,33 @@
       "id": "puc-academia",
       "title": "PUC - Academia.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/puc/PUC - Academia.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Academia.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
       "hotspots": [
         {
-          "id": "go-to-puc-gourmet-cozinha",
+          "id": "go-to-puc-mesa-academia",
           "type": "scene_link",
-          "target_scene": "puc-gourmet-cozinha",
+          "target_scene": "puc-mesa-academia",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": -7.708,
+            "y": -1.151,
+            "z": 1.806
           },
           "rotation": {
             "yaw": 24,
@@ -216,7 +196,7 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Ir para PUC - Gourmet Cozinha.jpg",
+            "text": "PUC - Mesa Academia.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -231,16 +211,20 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": "puc",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
           "id": "go-to-puc-academia-banheiro",
           "type": "scene_link",
           "target_scene": "puc-academia-banheiro",
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": 7.743,
+            "y": -1.84,
+            "z": -0.812
           },
           "rotation": {
             "yaw": -24,
@@ -266,78 +250,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
-        },
-        {
-          "id": "puc-academia-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
           },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Academia.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-academia-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "reference_depth": 8,
-          "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Academia.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         }
       ]
     },
@@ -345,22 +262,24 @@
       "id": "puc-gourmet-cozinha",
       "title": "PUC - Gourmet Cozinha.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/puc/PUC - Gourmet Cozinha.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Gourmet Cozinha.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-puc-gourmet",
@@ -395,16 +314,20 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
-          "id": "go-to-puc-academia",
+          "id": "go-to-puc-vista-meio-salao",
           "type": "scene_link",
-          "target_scene": "puc-academia",
+          "target_scene": "puc-vista-meio-salao",
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": -7.283,
+            "y": -2.014,
+            "z": -2.627
           },
           "rotation": {
             "yaw": -24,
@@ -415,7 +338,7 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Voltar para PUC - Academia.jpg",
+            "text": "PUC - Vista Meio Salao.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -430,78 +353,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
-        },
-        {
-          "id": "puc-gourmet-cozinha-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
           },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Gourmet Cozinha.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-gourmet-cozinha-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "reference_depth": 8,
-          "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Gourmet Cozinha.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
+          "target_tour": "puc",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         }
       ]
     },
@@ -509,22 +365,24 @@
       "id": "puc-gourmet",
       "title": "PUC - Gourmet.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/puc/PUC - Gourmet.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Gourmet.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-puc-hall-de-elevador",
@@ -559,16 +417,20 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
           "id": "go-to-puc-gourmet-cozinha",
           "type": "scene_link",
           "target_scene": "puc-gourmet-cozinha",
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": -1.417,
+            "y": -4.586,
+            "z": -6.4
           },
           "rotation": {
             "yaw": -24,
@@ -594,78 +456,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
-        },
-        {
-          "id": "puc-gourmet-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
           },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Gourmet.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-gourmet-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "reference_depth": 8,
-          "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Gourmet.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         }
       ]
     },
@@ -673,31 +468,33 @@
       "id": "puc-hall-de-elevador",
       "title": "PUC - Hall de Elevador.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/puc/PUC - Hall de Elevador.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Hall de Elevador.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
       "hotspots": [
         {
-          "id": "go-to-puc-mesa-academia",
+          "id": "go-to-puc-academia-banheiro",
           "type": "scene_link",
-          "target_scene": "puc-mesa-academia",
+          "target_scene": "puc-academia-banheiro",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": -6.396,
+            "y": -4.332,
+            "z": 2.079
           },
           "rotation": {
             "yaw": 24,
@@ -708,7 +505,7 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Ir para PUC - Mesa Academia.jpg",
+            "text": "PUC - Academia Banheiro.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -723,7 +520,11 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": "puc",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
           "id": "go-to-puc-gourmet",
@@ -758,51 +559,23 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
-          "id": "puc-hall-de-elevador-label",
-          "type": "annotation",
+          "id": "go-to-puc-sauna",
+          "type": "scene_link",
+          "target_tour": "puc",
+          "target_scene": "puc-sauna",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Hall de Elevador.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-hall-de-elevador-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": 4.873,
+            "y": -5.541,
+            "z": 3.092
           },
           "rotation": {
             "yaw": 0,
@@ -812,13 +585,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "PUC - Hall de Elevador.jpg",
+            "text": "PUC - Sauna.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {
@@ -837,31 +610,33 @@
       "id": "puc-mesa-academia",
       "title": "PUC - Mesa Academia.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/puc/PUC - Mesa Academia.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Mesa Academia.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
       "hotspots": [
         {
           "id": "go-to-puc-pergolado-inferior",
           "type": "scene_link",
           "target_scene": "puc-pergolado-inferior",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": 3.124,
+            "y": -0.969,
+            "z": -7.301
           },
           "rotation": {
             "yaw": 24,
@@ -887,16 +662,20 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": null,
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
-          "id": "go-to-puc-hall-de-elevador",
+          "id": "go-to-puc-piscina",
           "type": "scene_link",
-          "target_scene": "puc-hall-de-elevador",
+          "target_scene": "puc-piscina",
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
+            "x": -7.76,
+            "y": -0.387,
+            "z": -1.906
           },
           "rotation": {
             "yaw": -24,
@@ -907,7 +686,7 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Voltar para PUC - Hall de Elevador.jpg",
+            "text": "PUC - Piscina.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -922,51 +701,23 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
-          }
+          },
+          "target_tour": "puc",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
         },
         {
-          "id": "puc-mesa-academia-label",
-          "type": "annotation",
+          "id": "go-to-puc-academia",
+          "type": "scene_link",
+          "target_tour": "puc",
+          "target_scene": "puc-academia",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Mesa Academia.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-mesa-academia-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": 7.814,
+            "y": -1.643,
+            "z": -0.488
           },
           "rotation": {
             "yaw": 0,
@@ -976,13 +727,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "PUC - Mesa Academia.jpg",
+            "text": "PUC - Academia.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {
@@ -1001,31 +752,33 @@
       "id": "puc-pergolado-inferior",
       "title": "PUC - Pergolado Inferior.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/puc/PUC - Pergolado Inferior.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Pergolado Inferior.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
       "hotspots": [
         {
-          "id": "go-to-puc-piscina",
+          "id": "go-to-puc-gourmet",
           "type": "scene_link",
-          "target_scene": "puc-piscina",
+          "target_scene": "puc-gourmet",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": 7.704,
+            "y": -1.132,
+            "z": 1.836
           },
           "rotation": {
             "yaw": 24,
@@ -1036,7 +789,89 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Ir para PUC - Piscina.jpg",
+            "text": "PUC - Gourmet.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          },
+          "target_tour": "puc",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
+        },
+        {
+          "id": "puc-pergolado-inferior-hotspot",
+          "type": "scene_link",
+          "target_tour": "puc",
+          "target_scene": "puc-academia-banheiro",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "position": {
+            "x": 7.864,
+            "y": -1.19,
+            "z": -0.86
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "PUC - Academia Banheiro.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          }
+        },
+        {
+          "id": "go-to-puc-vista-meio-salao",
+          "type": "scene_link",
+          "target_tour": "puc",
+          "target_scene": "puc-vista-meio-salao",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "position": {
+            "x": 5.219,
+            "y": -2.581,
+            "z": 5.486
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "PUC - Vista Meio Salao.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -1056,81 +891,14 @@
         {
           "id": "go-to-puc-mesa-academia",
           "type": "scene_link",
+          "target_tour": "puc",
           "target_scene": "puc-mesa-academia",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": -24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
-          "marker_visible": true,
-          "label": {
-            "text": "Voltar para PUC - Mesa Academia.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-pergolado-inferior-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Pergolado Inferior.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-pergolado-inferior-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": -3.375,
+            "y": -2.034,
+            "z": 6.962
           },
           "rotation": {
             "yaw": 0,
@@ -1140,13 +908,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
+          "marker_visible": true,
           "label": {
-            "text": "PUC - Pergolado Inferior.jpg",
+            "text": "PUC - Mesa Academia.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
-              "y": 0,
+              "y": 0.9,
               "z": 0
             },
             "rotation_offset": {
@@ -1165,31 +933,33 @@
       "id": "puc-piscina",
       "title": "PUC - Piscina.jpg",
       "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
       "media": {
         "type": "image",
-        "src": "./data/tours/puc/PUC - Piscina.jpg",
         "projection": "equirectangular",
         "stereo_layout": "top-bottom",
         "eye_order": "left-right",
-        "mono_eye": "left"
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Piscina.jpg"
       },
       "rotation": {
         "yaw": 0,
         "pitch": 0,
         "roll": 0
       },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
       "hotspots": [
         {
-          "id": "go-to-puc-sauna",
+          "id": "go-to-puc-mesa-academia",
           "type": "scene_link",
-          "target_scene": "puc-sauna",
+          "target_scene": "puc-mesa-academia",
           "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
+            "x": 7.884,
+            "y": -1.321,
+            "z": -0.306
           },
           "rotation": {
             "yaw": 24,
@@ -1200,7 +970,139 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Ir para PUC - Sauna.jpg",
+            "text": "PUC - Mesa Academia.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          },
+          "target_tour": "puc",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
+        }
+      ]
+    },
+    {
+      "id": "puc-sauna",
+      "title": "PUC - Sauna.jpg",
+      "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
+      "media": {
+        "type": "image",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Sauna.jpg"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "hotspots": [
+        {
+          "id": "go-to-puc-hall-de-elevador",
+          "type": "scene_link",
+          "target_scene": "puc-hall-de-elevador",
+          "position": {
+            "x": -0.924,
+            "y": -5.321,
+            "z": -5.902
+          },
+          "rotation": {
+            "yaw": -24,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "PUC - Hall de Elevador.jpg",
+            "visible": true,
+            "position_offset": {
+              "x": 0,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation_offset": {
+              "yaw": 0,
+              "pitch": 0,
+              "roll": 0
+            },
+            "scale": 1,
+            "reference_depth": 8,
+            "billboard": true
+          },
+          "target_tour": "puc",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "reference_depth": 8
+        }
+      ]
+    },
+    {
+      "id": "puc-vista-meio-salao",
+      "title": "PUC - Vista Meio Salao.jpg",
+      "media_type": "equirectangular-image",
+      "scale": 1,
+      "billboard": true,
+      "minimap_image": "./data/tours/puc/mapa_padrao.png",
+      "scene_global_yaw": false,
+      "flip_horizontally": false,
+      "media": {
+        "type": "image",
+        "projection": "equirectangular",
+        "stereo_layout": "top-bottom",
+        "eye_order": "left-right",
+        "mono_eye": "left",
+        "src": "./data/tours/puc/PUC - Vista Meio Salao.jpg"
+      },
+      "rotation": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "hotspots": [
+        {
+          "id": "go-to-puc-gourmet-cozinha",
+          "type": "scene_link",
+          "target_tour": "puc",
+          "target_scene": "puc-gourmet-cozinha",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
+          "position": {
+            "x": 7.667,
+            "y": -1.589,
+            "z": 1.639
+          },
+          "rotation": {
+            "yaw": 0,
+            "pitch": 0,
+            "roll": 0
+          },
+          "scale": 1,
+          "reference_depth": 8,
+          "billboard": true,
+          "marker_visible": true,
+          "label": {
+            "text": "PUC - Gourmet Cozinha.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -1220,81 +1122,14 @@
         {
           "id": "go-to-puc-pergolado-inferior",
           "type": "scene_link",
+          "target_tour": "puc",
           "target_scene": "puc-pergolado-inferior",
+          "apply_hotspot_scene_yaw": false,
+          "hotspot_define_scene_yaw": 0,
           "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": -24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
-          "marker_visible": true,
-          "label": {
-            "text": "Voltar para PUC - Pergolado Inferior.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-piscina-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Piscina.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-piscina-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
+            "x": -4.468,
+            "y": -2.062,
+            "z": -6.307
           },
           "rotation": {
             "yaw": 0,
@@ -1304,341 +1139,13 @@
           "scale": 1,
           "reference_depth": 8,
           "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Piscina.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        }
-      ]
-    },
-    {
-      "id": "puc-sauna",
-      "title": "PUC - Sauna.jpg",
-      "media_type": "equirectangular-image",
-      "media": {
-        "type": "image",
-        "src": "./data/tours/puc/PUC - Sauna.jpg",
-        "projection": "equirectangular",
-        "stereo_layout": "top-bottom",
-        "eye_order": "left-right",
-        "mono_eye": "left"
-      },
-      "rotation": {
-        "yaw": 0,
-        "pitch": 0,
-        "roll": 0
-      },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
-      "hotspots": [
-        {
-          "id": "go-to-puc-vista-meio-salao",
-          "type": "scene_link",
-          "target_scene": "puc-vista-meio-salao",
-          "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "Ir para PUC - Vista Meio Salao.jpg",
+            "text": "PUC - Pergolado Inferior.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
               "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "go-to-puc-piscina",
-          "type": "scene_link",
-          "target_scene": "puc-piscina",
-          "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": -24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
-          "marker_visible": true,
-          "label": {
-            "text": "Voltar para PUC - Piscina.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-sauna-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Sauna.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-sauna-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "reference_depth": 8,
-          "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Sauna.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        }
-      ]
-    },
-    {
-      "id": "puc-vista-meio-salao",
-      "title": "PUC - Vista Meio Salao.jpg",
-      "media_type": "equirectangular-image",
-      "media": {
-        "type": "image",
-        "src": "./data/tours/puc/PUC - Vista Meio Salao.jpg",
-        "projection": "equirectangular",
-        "stereo_layout": "top-bottom",
-        "eye_order": "left-right",
-        "mono_eye": "left"
-      },
-      "rotation": {
-        "yaw": 0,
-        "pitch": 0,
-        "roll": 0
-      },
-      "scale": 1,
-      "billboard": true,
-      "minimap_image": "./data/tours/puc/mapa_padrao.png",
-      "hotspots": [
-        {
-          "id": "go-to-puc-academia-banheiro",
-          "type": "scene_link",
-          "target_scene": "puc-academia-banheiro",
-          "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
-          "marker_visible": true,
-          "label": {
-            "text": "Ir para PUC - Academia Banheiro.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "go-to-puc-sauna",
-          "type": "scene_link",
-          "target_scene": "puc-sauna",
-          "position": {
-            "x": -5,
-            "y": 0.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": -24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
-          "marker_visible": true,
-          "label": {
-            "text": "Voltar para PUC - Sauna.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-vista-meio-salao-label",
-          "type": "annotation",
-          "position": {
-            "x": 0,
-            "y": 1.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 0.9,
-          "billboard": true,
-          "target_scene": null,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Vista Meio Salao.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 0.9,
-            "reference_depth": 8,
-            "billboard": true
-          }
-        },
-        {
-          "id": "puc-vista-meio-salao-scene-label",
-          "type": "annotation",
-          "target_scene": null,
-          "position": {
-            "x": 0,
-            "y": 1.75,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 0,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "reference_depth": 8,
-          "billboard": true,
-          "marker_visible": false,
-          "label": {
-            "text": "PUC - Vista Meio Salao.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0,
               "z": 0
             },
             "rotation_offset": {

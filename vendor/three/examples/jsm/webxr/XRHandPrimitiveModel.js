@@ -29,7 +29,7 @@ class XRHandPrimitiveModel {
 	 * @param {XRHandedness} handedness - The handedness of the XR input source.
 	 * @param {XRHandPrimitiveModel~Options} options - The model options.
 	 */
-	constructor( handModel, controller, path, handedness, options ) {
+	constructor( handModel, controller, path, handedness, options, connectionToken = 0 ) {
 
 		/**
 		 * The WebXR controller.
@@ -44,6 +44,7 @@ class XRHandPrimitiveModel {
 		 * @type {XRHandModel}
 		 */
 		this.handModel = handModel;
+		this.connectionToken = connectionToken;
 
 		/**
 		 * The model's environment map.

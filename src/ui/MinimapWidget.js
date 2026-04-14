@@ -19,11 +19,13 @@ export class MinimapWidget {
 
     const widget = document.createElement("article");
     widget.id = "minimap_widget";
-    widget.setAttribute("aria-label", "Scene minimap");
+    widget.setAttribute("aria-label", "Minimapa da cena");
+    widget.title = "Visualizacao auxiliar do minimapa da cena atual.";
 
     const header = document.createElement("header");
     const title = document.createElement("h2");
-    title.textContent = "Minimap";
+    title.textContent = "Minimapa";
+    title.title = "Resumo visual da cena atual no minimapa.";
     const sceneLabel = document.createElement("span");
     sceneLabel.className = "eyebrow";
     sceneLabel.textContent = scene.title ?? scene.id;
@@ -32,6 +34,7 @@ export class MinimapWidget {
     const image = document.createElement("img");
     image.src = minimapImage;
     image.alt = `${scene.title ?? scene.id} minimap`;
+    image.title = `Minimapa da cena ${scene.title ?? scene.id}.`;
     image.loading = "lazy";
     image.onerror = () => this.root.replaceChildren();
 

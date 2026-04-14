@@ -38,8 +38,9 @@ export class VRSceneController {
       return;
     }
 
-    await this.renderer.showScene(state.currentScene, state.currentTour, options);
+    const sceneTransition = await this.renderer.showScene(state.currentScene, state.currentTour, options);
     this.hotspotRenderer.render(state.currentScene);
+    return sceneTransition;
   }
 
   screenToWorldFromEvent(event, options) {

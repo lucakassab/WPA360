@@ -12,7 +12,8 @@ export class TwoDSceneController {
     this.renderer = new TwoDRenderer({
       root: this.root,
       cfgProvider: () => this.context.store.getSnapshot().cfg,
-      assetCache: this.context.assetCache
+      assetCache: this.context.assetCache,
+      context: this.context
     });
     this.hotspotRenderer = new TwoDHotspotRenderer({
       root: this.renderer.hotspotLayer,
@@ -28,13 +29,26 @@ export class TwoDSceneController {
     this.inputController.attach();
   }
 
-  async render(state) {
+  async render(state, options = {}) {
     if (!state.currentScene) {
       return;
     }
 
-    await this.renderer.showScene(state.currentScene, state.currentTour);
-    this.hotspotRenderer.render(state.currentScene);
+    this.renderer.setInteractionLocked(true);
+    this.hotspotRenderer.setInteractionLocked(true);
+
+    try {
+      const sceneTransition = await this.renderer.showScene(state.currentScene, state.currentTour, options);
+      await this.renderer.waitForScenePresentation(sceneTransition?.transitionId);
+      this.renderer.compactSceneResources(state.currentScene);
+      this.hotspotRenderer.render(state.currentScene);
+      this.hotspotRenderer.updateProjection();
+      await waitForUiCommit();
+      return sceneTransition;
+    } finally {
+      this.hotspotRenderer.setInteractionLocked(false);
+      this.renderer.setInteractionLocked(false);
+    }
   }
 
   screenToWorldFromEvent(event, options) {
@@ -46,4 +60,10 @@ export class TwoDSceneController {
     this.hotspotRenderer?.destroy();
     this.renderer?.destroy();
   }
+}
+
+function waitForUiCommit() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
 }

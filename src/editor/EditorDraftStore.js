@@ -6,11 +6,16 @@ export class EditorDraftStore {
   constructor({ context }) {
     this.context = context;
     this.listeners = new Set();
+    this.undoStack = [];
+    this.maxUndoEntries = 80;
+    this.savedDraftSignature = null;
     this.state = {
       draft: null,
       activeSceneId: null,
       selectedSceneId: null,
       selectedHotspotId: null,
+      lastCreatedHotspotId: null,
+      lastCreatedAtMs: 0,
       dirty: false,
       error: null
     };
@@ -25,6 +30,7 @@ export class EditorDraftStore {
   destroy() {
     this.unsubscribeRuntime?.();
     this.listeners.clear();
+    this.undoStack = [];
   }
 
   subscribe(listener) {
@@ -60,6 +66,8 @@ export class EditorDraftStore {
       activeSceneId,
       selectedSceneId: activeSceneId,
       selectedHotspotId: activeScene?.hotspots?.[0]?.id ?? null,
+      lastCreatedHotspotId: null,
+      lastCreatedAtMs: 0,
       dirty: false,
       error: null
     });
@@ -84,6 +92,47 @@ export class EditorDraftStore {
 
   getSnapshot() {
     return this.state;
+  }
+
+  captureUndoPoint() {
+    if (!this.state.draft) {
+      return false;
+    }
+
+    const snapshot = createHistorySnapshot(this.state);
+    const signature = JSON.stringify(snapshot);
+    if (this.undoStack[this.undoStack.length - 1]?.signature === signature) {
+      return false;
+    }
+
+    this.undoStack.push({ snapshot, signature });
+    if (this.undoStack.length > this.maxUndoEntries) {
+      this.undoStack.splice(0, this.undoStack.length - this.maxUndoEntries);
+    }
+    return true;
+  }
+
+  undo() {
+    const previous = this.undoStack.pop();
+    if (!previous?.snapshot) {
+      return false;
+    }
+
+    this.restoreSnapshot(previous.snapshot);
+    return true;
+  }
+
+  saveDraft() {
+    if (!this.state.draft) {
+      return false;
+    }
+
+    this.savedDraftSignature = JSON.stringify(toExportableTour(this.state.draft));
+    this.patch({
+      dirty: false,
+      error: null
+    });
+    return true;
   }
 
   setSelectedScene(sceneId) {
@@ -111,6 +160,14 @@ export class EditorDraftStore {
     const hotspot = getHotspot(scene, hotspotId);
     if (!scene || !hotspot) {
       return false;
+    }
+
+    if (
+      this.state.activeSceneId === scene.id
+      && this.state.selectedSceneId === scene.id
+      && this.state.selectedHotspotId === hotspot.id
+    ) {
+      return true;
     }
 
     this.patch({
@@ -199,11 +256,32 @@ export class EditorDraftStore {
       if (field === "type") {
         const nextType = value === "scene_link" ? "scene_link" : "annotation";
         hotspot.type = nextType;
+        hotspot.target_tour = nextType === "scene_link"
+          ? hotspot.target_tour ?? draft.id ?? null
+          : null;
         hotspot.target_scene = nextType === "scene_link"
           ? hotspot.target_scene ?? getAlternateSceneId(draft.scenes, scene.id)
           : null;
+        hotspot.apply_hotspot_scene_yaw = nextType === "scene_link"
+          ? hotspot.apply_hotspot_scene_yaw === true
+          : false;
+        hotspot.hotspot_define_scene_yaw = nextType === "scene_link"
+          ? safeNumber(hotspot.hotspot_define_scene_yaw, 0)
+          : 0;
         hotspot.label ??= createHotspotLabel(nextType);
         hotspot.label.text ||= nextType === "scene_link" ? "Ir para cena" : "Anotacao";
+        if (nextType === "scene_link") {
+          syncLinkedHotspotMetadata(draft, scene, hotspot, this.state);
+        }
+        return;
+      }
+
+      if (field === "target_tour") {
+        hotspot.target_tour = value || null;
+        if (hotspot.target_tour) {
+          hotspot.type = "scene_link";
+        }
+        syncLinkedHotspotMetadata(draft, scene, hotspot, this.state);
         return;
       }
 
@@ -211,7 +289,9 @@ export class EditorDraftStore {
         hotspot.target_scene = value || null;
         if (hotspot.target_scene) {
           hotspot.type = "scene_link";
+          hotspot.target_tour ??= draft.id ?? null;
         }
+        syncLinkedHotspotMetadata(draft, scene, hotspot, this.state);
         return;
       }
 
@@ -253,6 +333,12 @@ export class EditorDraftStore {
         return;
       }
 
+      if (field === "reference_depth") {
+        hotspot.label.reference_depth = value;
+        hotspot.label.reference_depth_linked = false;
+        return;
+      }
+
       hotspot.label[field] = value;
     });
   }
@@ -269,12 +355,69 @@ export class EditorDraftStore {
         return;
       }
 
+      const previousReferenceDepth = safeNumber(
+        hotspot.reference_depth,
+        distanceFromOrigin(hotspot.position)
+      );
+      const nextReferenceDepth = roundPosition(position.depth ?? distanceFromOrigin(position));
+
       hotspot.position = {
         x: roundPosition(position.x),
         y: roundPosition(position.y),
         z: roundPosition(position.z)
       };
-      hotspot.reference_depth = roundPosition(position.depth ?? distanceFromOrigin(hotspot.position));
+      hotspot.reference_depth = nextReferenceDepth;
+      if (shouldSyncLabelReferenceDepth(hotspot, previousReferenceDepth)) {
+        hotspot.label.reference_depth = nextReferenceDepth;
+      }
+
+      this.context.debugLog?.("editor:hotspot-move:apply-draft", {
+        hotspotId: hotspot.id,
+        sceneId: scene?.id ?? null,
+        isRecentlyCreated: hotspot.id === this.state.lastCreatedHotspotId,
+        lastCreatedHotspotId: this.state.lastCreatedHotspotId,
+        position: hotspot.position,
+        referenceDepth: hotspot.reference_depth,
+        sourcePosition: position
+      });
+    });
+  }
+
+  applySelectedHotspotTransform({ position = null, rotation = null, referenceDepth = undefined } = {}) {
+    this.updateDraft((draft) => {
+      const scene = getScene(draft, this.state.selectedSceneId);
+      const hotspot = getHotspot(scene, this.state.selectedHotspotId);
+      if (!hotspot) {
+        return;
+      }
+
+      if (position) {
+        const previousReferenceDepth = safeNumber(
+          hotspot.reference_depth,
+          distanceFromOrigin(hotspot.position)
+        );
+        hotspot.position = {
+          x: roundPosition(position.x),
+          y: roundPosition(position.y),
+          z: roundPosition(position.z)
+        };
+        const nextReferenceDepth = roundPosition(
+          referenceDepth ?? position.depth ?? distanceFromOrigin(hotspot.position)
+        );
+        hotspot.reference_depth = nextReferenceDepth;
+        if (shouldSyncLabelReferenceDepth(hotspot, previousReferenceDepth)) {
+          hotspot.label.reference_depth = nextReferenceDepth;
+        }
+      }
+
+      if (rotation) {
+        hotspot.rotation = {
+          ...normalizeRotation(hotspot.rotation),
+          yaw: roundPosition(rotation.yaw),
+          pitch: roundPosition(rotation.pitch),
+          roll: roundPosition(rotation.roll)
+        };
+      }
     });
   }
 
@@ -323,7 +466,11 @@ export class EditorDraftStore {
       for (const scene of draft.scenes) {
         scene.hotspots = (scene.hotspots ?? []).map((hotspot) => ({
           ...hotspot,
-          target_scene: hotspot.target_scene === removedId ? null : hotspot.target_scene
+          target_scene:
+            hotspot.target_scene === removedId
+            && (!hotspot.target_tour || hotspot.target_tour === draft.id)
+              ? null
+              : hotspot.target_scene
         }));
       }
       if (draft.initial_scene === removedId) {
@@ -335,7 +482,9 @@ export class EditorDraftStore {
     });
   }
 
-  addHotspot(type = "scene_link") {
+  addHotspot(type = "scene_link", options = {}) {
+    let createdHotspotId = null;
+
     this.updateDraft((draft) => {
       const scene = getScene(draft, this.state.selectedSceneId);
       if (!scene) {
@@ -344,11 +493,34 @@ export class EditorDraftStore {
 
       scene.hotspots ??= [];
       const id = uniqueId(scene.hotspots.map((hotspot) => hotspot.id), `${scene.id}-hotspot`);
-      const targetScene = getAlternateSceneId(draft.scenes, scene.id);
-      const hotspot = createHotspot(id, type, targetScene);
+      const targetScene = options.targetSceneId ?? getAlternateSceneId(draft.scenes, scene.id);
+      const targetTour = options.targetTourId ?? draft.id ?? null;
+      const targetSceneTitle = getSceneTitleForHotspot(draft, targetTour, targetScene);
+      const hotspot = createHotspot(id, type, targetScene, targetTour, {
+        position: options.position,
+        referenceDepth: options.referenceDepth,
+        labelText: options.labelText ?? (type === "scene_link" ? targetSceneTitle : null)
+      });
       scene.hotspots.push(hotspot);
       this.state.selectedHotspotId = hotspot.id;
+      this.state.lastCreatedHotspotId = hotspot.id;
+      this.state.lastCreatedAtMs = Date.now();
+      createdHotspotId = hotspot.id;
+
+      this.context.debugLog?.("editor:hotspot-create", {
+        hotspotId: hotspot.id,
+        sceneId: scene.id,
+        type,
+        targetScene,
+        targetTour,
+        position: hotspot.position,
+        referenceDepth: hotspot.reference_depth,
+        requestedPosition: options.position ?? null,
+        requestedReferenceDepth: options.referenceDepth ?? null
+      });
     });
+
+    return createdHotspotId;
   }
 
   deleteHotspot() {
@@ -437,6 +609,33 @@ export class EditorDraftStore {
       listener(this.state);
     }
   }
+
+  restoreSnapshot(snapshot) {
+    if (!snapshot) {
+      return false;
+    }
+
+    const draft = normalizeTour(deepClone(snapshot.draft));
+    this.patch({
+      draft,
+      activeSceneId: snapshot.activeSceneId,
+      selectedSceneId: snapshot.selectedSceneId,
+      selectedHotspotId: snapshot.selectedHotspotId,
+      dirty: this.savedDraftSignature !== JSON.stringify(toExportableTour(draft)),
+      error: null
+    });
+    this.applyRuntime();
+    return true;
+  }
+}
+
+function createHistorySnapshot(state) {
+  return {
+    draft: deepClone(state.draft),
+    activeSceneId: state.activeSceneId,
+    selectedSceneId: state.selectedSceneId,
+    selectedHotspotId: state.selectedHotspotId
+  };
 }
 
 function normalizeTour(tour) {
@@ -502,6 +701,8 @@ function normalizeScene(scene, index) {
     ...sceneRest,
     id,
     title: source.title || id,
+    scene_global_yaw: source.scene_global_yaw !== false,
+    flip_horizontally: source.flip_horizontally === true || sourceMedia?.flip_horizontally === true,
     media_type: source.media_type || "equirectangular-image",
     media,
     rotation: {
@@ -529,7 +730,10 @@ function normalizeHotspot(hotspot, index) {
     ...source,
     id: source.id ? slugify(source.id) : `hotspot-${index + 1}`,
     type,
+    target_tour: type === "scene_link" ? source.target_tour ?? null : null,
     target_scene: type === "scene_link" ? source.target_scene ?? null : null,
+    apply_hotspot_scene_yaw: source.apply_hotspot_scene_yaw === true,
+    hotspot_define_scene_yaw: safeNumber(source.hotspot_define_scene_yaw, 0),
     position: normalizeVector(source.position, defaultHotspotPosition()),
     rotation: normalizeRotation(source.rotation),
     scale: safeNumber(source.scale, 1),
@@ -542,6 +746,7 @@ function normalizeHotspot(hotspot, index) {
       defaultPositionOffset: { x: 0, y: 0.9, z: 0 },
       fallbackScale: 1,
       fallbackReferenceDepth: safeNumber(source.reference_depth, 8),
+      defaultReferenceDepthLinked: source.label?.reference_depth == null,
       defaultBillboard: true
     })
   };
@@ -553,6 +758,7 @@ function normalizeHotspotLabel(label, {
   defaultPositionOffset = { x: 0, y: 0.9, z: 0 },
   fallbackScale = 1,
   fallbackReferenceDepth = 8,
+  defaultReferenceDepthLinked = true,
   defaultBillboard = true
 } = {}) {
   const source = isObject(label) ? label : {};
@@ -564,6 +770,7 @@ function normalizeHotspotLabel(label, {
     rotation_offset: normalizeRotation(source.rotation_offset),
     scale: safeNumber(source.scale, fallbackScale),
     reference_depth: safeNumber(source.reference_depth, fallbackReferenceDepth),
+    reference_depth_linked: source.reference_depth_linked ?? (source.reference_depth == null ? defaultReferenceDepthLinked : false),
     billboard: source.billboard ?? defaultBillboard
   };
 }
@@ -572,6 +779,8 @@ function createScene(id) {
   return {
     id,
     title: id,
+    scene_global_yaw: true,
+    flip_horizontally: false,
     media_type: "equirectangular-image",
     media: createSceneMedia(),
     rotation: defaultRotation(),
@@ -593,29 +802,34 @@ function createSceneMedia() {
   };
 }
 
-function createHotspot(id, type, targetScene) {
+function createHotspot(id, type, targetScene, targetTour = null, { position = null, referenceDepth = null, labelText = null } = {}) {
   const normalizedType = type === "scene_link" ? "scene_link" : "annotation";
+  const normalizedPosition = normalizeVector(position, defaultHotspotPosition());
+  const normalizedReferenceDepth = safeNumber(referenceDepth, 8);
   return {
     id,
     type: normalizedType,
+    target_tour: normalizedType === "scene_link" ? targetTour ?? null : null,
     target_scene: normalizedType === "scene_link" ? targetScene ?? null : null,
-    position: defaultHotspotPosition(),
+    apply_hotspot_scene_yaw: false,
+    hotspot_define_scene_yaw: 0,
+    position: normalizedPosition,
     rotation: defaultRotation(),
     scale: 1,
-    reference_depth: 8,
+    reference_depth: normalizedReferenceDepth,
     billboard: true,
     marker_visible: true,
-    label: createHotspotLabel(normalizedType)
+    label: createHotspotLabel(normalizedType, labelText, normalizedReferenceDepth)
   };
 }
 
-function createHotspotLabel(type) {
+function createHotspotLabel(type, fallbackText = null, fallbackReferenceDepth = 8) {
   return normalizeHotspotLabel({}, {
-    fallbackText: type === "scene_link" ? "Ir para cena" : "Anotacao",
+    fallbackText: fallbackText || (type === "scene_link" ? "Ir para cena" : "Anotacao"),
     defaultVisible: true,
     defaultPositionOffset: defaultLabelOffset(),
     fallbackScale: 1,
-    fallbackReferenceDepth: 8,
+    fallbackReferenceDepth,
     defaultBillboard: true
   });
 }
@@ -636,7 +850,7 @@ function stripRuntimeFields(value) {
   if (value && typeof value === "object") {
     const output = {};
     for (const [key, item] of Object.entries(value)) {
-      if (key === "raw" || key === "media_available") {
+      if (key === "raw" || key === "media_available" || key === "reference_depth_linked") {
         continue;
       }
       output[key] = stripRuntimeFields(item);
@@ -660,7 +874,10 @@ function renameScene(draft, oldId, nextId) {
 
   for (const candidate of draft.scenes) {
     for (const hotspot of candidate.hotspots ?? []) {
-      if (hotspot.target_scene === oldId) {
+      if (
+        hotspot.target_scene === oldId
+        && (!hotspot.target_tour || hotspot.target_tour === draft.id)
+      ) {
         hotspot.target_scene = nextId;
       }
     }
@@ -702,11 +919,67 @@ function getAlternateSceneId(scenes, currentSceneId) {
   return scenes.find((candidate) => candidate.id !== currentSceneId)?.id ?? currentSceneId ?? null;
 }
 
+function getSceneTitleForHotspot(draft, targetTourId, targetSceneId) {
+  const normalizedTourId = String(targetTourId ?? "").trim();
+  const normalizedSceneId = String(targetSceneId ?? "").trim();
+  if (!normalizedSceneId) {
+    return null;
+  }
+
+  if (!normalizedTourId || normalizedTourId === draft?.id) {
+    const localScene = draft?.scenes?.find((candidate) => candidate.id === normalizedSceneId) ?? null;
+    return localScene?.title ?? localScene?.id ?? normalizedSceneId;
+  }
+
+  return normalizedSceneId;
+}
+
+function syncLinkedHotspotMetadata(draft, scene, hotspot, state) {
+  if (!scene || !hotspot || hotspot.type !== "scene_link") {
+    return;
+  }
+
+  const targetSceneId = String(hotspot.target_scene ?? "").trim();
+  if (!targetSceneId) {
+    return;
+  }
+
+  hotspot.target_tour ??= draft?.id ?? null;
+  hotspot.label ??= createHotspotLabel("scene_link");
+
+  const nextLabelText = getSceneTitleForHotspot(draft, hotspot.target_tour, targetSceneId);
+  if (nextLabelText) {
+    hotspot.label.text = nextLabelText;
+  }
+
+  const targetTourId = String(hotspot.target_tour ?? "").trim();
+  const usesLocalTour = !targetTourId || targetTourId === draft?.id;
+  const preferredId = usesLocalTour
+    ? `go-to-${targetSceneId}`
+    : `go-to-${targetTourId}-${targetSceneId}`;
+  const existingIds = (scene.hotspots ?? [])
+    .filter((candidate) => candidate !== hotspot)
+    .map((candidate) => candidate.id);
+  const nextId = uniqueId(existingIds, preferredId);
+  const previousId = hotspot.id;
+
+  hotspot.id = nextId;
+  if (state?.selectedSceneId === scene.id && state.selectedHotspotId === previousId) {
+    state.selectedHotspotId = nextId;
+  }
+  if (state?.lastCreatedHotspotId === previousId) {
+    state.lastCreatedHotspotId = nextId;
+  }
+}
+
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function safeNumber(value, fallback) {
+  if (value == null || value === "") {
+    return fallback;
+  }
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
@@ -733,7 +1006,7 @@ function defaultRotation() {
 }
 
 function defaultHotspotPosition() {
-  return { x: 5, y: 0.25, z: -8 };
+  return { x: 0, y: 0.25, z: -8 };
 }
 
 function defaultLabelOffset() {
@@ -742,6 +1015,15 @@ function defaultLabelOffset() {
 
 function roundPosition(value) {
   return Math.round(safeNumber(value, 0) * 1000) / 1000;
+}
+
+function shouldSyncLabelReferenceDepth(hotspot, previousReferenceDepth) {
+  if (!hotspot?.label) {
+    return false;
+  }
+
+  const labelReferenceDepth = safeNumber(hotspot.label.reference_depth, previousReferenceDepth);
+  return Math.abs(labelReferenceDepth - previousReferenceDepth) < 0.0005;
 }
 
 function distanceFromOrigin(position) {

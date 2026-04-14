@@ -5,22 +5,39 @@ const DEFAULT_VIEW = {
   pitch: 0,
   fov: 86
 };
+const DEFAULT_MAX_TEXTURE_ENTRIES = 6;
+const DEFAULT_MAX_TEXTURE_ENTRIES_2D = 1;
 
 export class ThreePanoramaRenderer {
   constructor({
     root,
     assetCache,
+    xrDebug = null,
     previewMode = "mono",
     xrEnabled = false
   }) {
     this.root = root;
     this.assetCache = assetCache;
+    this.xrDebug = xrDebug;
     this.previewMode = previewMode;
     this.xrEnabled = xrEnabled;
     this.listeners = new Set();
+    this.sceneStatusListeners = new Set();
+    this.frameWaiters = [];
     this.textureCache = new Map();
+    this.pinnedTextureSrcs = new Set();
+    this.currentSceneSrc = "";
+    this.currentTextureSrc = "";
+    this.sceneTransitionCounter = 0;
+    this.sceneTransitionRecords = new Map();
+    this.activeSceneTransitionId = null;
+    this.pendingScenePresentation = null;
+    this.maxTextureEntries = xrEnabled
+      ? DEFAULT_MAX_TEXTURE_ENTRIES
+      : DEFAULT_MAX_TEXTURE_ENTRIES_2D;
     this.view = { ...DEFAULT_VIEW };
     this.baseRotation = { yaw: 0, pitch: 0, roll: 0 };
+    this.runtimeRotationOffset = { yaw: 0, pitch: 0, roll: 0 };
     this.contentOffset = new THREE.Vector3();
     this.renderStats = {
       mode: "idle",
@@ -31,7 +48,9 @@ export class ThreePanoramaRenderer {
     this.tempVectors = {
       worldPosition: new THREE.Vector3(),
       cameraPosition: new THREE.Vector3(),
+      sceneCameraPosition: new THREE.Vector3(),
       cameraDirection: new THREE.Vector3(),
+      sceneDirection: new THREE.Vector3(),
       toWorldPosition: new THREE.Vector3(),
       unprojectPoint: new THREE.Vector3(),
       headPosition: new THREE.Vector3(),
@@ -74,9 +93,10 @@ export class ThreePanoramaRenderer {
     }
 
     this.geometry = new THREE.SphereGeometry(500, 96, 64);
+    this.geometry.scale(-1, 1, 1);
     this.material = new THREE.MeshBasicMaterial({
       color: 0xffffff,
-      side: THREE.BackSide,
+      side: THREE.FrontSide,
       depthWrite: false
     });
     this.mesh = new THREE.Mesh(this.geometry, this.material);
@@ -86,6 +106,7 @@ export class ThreePanoramaRenderer {
     this.contentRoot.add(this.mesh);
 
     this.handleSessionEnd = this.handleSessionEnd.bind(this);
+    this.handleXRVisibilityChange = this.handleXRVisibilityChange.bind(this);
     this.handleAnimationFrame = this.handleAnimationFrame.bind(this);
     this.handleXRAnimationFrame = this.handleXRAnimationFrame.bind(this);
     this.onWindowResize = this.onWindowResize.bind(this);
@@ -99,43 +120,125 @@ export class ThreePanoramaRenderer {
     this.requestRender("init");
   }
 
-  async setScene(scene, { eye = "left" } = {}) {
+  async setScene(scene, { eye = "left", entryYawOverride = null } = {}) {
     this.activeScene = scene ?? null;
     this.stereoLayout = normalizeStereoLayout(scene?.media?.stereo_layout);
     this.eyeOrder = normalizeEyeOrder(scene?.media?.eye_order);
     this.monoEye = eye || scene?.media?.mono_eye || "left";
+    this.flipHorizontally = scene?.media?.flip_horizontally === true || scene?.flip_horizontally === true;
+    const hasEntryYawOverride = Number.isFinite(Number(entryYawOverride));
     this.baseRotation = {
-      yaw: Number(scene?.rotation?.yaw ?? 0),
+      yaw: hasEntryYawOverride
+        ? Number(entryYawOverride)
+        : (scene?.scene_global_yaw !== false ? Number(scene?.rotation?.yaw ?? 0) : 0),
       pitch: Number(scene?.rotation?.pitch ?? 0),
       roll: Number(scene?.rotation?.roll ?? 0)
     };
+    this.runtimeRotationOffset = { yaw: 0, pitch: 0, roll: 0 };
     this.applyContentTransform();
 
     const src = scene?.media_available === false ? "" : scene?.media?.src ?? "";
+    const transition = this.beginSceneTransition(scene, src);
+    this.xrDebug?.log("scene-transition-begin", {
+      transitionId: transition.transitionId,
+      sceneId: transition.sceneId,
+      src: transition.src,
+      details: {
+        stereoLayout: this.stereoLayout,
+        eyeOrder: this.eyeOrder,
+        presenting: this.isPresenting()
+      }
+    });
     if (!src) {
-      this.setTexture(null);
+      this.currentSceneSrc = "";
+      this.setTexture(null, "");
+      this.clearTextureCache();
       this.root.classList.add("is-empty");
+      this.notifySceneStatus({
+        state: "scene-cleared",
+        transitionId: transition.transitionId,
+        sceneId: scene?.id ?? null,
+        src: null
+      });
+      this.settleSceneTransition(transition, {
+        state: "scene-cleared",
+        presented: false
+      });
       this.requestRender("scene-cleared");
-      return;
+      return transition;
     }
 
-    const token = Symbol(src);
+    if (this.currentSceneSrc === src && this.material.map) {
+      this.root.classList.remove("is-empty");
+      this.notifySceneStatus({
+        state: "scene-updated",
+        transitionId: transition.transitionId,
+        sceneId: scene?.id ?? null,
+        src
+      });
+      this.queueScenePresentation(transition);
+      this.requestRender("scene-updated");
+      return transition;
+    }
+
+    if (this.shouldUseAggressiveStereoSceneSwap(scene, src)) {
+      this.releaseCurrentTextureForSwap(src);
+      await this.waitForNextRenderFrame();
+    }
+
+    this.notifySceneStatus({
+      state: "loading-start",
+      transitionId: transition.transitionId,
+      sceneId: scene?.id ?? null,
+      src
+    });
+    const token = Symbol(transition.transitionId);
     this.pendingTextureToken = token;
-    const loadedAsset = await this.assetCache.loadImage(src, { optional: true });
-    if (this.pendingTextureToken !== token) {
-      return;
+    const loadedAsset = await this.assetCache.loadImage(src, {
+      optional: true,
+      transitionId: transition.transitionId,
+      sceneId: transition.sceneId
+    });
+    if (this.pendingTextureToken !== token || this.activeSceneTransitionId !== transition.transitionId) {
+      this.settleSceneTransition(transition, {
+        state: "scene-superseded",
+        presented: false
+      });
+      return transition;
     }
 
     if (!loadedAsset) {
-      this.setTexture(null);
+      this.currentSceneSrc = "";
+      this.setTexture(null, "");
+      this.clearTextureCache();
       this.root.classList.add("is-empty");
+      this.notifySceneStatus({
+        state: "scene-missing-texture",
+        transitionId: transition.transitionId,
+        sceneId: scene?.id ?? null,
+        src
+      });
+      this.settleSceneTransition(transition, {
+        state: "scene-missing-texture",
+        presented: false
+      });
       this.requestRender("scene-missing-texture");
-      return;
+      return transition;
     }
 
     this.root.classList.remove("is-empty");
-    this.setTexture(this.getOrCreateTexture(loadedAsset));
+    this.currentSceneSrc = src;
+    this.setTexture(this.getOrCreateTexture(loadedAsset, scene, transition), src, transition);
+    this.evictTextures([src]);
+    this.notifySceneStatus({
+      state: "texture-ready",
+      transitionId: transition.transitionId,
+      sceneId: scene?.id ?? null,
+      src
+    });
+    this.queueScenePresentation(transition);
     this.requestRender("scene-texture-ready");
+    return transition;
   }
 
   render({ yaw = 0, pitch = 0, fov = 86 } = {}) {
@@ -179,9 +282,65 @@ export class ThreePanoramaRenderer {
     }
   }
 
+  setRuntimeRotationOffset(offset = { yaw: 0, pitch: 0, roll: 0 }) {
+    const nextYaw = Number(offset?.yaw ?? 0);
+    const nextPitch = Number(offset?.pitch ?? 0);
+    const nextRoll = Number(offset?.roll ?? 0);
+
+    if (
+      this.runtimeRotationOffset.yaw === nextYaw
+      && this.runtimeRotationOffset.pitch === nextPitch
+      && this.runtimeRotationOffset.roll === nextRoll
+    ) {
+      return;
+    }
+
+    this.runtimeRotationOffset = {
+      yaw: nextYaw,
+      pitch: nextPitch,
+      roll: nextRoll
+    };
+    this.applyContentTransform();
+    this.contentRoot.updateMatrixWorld(true);
+
+    if (!this.isPresenting()) {
+      this.requestRender("runtime-rotation-offset");
+    }
+  }
+
   onFrame(listener) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  onSceneStatusChange(listener) {
+    this.sceneStatusListeners.add(listener);
+    return () => this.sceneStatusListeners.delete(listener);
+  }
+
+  waitForScenePresentation(transitionId) {
+    if (!transitionId) {
+      return Promise.resolve(null);
+    }
+
+    const record = this.sceneTransitionRecords.get(transitionId);
+    if (!record) {
+      return Promise.resolve(null);
+    }
+
+    if (record.settled) {
+      return Promise.resolve(record.result);
+    }
+
+    return new Promise((resolve) => {
+      record.waiters.push(resolve);
+    });
+  }
+
+  getCurrentSceneTransition() {
+    return this.activeSceneTransitionId
+      ? this.sceneTransitionRecords.get(this.activeSceneTransitionId)?.metadata ?? null
+      : null;
   }
 
   getPerformanceSnapshot() {
@@ -189,8 +348,223 @@ export class ThreePanoramaRenderer {
       ...this.renderStats,
       presenting: this.isPresenting(),
       previewMode: this.previewMode,
-      queuedNonXrFrame: Boolean(this.rafHandle)
+      queuedNonXrFrame: Boolean(this.rafHandle),
+      textureCacheSize: this.textureCache.size,
+      pinnedTextureCount: this.pinnedTextureSrcs.size,
+      rendererMemory: this.getRendererMemorySnapshot()
     };
+  }
+
+  getRenderResourceStats() {
+    return {
+      textureCacheSize: this.textureCache.size,
+      pinnedTextureCount: this.pinnedTextureSrcs.size,
+      currentSceneSrc: this.currentSceneSrc || null,
+      currentTextureSrc: this.currentTextureSrc || null,
+      rendererMemory: this.getRendererMemorySnapshot()
+    };
+  }
+
+  async preloadSceneTextures(scenes = []) {
+    const uniqueScenes = [];
+    const seenSources = new Set();
+    for (const scene of scenes ?? []) {
+      const src = scene?.media?.src;
+      if (!src) {
+        continue;
+      }
+      const normalizedSrc = this.assetCache?.normalizeUrl?.(src) ?? src;
+      if (seenSources.has(normalizedSrc)) {
+        continue;
+      }
+      seenSources.add(normalizedSrc);
+      uniqueScenes.push(scene);
+    }
+    const sources = uniqueScenes.map((scene) => this.assetCache?.normalizeUrl?.(scene?.media?.src) ?? scene?.media?.src);
+    this.setPinnedTextureSources(sources);
+
+    const preloadResults = [];
+    for (const scene of uniqueScenes) {
+      const src = this.assetCache?.normalizeUrl?.(scene?.media?.src) ?? scene?.media?.src;
+      const loadedAsset = await this.assetCache.loadImage(src, { optional: true });
+      if (!loadedAsset) {
+        preloadResults.push({ src, status: "missing" });
+        continue;
+      }
+
+      const texture = this.getOrCreateTexture(loadedAsset, scene);
+      this.renderer.initTexture?.(texture);
+      preloadResults.push({ src: loadedAsset.src, status: "ready" });
+      if (isStereoScene(scene)) {
+        await this.waitForNextRenderFrame();
+      }
+    }
+
+    this.evictTextures(sources);
+    return preloadResults;
+  }
+
+  getBaseCamera() {
+    return this.camera;
+  }
+
+  notifySceneStatus(event) {
+    if (event?.state) {
+      this.xrDebug?.log(event.state, {
+        transitionId: event.transitionId ?? null,
+        sceneId: event.sceneId ?? null,
+        src: event.src ?? null,
+        details: {
+          frameSource: event.frameSource ?? null
+        }
+      });
+    }
+    for (const listener of this.sceneStatusListeners) {
+      listener(event);
+    }
+  }
+
+  beginSceneTransition(scene, src) {
+    if (this.activeSceneTransitionId) {
+      this.settleSceneTransition(this.activeSceneTransitionId, {
+        state: "scene-superseded",
+        presented: false
+      });
+    }
+
+    const transition = {
+      transitionId: `scene-transition-${++this.sceneTransitionCounter}`,
+      sceneId: scene?.id ?? null,
+      src: src || null
+    };
+    this.activeSceneTransitionId = transition.transitionId;
+    this.sceneTransitionRecords.set(transition.transitionId, {
+      metadata: transition,
+      settled: false,
+      result: null,
+      waiters: []
+    });
+    return transition;
+  }
+
+  queueScenePresentation(transition) {
+    this.pendingScenePresentation = { ...transition };
+  }
+
+  settleSceneTransition(transitionOrId, result = {}) {
+    const transitionId = typeof transitionOrId === "string"
+      ? transitionOrId
+      : transitionOrId?.transitionId;
+    if (!transitionId) {
+      return null;
+    }
+
+    const record = this.sceneTransitionRecords.get(transitionId);
+    if (!record) {
+      return null;
+    }
+
+    if (record.settled) {
+      return record.result;
+    }
+
+    const finalResult = {
+      ...record.metadata,
+      ...result
+    };
+    record.settled = true;
+    record.result = finalResult;
+
+    if (
+      finalResult.state
+      && finalResult.state !== "scene-presented"
+      && finalResult.state !== "scene-cleared"
+      && finalResult.state !== "scene-missing-texture"
+    ) {
+      this.xrDebug?.log(finalResult.state, {
+        transitionId,
+        sceneId: finalResult.sceneId ?? null,
+        src: finalResult.src ?? null,
+        details: {
+          presented: finalResult.presented === true,
+          frameSource: finalResult.frameSource ?? null
+        }
+      });
+    }
+
+    for (const resolve of record.waiters) {
+      resolve(finalResult);
+    }
+    record.waiters.length = 0;
+
+    if (this.pendingScenePresentation?.transitionId === transitionId) {
+      this.pendingScenePresentation = null;
+    }
+
+    this.pruneSceneTransitionRecords();
+    return finalResult;
+  }
+
+  presentPendingSceneTransition(frameState) {
+    const pending = this.pendingScenePresentation;
+    if (!pending) {
+      return;
+    }
+
+    if (pending.transitionId !== this.activeSceneTransitionId) {
+      this.settleSceneTransition(pending, {
+        state: "scene-superseded",
+        presented: false
+      });
+      return;
+    }
+
+    if (!this.material.map) {
+      return;
+    }
+
+    const currentSrc = this.currentSceneSrc || this.currentTextureSrc || null;
+    if (pending.src && currentSrc && pending.src !== currentSrc && pending.src !== this.currentTextureSrc) {
+      return;
+    }
+
+    this.notifySceneStatus({
+      state: "scene-presented",
+      transitionId: pending.transitionId,
+      sceneId: pending.sceneId ?? null,
+      src: pending.src ?? currentSrc,
+      frameSource: frameState?.source ?? "unknown"
+    });
+    this.settleSceneTransition(pending, {
+      state: "scene-presented",
+      presented: true,
+      frameSource: frameState?.source ?? "unknown"
+    });
+  }
+
+  pruneSceneTransitionRecords(maxSettledEntries = 24) {
+    let settledCount = 0;
+    for (const record of this.sceneTransitionRecords.values()) {
+      if (record.settled) {
+        settledCount += 1;
+      }
+    }
+
+    if (settledCount <= maxSettledEntries) {
+      return;
+    }
+
+    for (const [transitionId, record] of this.sceneTransitionRecords.entries()) {
+      if (!record.settled) {
+        continue;
+      }
+
+      this.sceneTransitionRecords.delete(transitionId);
+      settledCount -= 1;
+      if (settledCount <= maxSettledEntries) {
+        break;
+      }
+    }
   }
 
   projectWorldToScreen(position, viewport = this.root, eye = "center") {
@@ -250,13 +624,26 @@ export class ThreePanoramaRenderer {
     const x = ((clientX - rect.left) / rect.width) * 2 - 1;
     const y = -(((clientY - rect.top) / rect.height) * 2 - 1);
     const cameraPosition = this.tempVectors.cameraPosition;
+    const sceneCameraPosition = this.tempVectors.sceneCameraPosition;
     const worldPoint = this.tempVectors.unprojectPoint.set(x, y, 0.5).unproject(camera);
     camera.getWorldPosition(cameraPosition);
+    this.worldToScene(cameraPosition, sceneCameraPosition);
 
     const direction = worldPoint.sub(cameraPosition).normalize();
     const safeDepth = Math.max(0.1, Number(depth) || 8);
-    const worldPosition = worldPoint.copy(cameraPosition).add(direction.multiplyScalar(safeDepth));
-    const scenePosition = this.worldToScene(worldPosition, this.tempVectors.scenePosition);
+    const sceneDirection = this.tempVectors.sceneDirection
+      .copy(cameraPosition)
+      .add(direction);
+    this.worldToScene(sceneDirection, sceneDirection);
+    sceneDirection.sub(sceneCameraPosition).normalize();
+
+    if (!Number.isFinite(sceneDirection.x) || !Number.isFinite(sceneDirection.y) || !Number.isFinite(sceneDirection.z)) {
+      return null;
+    }
+
+    const scenePosition = this.tempVectors.scenePosition
+      .copy(sceneCameraPosition)
+      .addScaledVector(sceneDirection, safeDepth);
 
     return {
       x: scenePosition.x,
@@ -372,6 +759,7 @@ export class ThreePanoramaRenderer {
         optionalFeatures: ["local-floor", "bounded-floor", "hand-tracking"]
       });
       session.addEventListener("end", this.handleSessionEnd);
+      session.addEventListener?.("visibilitychange", this.handleXRVisibilityChange);
       this.xrSession = session;
       this.stopNonXrLoop();
       await this.renderer.xr.setSession(session);
@@ -392,6 +780,7 @@ export class ThreePanoramaRenderer {
 
     const session = this.xrSession;
     session.removeEventListener?.("end", this.handleSessionEnd);
+    session.removeEventListener?.("visibilitychange", this.handleXRVisibilityChange);
     this.xrSession = null;
     await session.end();
     this.stopXrLoop();
@@ -416,19 +805,30 @@ export class ThreePanoramaRenderer {
     this.resizeObserver?.disconnect();
     window.removeEventListener("resize", this.onWindowResize);
     this.xrSession?.removeEventListener?.("end", this.handleSessionEnd);
+    this.xrSession?.removeEventListener?.("visibilitychange", this.handleXRVisibilityChange);
     this.xrSession?.end?.().catch?.(() => {});
     this.xrSession = null;
 
-    for (const texture of this.textureCache.values()) {
-      texture.dispose();
-    }
-    this.textureCache.clear();
+    this.pinnedTextureSrcs.clear();
+    this.clearTextureCache();
     this.listeners.clear();
+    this.sceneStatusListeners.clear();
+    this.flushFrameWaiters(this.isPresenting() ? "xr" : "raf", performance.now());
     this.pendingTextureToken = null;
+    for (const transitionId of this.sceneTransitionRecords.keys()) {
+      this.settleSceneTransition(transitionId, {
+        state: "renderer-destroyed",
+        presented: false
+      });
+    }
+    this.sceneTransitionRecords.clear();
+    this.pendingScenePresentation = null;
+    this.activeSceneTransitionId = null;
 
     this.material.map = null;
     this.material.dispose();
     this.geometry.dispose();
+    this.renderer.forceContextLoss?.();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -458,6 +858,53 @@ export class ThreePanoramaRenderer {
     this.renderFrame({ timestamp, frame, source: "xr" });
   }
 
+  waitForNextRenderFrame() {
+    if (!this.isPresenting()) {
+      return new Promise((resolve) => {
+        window.requestAnimationFrame((timestamp) => resolve({
+          source: "raf",
+          timestamp
+        }));
+      });
+    }
+
+    return new Promise((resolve) => {
+      this.frameWaiters.push({
+        source: "xr",
+        resolve
+      });
+    });
+  }
+
+  async flushVisualUpdate({ frames = 1, reason = "visual-flush" } = {}) {
+    const safeFrames = Math.max(1, Number(frames) || 1);
+    for (let index = 0; index < safeFrames; index += 1) {
+      this.requestRender(`${reason}:${index + 1}`);
+      await this.waitForNextRenderFrame();
+    }
+  }
+
+  flushFrameWaiters(source, timestamp) {
+    if (!this.frameWaiters.length) {
+      return;
+    }
+
+    const pending = this.frameWaiters;
+    this.frameWaiters = [];
+
+    for (const waiter of pending) {
+      if (waiter?.source && waiter.source !== source) {
+        this.frameWaiters.push(waiter);
+        continue;
+      }
+
+      waiter.resolve?.({
+        source,
+        timestamp
+      });
+    }
+  }
+
   renderFrame({ timestamp, frame, source }) {
     const frameStart = performance.now();
     this.resizeIfNeeded();
@@ -466,6 +913,23 @@ export class ThreePanoramaRenderer {
     this.scene.updateMatrixWorld(true);
 
     const frameState = this.createFrameState(frame, source);
+    if (source === "xr" && this.pendingScenePresentation) {
+      this.xrDebug?.log("xr-render-frame", {
+        transitionId: this.pendingScenePresentation.transitionId,
+        sceneId: this.pendingScenePresentation.sceneId ?? null,
+        src: this.pendingScenePresentation.src ?? null,
+        details: {
+          frameIndex: this.renderStats.frameCount + 1,
+          cameraReady: Boolean(frameState.camera),
+          currentSceneSrc: this.currentSceneSrc || null,
+          currentTextureSrc: this.currentTextureSrc || null,
+          pendingTextureToken: this.pendingTextureToken ? "active" : null,
+          activeSceneTransitionId: this.activeSceneTransitionId,
+          pendingScenePresentation: this.pendingScenePresentation?.transitionId ?? null
+        }
+      });
+    }
+    this.presentPendingSceneTransition(frameState);
     for (const listener of this.listeners) {
       listener(frameState);
     }
@@ -490,6 +954,7 @@ export class ThreePanoramaRenderer {
     this.renderStats.lastFrameTimeMs = performance.now() - frameStart;
     this.renderStats.lastTimestamp = timestamp;
     this.renderStats.lastFrameSource = source;
+    this.flushFrameWaiters(source, timestamp);
   }
 
   createFrameState(frame, source) {
@@ -542,9 +1007,9 @@ export class ThreePanoramaRenderer {
   applyContentTransform() {
     this.contentRoot.position.copy(this.contentOffset);
     this.contentRoot.rotation.set(
-      THREE.MathUtils.degToRad(-this.baseRotation.pitch),
-      THREE.MathUtils.degToRad(-this.baseRotation.yaw),
-      THREE.MathUtils.degToRad(-this.baseRotation.roll),
+      THREE.MathUtils.degToRad(-(this.baseRotation.pitch + this.runtimeRotationOffset.pitch)),
+      THREE.MathUtils.degToRad(-(this.baseRotation.yaw + this.runtimeRotationOffset.yaw)),
+      THREE.MathUtils.degToRad(-(this.baseRotation.roll + this.runtimeRotationOffset.roll)),
       "YXZ"
     );
   }
@@ -556,30 +1021,51 @@ export class ThreePanoramaRenderer {
     }
 
     const requestedEye = camera ? detectRenderEye(camera, this.stereoCamera) : this.monoEye;
-    const cropKey = `${this.stereoLayout}:${this.eyeOrder}:${requestedEye}`;
+    const cropKey = `${this.stereoLayout}:${this.eyeOrder}:${requestedEye}:${this.flipHorizontally ? "flip" : "normal"}`;
     if (texture.userData.wpa360CropKey === cropKey) {
       return;
     }
 
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
+    const eyeForTexture = this.flipHorizontally ? invertEye(requestedEye) : requestedEye;
 
-    if (this.stereoLayout !== "top-bottom") {
-      texture.repeat.set(1, 1);
-      texture.offset.set(0, 0);
+    if (this.stereoLayout === "top-bottom") {
+      const useTopHalf = shouldUseTopHalf(eyeForTexture, this.eyeOrder);
+      texture.repeat.set(this.flipHorizontally ? -1 : 1, 0.5);
+      texture.offset.set(this.flipHorizontally ? 1 : 0, useTopHalf ? 0.5 : 0);
+    } else if (this.stereoLayout === "side-by-side") {
+      const useLeftHalf = shouldUseLeftHalf(eyeForTexture, this.eyeOrder);
+      texture.repeat.set(this.flipHorizontally ? -0.5 : 0.5, 1);
+      texture.offset.set(
+        this.flipHorizontally
+          ? (useLeftHalf ? 0.5 : 1)
+          : (useLeftHalf ? 0 : 0.5),
+        0
+      );
     } else {
-      const useTopHalf = shouldUseTopHalf(requestedEye, this.eyeOrder);
-      texture.repeat.set(1, 0.5);
-      texture.offset.set(0, useTopHalf ? 0.5 : 0);
+      texture.repeat.set(this.flipHorizontally ? -1 : 1, 1);
+      texture.offset.set(this.flipHorizontally ? 1 : 0, 0);
     }
 
     texture.updateMatrix();
     texture.userData.wpa360CropKey = cropKey;
   }
 
-  setTexture(texture) {
+  setTexture(texture, src = "", transition = null) {
     this.material.map = texture;
+    this.currentTextureSrc = texture ? src || this.currentTextureSrc : "";
     this.material.color.set(texture ? "#ffffff" : "#102a31");
+
+    this.xrDebug?.log("texture-apply", {
+      transitionId: transition?.transitionId ?? this.activeSceneTransitionId ?? null,
+      sceneId: transition?.sceneId ?? this.activeScene?.id ?? null,
+      src: src || null,
+      details: {
+        hasTexture: Boolean(texture),
+        currentTextureSrc: this.currentTextureSrc || null
+      }
+    });
 
     if (texture) {
       texture.userData.wpa360CropKey = null;
@@ -589,23 +1075,179 @@ export class ThreePanoramaRenderer {
     this.material.needsUpdate = true;
   }
 
-  getOrCreateTexture(loadedAsset) {
-    if (!this.textureCache.has(loadedAsset.src)) {
-      const texture = new THREE.Texture(loadedAsset.image);
-      texture.needsUpdate = true;
-      texture.minFilter = THREE.LinearMipmapLinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.generateMipmaps = true;
-      texture.matrixAutoUpdate = false;
-      if ("colorSpace" in texture && THREE.SRGBColorSpace) {
-        texture.colorSpace = THREE.SRGBColorSpace;
-      } else if ("encoding" in texture && THREE.sRGBEncoding) {
-        texture.encoding = THREE.sRGBEncoding;
-      }
-      this.textureCache.set(loadedAsset.src, texture);
+  getOrCreateTexture(loadedAsset, scene = null, transition = null) {
+    const cachedEntry = this.textureCache.get(loadedAsset.src);
+    if (cachedEntry) {
+      this.touchTextureEntry(loadedAsset.src, cachedEntry);
+      this.xrDebug?.log("texture-create", {
+        transitionId: transition?.transitionId ?? this.activeSceneTransitionId ?? null,
+        sceneId: transition?.sceneId ?? scene?.id ?? null,
+        src: loadedAsset.src,
+        details: {
+          mode: "cache-hit",
+          stereo: isStereoScene(scene)
+        }
+      });
+      return cachedEntry.texture;
     }
 
-    return this.textureCache.get(loadedAsset.src);
+    const textureProfile = this.getTextureProfile(scene);
+    const texture = new THREE.Texture(loadedAsset.image);
+    texture.needsUpdate = true;
+    texture.minFilter = textureProfile.minFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = textureProfile.generateMipmaps;
+    texture.matrixAutoUpdate = false;
+    if ("colorSpace" in texture && THREE.SRGBColorSpace) {
+      texture.colorSpace = THREE.SRGBColorSpace;
+    } else if ("encoding" in texture && THREE.sRGBEncoding) {
+      texture.encoding = THREE.sRGBEncoding;
+    }
+
+    const entry = {
+      src: loadedAsset.src,
+      texture
+    };
+    this.textureCache.set(loadedAsset.src, entry);
+    this.xrDebug?.log("texture-create", {
+      transitionId: transition?.transitionId ?? this.activeSceneTransitionId ?? null,
+      sceneId: transition?.sceneId ?? scene?.id ?? null,
+      src: loadedAsset.src,
+      details: {
+        mode: "new-texture",
+        stereo: isStereoScene(scene),
+        generateMipmaps: textureProfile.generateMipmaps,
+        minFilter: textureProfile.minFilter === THREE.LinearFilter ? "LinearFilter" : "LinearMipmapLinearFilter"
+      }
+    });
+    this.evictTextures([loadedAsset.src]);
+    return texture;
+  }
+
+  getTextureProfile(scene = null) {
+    const stereo = isStereoScene(scene);
+    const shouldUseLowMemoryTexture = stereo || this.xrEnabled === true;
+    return {
+      generateMipmaps: !shouldUseLowMemoryTexture,
+      minFilter: shouldUseLowMemoryTexture
+        ? THREE.LinearFilter
+        : THREE.LinearMipmapLinearFilter
+    };
+  }
+
+  shouldUseAggressiveStereoSceneSwap(scene, nextSrc) {
+    return isStereoScene(scene)
+      && this.xrEnabled === true
+      && Boolean(this.currentTextureSrc)
+      && this.currentTextureSrc !== nextSrc;
+  }
+
+  releaseCurrentTextureForSwap(nextSrc) {
+    const previousSrc = this.currentTextureSrc;
+    if (!previousSrc || previousSrc === nextSrc) {
+      return;
+    }
+
+    const previousEntry = this.textureCache.get(previousSrc);
+    this.setTexture(null, "");
+    this.currentSceneSrc = "";
+    if (previousEntry) {
+      this.disposeTextureEntry(previousEntry, { forceImageRelease: true });
+      this.textureCache.delete(previousSrc);
+    }
+    this.root.classList.remove("is-empty");
+    this.requestRender("scene-transition-placeholder");
+  }
+
+  setPinnedTextureSources(srcs = []) {
+    this.pinnedTextureSrcs = new Set(
+      srcs
+        .filter(Boolean)
+        .map((src) => this.assetCache?.normalizeUrl?.(src) ?? src)
+    );
+    this.evictTextures(srcs);
+    return this.pinnedTextureSrcs.size;
+  }
+
+  evictTextures(preserveSrcs = []) {
+    const preserve = new Set(
+      preserveSrcs
+        .filter(Boolean)
+        .map((src) => this.assetCache?.normalizeUrl?.(src) ?? src)
+    );
+    for (const src of this.pinnedTextureSrcs) {
+      preserve.add(src);
+    }
+
+    if (this.currentTextureSrc) {
+      preserve.add(this.currentTextureSrc);
+    }
+
+    while (this.textureCache.size > this.maxTextureEntries) {
+      const evictableKey = this.findEvictableTextureKey(preserve);
+      if (!evictableKey) {
+        break;
+      }
+
+      const entry = this.textureCache.get(evictableKey);
+      this.disposeTextureEntry(entry);
+      this.textureCache.delete(evictableKey);
+    }
+    this.renderer.renderLists?.dispose?.();
+  }
+
+  clearTextureCache() {
+    for (const entry of this.textureCache.values()) {
+      this.disposeTextureEntry(entry);
+    }
+    this.textureCache.clear();
+    this.renderer.renderLists?.dispose?.();
+  }
+
+  findEvictableTextureKey(preserve) {
+    for (const key of this.textureCache.keys()) {
+      if (!preserve.has(key)) {
+        return key;
+      }
+    }
+    return null;
+  }
+
+  touchTextureEntry(key, entry) {
+    this.textureCache.delete(key);
+    this.textureCache.set(key, entry);
+  }
+
+  disposeTextureEntry(entry, { forceImageRelease = false } = {}) {
+    const texture = entry?.texture ?? null;
+    const src = entry?.src ?? null;
+
+    if (texture) {
+      try {
+        if (texture.source && "data" in texture.source) {
+          texture.source.data = null;
+        }
+      } catch {}
+
+      try {
+        if ("image" in texture) {
+          texture.image = null;
+        }
+      } catch {}
+
+      texture.dispose?.();
+    }
+
+    if (src) {
+      this.assetCache?.releaseImage?.(src, { force: forceImageRelease });
+    }
+  }
+
+  getRendererMemorySnapshot() {
+    return {
+      geometries: Number(this.renderer.info?.memory?.geometries ?? 0),
+      textures: Number(this.renderer.info?.memory?.textures ?? 0)
+    };
   }
 
   resizeIfNeeded(force = false) {
@@ -660,6 +1302,11 @@ export class ThreePanoramaRenderer {
 
     this.xrLoopActive = true;
     this.renderStats.mode = "xr";
+    this.xrDebug?.log("xr-session-start", {
+      details: {
+        presenting: true
+      }
+    });
     this.renderer.setAnimationLoop(this.handleXRAnimationFrame);
   }
 
@@ -671,6 +1318,11 @@ export class ThreePanoramaRenderer {
     this.xrLoopActive = false;
     this.renderer.setAnimationLoop(null);
     this.renderStats.mode = "idle";
+    this.xrDebug?.log("xr-session-end", {
+      details: {
+        presenting: false
+      }
+    });
   }
 
   stopNonXrLoop() {
@@ -685,15 +1337,38 @@ export class ThreePanoramaRenderer {
 
   handleSessionEnd() {
     this.xrSession?.removeEventListener?.("end", this.handleSessionEnd);
+    this.xrSession?.removeEventListener?.("visibilitychange", this.handleXRVisibilityChange);
     this.xrSession = null;
+    this.xrDebug?.log("xr-visibility-change", {
+      details: {
+        state: "session-ended"
+      }
+    });
     this.stopXrLoop();
     this.requestRender("xr-session-ended");
+  }
+
+  handleXRVisibilityChange() {
+    this.xrDebug?.log("xr-visibility-change", {
+      details: {
+        state: this.xrSession?.visibilityState ?? "unknown"
+      }
+    });
   }
 }
 
 function normalizeStereoLayout(layout) {
   if (layout === "top-bottom" || layout === "topdown" || layout === "top-down") {
     return "top-bottom";
+  }
+  if (
+    layout === "side-by-side"
+    || layout === "sidebyside"
+    || layout === "left-right"
+    || layout === "right-left"
+    || layout === "sbs"
+  ) {
+    return "side-by-side";
   }
   return "mono";
 }
@@ -706,6 +1381,12 @@ function shouldUseTopHalf(eye, eyeOrder) {
   return eyeOrder === "right-left"
     ? eye === "right"
     : eye !== "right";
+}
+
+function shouldUseLeftHalf(eye, eyeOrder) {
+  return eyeOrder === "right-left"
+    ? eye !== "right"
+    : eye === "left";
 }
 
 function detectRenderEye(camera, stereoCamera) {
@@ -726,6 +1407,14 @@ function detectRenderEye(camera, stereoCamera) {
   }
 
   return "left";
+}
+
+function invertEye(eye) {
+  return eye === "right" ? "left" : "right";
+}
+
+function isStereoScene(scene) {
+  return normalizeStereoLayout(scene?.media?.stereo_layout) !== "mono";
 }
 
 function hiddenProjection(rect) {

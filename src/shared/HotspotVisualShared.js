@@ -6,6 +6,29 @@ export function isHotspotMarkerVisible(hotspot) {
   return hotspot?.marker_visible !== false;
 }
 
+export function getHotspotMarkerIconSrc(hotspot) {
+  const markerIcon = hotspot?.marker_icon;
+
+  if (typeof markerIcon === "string") {
+    const normalizedString = markerIcon.trim();
+    return normalizedString || null;
+  }
+
+  if (markerIcon && typeof markerIcon === "object" && !Array.isArray(markerIcon)) {
+    const normalizedObjectSrc = typeof markerIcon.src === "string"
+      ? markerIcon.src.trim()
+      : "";
+    return normalizedObjectSrc || null;
+  }
+
+  if (typeof hotspot?.marker_icon_src === "string") {
+    const normalizedLegacySrc = hotspot.marker_icon_src.trim();
+    return normalizedLegacySrc || null;
+  }
+
+  return null;
+}
+
 export function getHotspotLabelText(hotspot) {
   return String(hotspot?.label?.text ?? hotspot?.id ?? "Hotspot");
 }
@@ -40,7 +63,10 @@ export function getHotspotMarkerRoll(hotspot) {
 }
 
 export function getHotspotLabelScale(hotspot, depth) {
-  return getDepthScale(hotspot?.label?.scale, hotspot?.label?.reference_depth ?? hotspot?.reference_depth, depth);
+  const referenceDepth = hotspot?.label?.reference_depth_linked === true
+    ? hotspot?.reference_depth
+    : (hotspot?.label?.reference_depth ?? hotspot?.reference_depth);
+  return getDepthScale(hotspot?.label?.scale, referenceDepth, depth);
 }
 
 export function getHotspotLabelRoll(hotspot) {

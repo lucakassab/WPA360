@@ -35,9 +35,70 @@ export class EditorPlacementController {
 
     this.context.debugLog?.("editor:hotspot-placement:start", {
       sceneId: target.scene.id,
-      hotspotId: hotspot.id
+      hotspotId: hotspot.id,
+      position: {
+        x: Number(hotspot.position?.x ?? 0),
+        y: Number(hotspot.position?.y ?? 0),
+        z: Number(hotspot.position?.z ?? 0)
+      },
+      referenceDepth: Number(hotspot.reference_depth ?? distanceFromOrigin(hotspot.position) ?? 8),
+      isRecentlyCreated: hotspot.id === this.draftStore.getSnapshot().lastCreatedHotspotId,
+      lastCreatedHotspotId: this.draftStore.getSnapshot().lastCreatedHotspotId,
+      lastCreatedAtMs: this.draftStore.getSnapshot().lastCreatedAtMs
     });
     this.context.setStatus?.("Click no panorama para reposicionar o hotspot selecionado. Esc cancela.");
+    return true;
+  }
+
+  moveSelectedHotspotToPosition(position, {
+    successMessage = "Hotspot reposicionado.",
+    missingSelectionMessage = "Selecione um hotspot visivel da cena ativa antes de mover.",
+    missingPositionMessage = "Nao consegui calcular a posicao 3D para o hotspot."
+  } = {}) {
+    const target = getSelectedActiveHotspot(this.draftStore.getSnapshot(), this.context.store.getSnapshot().currentSceneId);
+    const hotspot = target?.hotspot;
+    if (!hotspot) {
+      this.context.debugLog?.("editor:hotspot-placement:blocked:not-active-scene", {
+        runtimeSceneId: this.context.store.getSnapshot().currentSceneId,
+        editorSceneId: this.draftStore.getSnapshot().selectedSceneId,
+        selectedHotspotId: this.draftStore.getSnapshot().selectedHotspotId
+      });
+      this.context.setStatus?.(missingSelectionMessage, { hideAfterMs: 2200 });
+      return false;
+    }
+
+    if (!position) {
+      this.context.setStatus?.(missingPositionMessage, { hideAfterMs: 2000 });
+      this.context.debugLog?.("editor:hotspot-placement:failed", {
+        reason: "missing-position",
+        hotspotId: hotspot.id,
+        isRecentlyCreated: hotspot.id === this.draftStore.getSnapshot().lastCreatedHotspotId
+      });
+      return false;
+    }
+
+    this.context.debugLog?.("editor:hotspot-placement:move-request", {
+      hotspotId: hotspot.id,
+      sceneId: target.scene.id,
+      currentPosition: {
+        x: Number(hotspot.position?.x ?? 0),
+        y: Number(hotspot.position?.y ?? 0),
+        z: Number(hotspot.position?.z ?? 0)
+      },
+      currentReferenceDepth: Number(hotspot.reference_depth ?? distanceFromOrigin(hotspot.position) ?? 8),
+      requestedPosition: position,
+      isRecentlyCreated: hotspot.id === this.draftStore.getSnapshot().lastCreatedHotspotId,
+      lastCreatedHotspotId: this.draftStore.getSnapshot().lastCreatedHotspotId,
+      lastCreatedAtMs: this.draftStore.getSnapshot().lastCreatedAtMs
+    });
+
+    this.draftStore.moveSelectedHotspotTo(position);
+    this.context.debugLog?.("editor:hotspot-placement:complete", {
+      hotspotId: hotspot.id,
+      position,
+      isRecentlyCreated: hotspot.id === this.draftStore.getSnapshot().lastCreatedHotspotId
+    });
+    this.context.setStatus?.(successMessage, { hideAfterMs: 1400 });
     return true;
   }
 
@@ -70,21 +131,35 @@ export class EditorPlacementController {
     }
 
     const depth = Math.max(0.1, Number(hotspot?.reference_depth ?? distanceFromOrigin(hotspot?.position) ?? 8));
+    this.context.debugLog?.("editor:hotspot-placement:pointer", {
+      hotspotId: hotspot.id,
+      sceneId: target.scene.id,
+      clientX: Number(event.clientX ?? 0),
+      clientY: Number(event.clientY ?? 0),
+      button: Number(event.button ?? -1),
+      depth,
+      hotspotPosition: {
+        x: Number(hotspot.position?.x ?? 0),
+        y: Number(hotspot.position?.y ?? 0),
+        z: Number(hotspot.position?.z ?? 0)
+      },
+      hotspotReferenceDepth: Number(hotspot.reference_depth ?? 0),
+      isRecentlyCreated: hotspot.id === this.draftStore.getSnapshot().lastCreatedHotspotId,
+      lastCreatedHotspotId: this.draftStore.getSnapshot().lastCreatedHotspotId,
+      lastCreatedAtMs: this.draftStore.getSnapshot().lastCreatedAtMs
+    });
     const position = this.context.screenToWorldFromEvent?.(event, { depth });
 
-    if (!position) {
-      this.context.setStatus?.("Nao consegui calcular a posicao 3D desse clique.", { hideAfterMs: 2000 });
-      this.context.debugLog?.("editor:hotspot-placement:failed", { reason: "screen-to-world-null" });
-      this.stopHotspotPlacement();
-      return;
-    }
-
-    this.draftStore.moveSelectedHotspotTo(position);
-    this.context.debugLog?.("editor:hotspot-placement:complete", {
-      hotspotId: hotspot?.id,
-      position
+    this.context.debugLog?.("editor:hotspot-placement:screen-to-world-result", {
+      hotspotId: hotspot.id,
+      depth,
+      computedPosition: position ?? null,
+      isRecentlyCreated: hotspot.id === this.draftStore.getSnapshot().lastCreatedHotspotId
     });
-    this.context.setStatus?.("Hotspot reposicionado.", { hideAfterMs: 1400 });
+
+    this.moveSelectedHotspotToPosition(position, {
+      missingPositionMessage: "Nao consegui calcular a posicao 3D desse clique."
+    });
     this.stopHotspotPlacement();
   }
 
