@@ -181,9 +181,9 @@ export class ThreePanoramaRenderer {
       return transition;
     }
 
-    if (this.shouldUseAggressiveStereoSceneSwap(scene, src)) {
+    if (this.shouldUseAggressiveSceneSwap(scene, src)) {
       this.releaseCurrentTextureForSwap(src);
-      await this.waitForNextRenderFrame();
+      await this.flushVisualUpdate({ frames: 1, reason: "scene-transition-placeholder" });
     }
 
     this.notifySceneStatus({
@@ -1109,6 +1109,7 @@ export class ThreePanoramaRenderer {
       texture
     };
     this.textureCache.set(loadedAsset.src, entry);
+    this.attachTextureUploadCleanup(texture, loadedAsset.src);
     this.xrDebug?.log("texture-create", {
       transitionId: transition?.transitionId ?? this.activeSceneTransitionId ?? null,
       sceneId: transition?.sceneId ?? scene?.id ?? null,
@@ -1116,12 +1117,35 @@ export class ThreePanoramaRenderer {
       details: {
         mode: "new-texture",
         stereo: isStereoScene(scene),
+        imageWidth: Number(loadedAsset.image?.width ?? loadedAsset.image?.videoWidth ?? 0),
+        imageHeight: Number(loadedAsset.image?.height ?? loadedAsset.image?.videoHeight ?? 0),
         generateMipmaps: textureProfile.generateMipmaps,
         minFilter: textureProfile.minFilter === THREE.LinearFilter ? "LinearFilter" : "LinearMipmapLinearFilter"
       }
     });
     this.evictTextures([loadedAsset.src]);
     return texture;
+  }
+
+  attachTextureUploadCleanup(texture, src) {
+    if (this.xrEnabled === true || !texture) {
+      return;
+    }
+
+    texture.onUpdate = () => {
+      this.assetCache?.releaseImage?.(src, { force: true });
+      try {
+        if (texture.source && "data" in texture.source) {
+          texture.source.data = null;
+        }
+      } catch {}
+      try {
+        if ("image" in texture) {
+          texture.image = null;
+        }
+      } catch {}
+      texture.onUpdate = null;
+    };
   }
 
   getTextureProfile(scene = null) {
@@ -1135,11 +1159,16 @@ export class ThreePanoramaRenderer {
     };
   }
 
-  shouldUseAggressiveStereoSceneSwap(scene, nextSrc) {
-    return isStereoScene(scene)
-      && this.xrEnabled === true
-      && Boolean(this.currentTextureSrc)
-      && this.currentTextureSrc !== nextSrc;
+  shouldUseAggressiveSceneSwap(scene, nextSrc) {
+    if (!this.currentTextureSrc || this.currentTextureSrc === nextSrc) {
+      return false;
+    }
+
+    if (this.xrEnabled !== true) {
+      return true;
+    }
+
+    return isStereoScene(scene) && this.xrEnabled === true;
   }
 
   releaseCurrentTextureForSwap(nextSrc) {

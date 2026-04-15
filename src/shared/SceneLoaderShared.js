@@ -138,6 +138,16 @@ export class SceneLoaderShared {
     return jobs;
   }
 
+  clearTourCache(tour) {
+    if (!tour) {
+      return false;
+    }
+
+    this.sceneCache.delete(tour);
+    this.preloadJobs.delete(tour);
+    return true;
+  }
+
   touchCacheEntry(cache, sceneId, entry) {
     cache.delete(sceneId);
     cache.set(sceneId, entry);

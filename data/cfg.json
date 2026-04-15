@@ -19,7 +19,7 @@
       "show_brand_mark": false,
       "show_brand_name": false,
       "show_scene_select": true,
-      "show_pwa_install_button": true,
+      "show_pwa_install_button": false,
       "show_platform_badge": false,
       "show_webxr_badge": false,
       "show_pwa_badge": false,

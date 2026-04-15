@@ -31,6 +31,9 @@ export class AppKernel {
       hotspotLoader: this.hotspotLoader
     });
     this.navigationInFlight = null;
+    this.runtimeTransitionCounter = 0;
+    this.activeRuntimeTransition = null;
+    this.backgroundPreloadGeneration = 0;
     this.editorTourCatalogCache = new Map();
     this.backgroundWarmJobs = new WeakMap();
     this.sceneLoader = new SceneLoaderShared({
@@ -305,9 +308,16 @@ export class AppKernel {
   }
 
   async loadTour(tourId, { sceneId = null, navigationHotspot = null } = {}) {
+    const transitionToken = this.beginRuntimeTransition("load-tour", tourId);
+    if (!transitionToken) {
+      return;
+    }
+
     const state = this.store.getSnapshot();
+    const previousTour = state.currentTour ?? null;
     const entry = this.registry.findTour(state.master, tourId);
     if (!entry) {
+      this.finishRuntimeTransition(transitionToken);
       throw new Error("No tour available in master.json.");
     }
 
@@ -325,17 +335,27 @@ export class AppKernel {
 
     try {
       const tour = await this.tourLoader.load(entry);
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
       const requestedSceneId = tour.scenes?.some((candidate) => candidate.id === sceneId)
         ? sceneId
         : tour.initial_scene;
       await this.prepareTourAssets(tour, state.cfg, {
         reason: "load-tour",
-        prioritySceneId: requestedSceneId
+        prioritySceneId: requestedSceneId,
+        guard: this.createBackgroundPreloadGuard(tour)
       });
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
       const shouldDeferMediaLoad = state.platformId === PLATFORM_2D;
       const scene = await this.sceneLoader.loadScene(tour, requestedSceneId, state.cfg, {
         preloadAssets: shouldDeferMediaLoad ? false : undefined
       });
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
       const renderOptions = resolveSceneOrientationOptions(scene, navigationHotspot);
       this.xrDebug.log("navigation-scene-loaded", {
         sceneId: scene.id,
@@ -373,10 +393,16 @@ export class AppKernel {
         }
       });
       const renderResult = await this.platformCoordinator.renderCurrent(renderOptions);
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
       const presentationResult = await this.awaitRendererScenePresentation(activeRenderer, renderResult, {
         reason: "load-tour",
         sceneId: scene.id
       });
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
       this.xrDebug.log("navigation-render-complete", {
         transitionId: renderResult?.transitionId ?? presentationResult?.transitionId ?? null,
         sceneId: scene.id,
@@ -388,16 +414,25 @@ export class AppKernel {
         }
       });
       handoffLoadingToRenderer = Boolean(activeRenderer?.setLoadingState && presentationResult);
+      if (previousTour && previousTour !== tour) {
+        this.releaseInactiveTourResources(previousTour, scene);
+      }
       this.store.patch({ isLoading: false });
       loadSucceeded = true;
     } finally {
-      if (!loadSucceeded || !handoffLoadingToRenderer) {
+      if (this.isRuntimeTransitionActive(transitionToken) && (!loadSucceeded || !handoffLoadingToRenderer)) {
         activeRenderer?.setLoadingState?.({ visible: false });
       }
+      this.finishRuntimeTransition(transitionToken);
     }
   }
 
   async goToScene(sceneId, { navigationHotspot = null } = {}) {
+    const transitionToken = this.beginRuntimeTransition("go-to-scene", sceneId);
+    if (!transitionToken) {
+      return;
+    }
+
     const state = this.store.getSnapshot();
     this.debugLog("navigation:request", {
       from: state.currentSceneId,
@@ -417,11 +452,13 @@ export class AppKernel {
 
     if (!state.currentTour) {
       this.debugLog("navigation:blocked:no-current-tour", { targetSceneId: sceneId });
+      this.finishRuntimeTransition(transitionToken);
       return;
     }
 
     if (state.currentSceneId === sceneId) {
       this.debugLog("navigation:blocked:same-scene", { sceneId });
+      this.finishRuntimeTransition(transitionToken);
       return;
     }
 
@@ -433,11 +470,13 @@ export class AppKernel {
         availableScenes: state.currentTour.scenes?.map((scene) => scene.id) ?? []
       });
       this.setStatus(message, { hideAfterMs: 2200 });
+      this.finishRuntimeTransition(transitionToken);
       throw new Error(message);
     }
 
     if (this.navigationInFlight === sceneId) {
       this.debugLog("navigation:blocked:already-loading", { sceneId });
+      this.finishRuntimeTransition(transitionToken);
       return;
     }
 
@@ -467,6 +506,9 @@ export class AppKernel {
         state.cfg,
         { preloadAssets: shouldDeferMediaLoad ? false : undefined }
       );
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
       this.xrDebug.log("navigation-scene-loaded", {
         sceneId: scene.id,
         src: scene?.media?.src ?? null,
@@ -491,10 +533,16 @@ export class AppKernel {
         }
       });
       const renderResult = await this.platformCoordinator.renderCurrent(renderOptions);
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
       const presentationResult = await this.awaitRendererScenePresentation(activeRenderer, renderResult, {
         reason: "go-to-scene",
         sceneId: scene.id
       });
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
       this.xrDebug.log("navigation-render-complete", {
         transitionId: renderResult?.transitionId ?? presentationResult?.transitionId ?? null,
         sceneId: scene.id,
@@ -508,9 +556,11 @@ export class AppKernel {
       handoffLoadingToRenderer = Boolean(activeRenderer?.setLoadingState && presentationResult);
       const preloadMode = this.getScenePreloadMode(state.cfg);
       if (preloadMode === "selective" || preloadMode === "minimal" || preloadMode === "hybrid") {
+        const preloadGuard = this.createBackgroundPreloadGuard(state.currentTour);
         this.prepareTourAssets(state.currentTour, state.cfg, {
           reason: "scene-change",
-          prioritySceneId: scene.id
+          prioritySceneId: scene.id,
+          guard: preloadGuard
         }).catch((preloadError) => {
           console.warn("[WPA360] background scene preload failed", preloadError);
         });
@@ -524,19 +574,20 @@ export class AppKernel {
       });
       this.setStatus(`Scene: ${scene.title ?? scene.id}`, { hideAfterMs: 1200 });
       navigationSucceeded = true;
-      if (!handoffLoadingToRenderer) {
+      if (this.isRuntimeTransitionActive(transitionToken) && !handoffLoadingToRenderer) {
         activeRenderer?.setLoadingState?.({ visible: false });
       }
     } catch (error) {
       this.debugLog("navigation:error", { targetSceneId: sceneId, error });
       throw error;
     } finally {
-      if (!navigationSucceeded || !handoffLoadingToRenderer) {
+      if (this.isRuntimeTransitionActive(transitionToken) && (!navigationSucceeded || !handoffLoadingToRenderer)) {
         activeRenderer?.setLoadingState?.({ visible: false });
       }
       if (this.navigationInFlight === sceneId) {
         this.navigationInFlight = null;
       }
+      this.finishRuntimeTransition(transitionToken);
     }
   }
 
@@ -635,34 +686,58 @@ export class AppKernel {
   }
 
   async switchPlatform(platformId, { userInitiated = false } = {}) {
+    const transitionToken = this.beginRuntimeTransition("switch-platform", platformId);
+    if (!transitionToken) {
+      return;
+    }
+
     const cfg = this.store.getSnapshot().cfg;
     if (platformId === PLATFORM_VR && cfg?.features?.vr === false) {
       this.setStatus("VR is disabled in cfg.json.");
+      this.finishRuntimeTransition(transitionToken);
       return;
     }
 
     if (cfg?.platform?.allow_runtime_switch === false) {
       this.setStatus("Runtime platform switching is disabled in cfg.json.");
+      this.finishRuntimeTransition(transitionToken);
       return;
     }
 
-    this.setStatus(`Switching to ${platformId}...`);
-    await this.platformCoordinator.switchPlatform(platformId, {
-      userInitiated,
-      deferRender: true
-    });
-    const state = this.store.getSnapshot();
-    await this.prepareActiveRendererForTour(state.currentTour, state.cfg, {
-      reason: platformId === PLATFORM_VR ? "enter-vr" : `switch-${platformId}`,
-      prioritySceneId: state.currentSceneId
-    });
-    const activeRenderer = this.platformCoordinator.getActiveRenderer();
-    const renderResult = await this.platformCoordinator.renderCurrent({ userInitiated });
-    await this.awaitRendererScenePresentation(activeRenderer, renderResult, {
-      reason: "switch-platform",
-      sceneId: state.currentSceneId
-    });
-    this.setStatus(`${platformId} active`, { hideAfterMs: 1200 });
+    try {
+      this.setStatus(`Switching to ${platformId}...`);
+      await this.platformCoordinator.switchPlatform(platformId, {
+        userInitiated,
+        deferRender: true
+      });
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
+      const state = this.store.getSnapshot();
+      await this.prepareActiveRendererForTour(state.currentTour, state.cfg, {
+        reason: platformId === PLATFORM_VR ? "enter-vr" : `switch-${platformId}`,
+        prioritySceneId: state.currentSceneId,
+        guard: this.createBackgroundPreloadGuard(state.currentTour)
+      });
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
+      const activeRenderer = this.platformCoordinator.getActiveRenderer();
+      const renderResult = await this.platformCoordinator.renderCurrent({ userInitiated });
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
+      await this.awaitRendererScenePresentation(activeRenderer, renderResult, {
+        reason: "switch-platform",
+        sceneId: state.currentSceneId
+      });
+      if (!this.isRuntimeTransitionActive(transitionToken)) {
+        return;
+      }
+      this.setStatus(`${platformId} active`, { hideAfterMs: 1200 });
+    } finally {
+      this.finishRuntimeTransition(transitionToken);
+    }
   }
 
   updateTourSettings(patch) {
@@ -1142,7 +1217,15 @@ export class AppKernel {
     console.debug("[WPA360]", eventName, payload);
   }
 
-  async prepareTourAssets(tour, cfg, { reason = "runtime", prioritySceneId = null } = {}) {
+  async prepareTourAssets(tour, cfg, { reason = "runtime", prioritySceneId = null, guard = null } = {}) {
+    if (!this.isPreloadGuardActive(guard, tour)) {
+      return {
+        preloadMode: this.getScenePreloadMode(cfg),
+        imageCount: 0,
+        failedSceneCount: 0,
+        textureCount: 0
+      };
+    }
     const preloadMode = this.getScenePreloadMode(cfg);
     const platformId = this.store.getSnapshot().platformId ?? null;
     const allowDecodedScenePreload = platformId !== PLATFORM_2D && platformId != null;
@@ -1156,7 +1239,7 @@ export class AppKernel {
       };
     }
 
-    if (preloadMode === "hybrid") {
+    if (preloadMode === "hybrid" && platformId !== PLATFORM_2D) {
       this.startBackgroundTourWarm(tour, cfg, { reason });
     }
 
@@ -1175,9 +1258,18 @@ export class AppKernel {
     });
 
     if (preloadMode === "none" || preloadScenes.length === 0 || !allowDecodedScenePreload) {
+      if (!this.isPreloadGuardActive(guard, tour)) {
+        return {
+          preloadMode,
+          imageCount: 0,
+          failedSceneCount: 0,
+          textureCount: 0
+        };
+      }
       const textureResults = await this.prepareActiveRendererForTour(tour, cfg, {
         reason,
-        prioritySceneId
+        prioritySceneId,
+        guard
       });
       this.debugLog("scene-preload:complete", {
         reason,
@@ -1203,6 +1295,14 @@ export class AppKernel {
         cfg,
         { prioritySceneId }
       );
+      if (!this.isPreloadGuardActive(guard, tour)) {
+        return {
+          preloadMode,
+          imageCount: 0,
+          failedSceneCount: 0,
+          textureCount: 0
+        };
+      }
       this.debugLog("scene-preload:complete", {
         reason,
         tourId: tour.id ?? null,
@@ -1223,7 +1323,8 @@ export class AppKernel {
 
     const textureResults = await this.prepareActiveRendererForTour(tour, cfg, {
       reason,
-      prioritySceneId
+      prioritySceneId,
+      guard
     });
     return {
       preloadMode,
@@ -1233,19 +1334,22 @@ export class AppKernel {
     };
   }
 
-  async prepareActiveRendererForTour(tour, cfg, { reason = "runtime", prioritySceneId = null } = {}) {
+  async prepareActiveRendererForTour(tour, cfg, { reason = "runtime", prioritySceneId = null, guard = null } = {}) {
+    if (!this.isPreloadGuardActive(guard, tour)) {
+      return [];
+    }
     const renderer = this.platformCoordinator.getActiveRenderer();
     if (!renderer?.preloadSceneTextures || !tour?.scenes?.length) {
       return [];
     }
 
     const platformId = this.store.getSnapshot().platformId ?? null;
-    if (platformId === PLATFORM_2D && reason === "scene-change") {
+    if (platformId === PLATFORM_2D) {
       this.debugLog("renderer-texture-preload:skipped", {
         reason,
         tourId: tour.id ?? null,
         platformId,
-        skipReason: "2d-scene-change-background-preload"
+        skipReason: "2d-renderer-texture-preload-disabled"
       });
       return [];
     }
@@ -1263,6 +1367,9 @@ export class AppKernel {
     });
 
     const results = await renderer.preloadSceneTextures(scenes);
+    if (!this.isPreloadGuardActive(guard, tour)) {
+      return [];
+    }
     this.debugLog("renderer-texture-preload:complete", {
       reason,
       tourId: tour.id ?? null,
@@ -1538,6 +1645,104 @@ export class AppKernel {
     });
     this.store.patch({ error, isLoading: false });
     this.setStatus(error.message);
+  }
+
+  beginRuntimeTransition(kind, target = null) {
+    if (this.activeRuntimeTransition) {
+      this.debugLog("transition:blocked", {
+        requestedKind: kind,
+        requestedTarget: target,
+        activeKind: this.activeRuntimeTransition.kind,
+        activeTarget: this.activeRuntimeTransition.target
+      });
+      return null;
+    }
+
+    const token = ++this.runtimeTransitionCounter;
+    this.activeRuntimeTransition = { token, kind, target };
+    this.backgroundPreloadGeneration += 1;
+    this.store.patch({ isLoading: true, error: null });
+    this.applyRuntimeBusyState(true);
+    this.xrDebug.log("runtime-transition-start", {
+      details: {
+        token,
+        kind,
+        target
+      }
+    });
+    return token;
+  }
+
+  finishRuntimeTransition(token) {
+    if (!this.isRuntimeTransitionActive(token)) {
+      return;
+    }
+
+    this.xrDebug.log("runtime-transition-complete", {
+      details: {
+        token,
+        kind: this.activeRuntimeTransition?.kind ?? null,
+        target: this.activeRuntimeTransition?.target ?? null
+      }
+    });
+    this.activeRuntimeTransition = null;
+    this.store.patch({ isLoading: false });
+    this.applyRuntimeBusyState(false);
+  }
+
+  isRuntimeTransitionActive(token) {
+    return this.activeRuntimeTransition?.token === token;
+  }
+
+  createBackgroundPreloadGuard(tour) {
+    return {
+      generation: this.backgroundPreloadGeneration,
+      tourId: tour?.id ?? null
+    };
+  }
+
+  isPreloadGuardActive(guard, tour) {
+    if (!guard) {
+      return true;
+    }
+
+    return guard.generation === this.backgroundPreloadGeneration
+      && guard.tourId === (tour?.id ?? null);
+  }
+
+  applyRuntimeBusyState(isBusy) {
+    if (this.elements.tourSelect) {
+      this.elements.tourSelect.disabled = isBusy;
+    }
+
+    if (this.elements.sceneSelect) {
+      const state = this.store.getSnapshot();
+      this.elements.sceneSelect.disabled = isBusy || (state.currentTour?.scenes?.length ?? 0) === 0;
+    }
+
+    for (const button of this.elements.platformButtons ?? []) {
+      button.disabled = isBusy;
+    }
+  }
+
+  releaseInactiveTourResources(previousTour, activeScene = null) {
+    this.sceneLoader.clearTourCache(previousTour);
+    this.backgroundWarmJobs.delete(previousTour);
+
+    const preserveUrls = [
+      activeScene?.media?.src,
+      activeScene?.minimap_image
+    ].filter(Boolean);
+
+    this.assetCache.setPinnedImages(preserveUrls);
+    this.assetCache.trimImageCache({
+      preserveUrls,
+      maxEntries: Math.max(2, preserveUrls.length)
+    });
+
+    const renderer = this.platformCoordinator.getActiveRenderer();
+    renderer?.setPinnedTextureSources?.(preserveUrls);
+    renderer?.evictTextures?.(preserveUrls);
   }
 }
 

@@ -343,16 +343,7 @@ p {
 }
 
 .scene-caption {
-  position: absolute;
-  left: clamp(1rem, 2.8vw, 2rem);
-  bottom: clamp(1rem, 2.8vw, 2rem);
-  z-index: 7;
-  max-width: min(36rem, calc(100% - 2rem));
-  padding: 1rem 1.15rem;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: rgba(8, 22, 27, 0.64);
-  backdrop-filter: blur(18px);
+  display: none !important;
 }
 
 .scene-caption h2 {
@@ -868,8 +859,7 @@ p {
   }
 
   .scene-caption {
-    right: 1rem;
-    bottom: 1rem;
+    display: none !important;
   }
 
   .minimap-slot {

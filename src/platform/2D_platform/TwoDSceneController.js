@@ -6,9 +6,12 @@ export class TwoDSceneController {
   constructor({ root, context }) {
     this.root = root;
     this.context = context;
+    this.renderToken = 0;
+    this.destroyed = false;
   }
 
   mount() {
+    this.destroyed = false;
     this.renderer = new TwoDRenderer({
       root: this.root,
       cfgProvider: () => this.context.store.getSnapshot().cfg,
@@ -33,22 +36,41 @@ export class TwoDSceneController {
     if (!state.currentScene) {
       return;
     }
+    const renderToken = ++this.renderToken;
 
     this.renderer.setInteractionLocked(true);
     this.hotspotRenderer.setInteractionLocked(true);
 
     try {
       const sceneTransition = await this.renderer.showScene(state.currentScene, state.currentTour, options);
+      if (!this.isRenderActive(renderToken)) {
+        return sceneTransition;
+      }
       await this.renderer.waitForScenePresentation(sceneTransition?.transitionId);
+      if (!this.isRenderActive(renderToken)) {
+        return sceneTransition;
+      }
       this.renderer.compactSceneResources(state.currentScene);
+      if (!this.isRenderActive(renderToken)) {
+        return sceneTransition;
+      }
       this.hotspotRenderer.render(state.currentScene);
       this.hotspotRenderer.updateProjection();
       await waitForUiCommit();
+      if (!this.isRenderActive(renderToken)) {
+        return sceneTransition;
+      }
       return sceneTransition;
     } finally {
-      this.hotspotRenderer.setInteractionLocked(false);
-      this.renderer.setInteractionLocked(false);
+      if (this.isRenderActive(renderToken)) {
+        this.hotspotRenderer.setInteractionLocked(false);
+        this.renderer.setInteractionLocked(false);
+      }
     }
+  }
+
+  isRenderActive(renderToken) {
+    return this.destroyed !== true && renderToken === this.renderToken;
   }
 
   screenToWorldFromEvent(event, options) {
@@ -56,6 +78,8 @@ export class TwoDSceneController {
   }
 
   destroy() {
+    this.destroyed = true;
+    this.renderToken += 1;
     this.inputController?.destroy();
     this.hotspotRenderer?.destroy();
     this.renderer?.destroy();

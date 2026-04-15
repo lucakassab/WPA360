@@ -55,7 +55,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Studio Quarto.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -122,7 +122,7 @@
           "marker_visible": true,
           "label": {
             "text": " Coluna 1 - Studio Quarto.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -168,7 +168,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Studio Banheiro.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -210,7 +210,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Studio Varanda.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -273,7 +273,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Studio Varanda.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -315,7 +315,7 @@
           "marker_visible": true,
           "label": {
             "text": " Coluna 1 - Studio Cozinha.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -361,7 +361,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Studio Banheiro.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -424,7 +424,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Studio Quarto.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -470,7 +470,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Studio Banheiro.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -512,7 +512,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Studio Cozinha.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -575,7 +575,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Suite Sala.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -642,7 +642,7 @@
           "marker_visible": true,
           "label": {
             "text": " Coluna 1 - Suite Quarto.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -684,7 +684,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Suite Sala.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -733,48 +733,6 @@
       },
       "hotspots": [
         {
-          "id": "go-to-coluna-1-suite-sala",
-          "type": "scene_link",
-          "target_scene": "coluna-1-suite-sala",
-          "position": {
-            "x": 5,
-            "y": 0.25,
-            "z": -8
-          },
-          "rotation": {
-            "yaw": 24,
-            "pitch": 0,
-            "roll": 0
-          },
-          "scale": 1,
-          "billboard": true,
-          "marker_visible": true,
-          "label": {
-            "text": " Coluna 1 - Suite Sala.jpg",
-            "visible": true,
-            "position_offset": {
-              "x": 0,
-              "y": 0.9,
-              "z": 0
-            },
-            "rotation_offset": {
-              "yaw": 0,
-              "pitch": 0,
-              "roll": 0
-            },
-            "scale": 1,
-            "reference_depth": 8,
-            "billboard": true
-          },
-          "target_tour": null,
-          "reference_depth": 8,
-          "apply_hotspot_scene_yaw": false,
-          "hotspot_define_scene_yaw": 0,
-          "marker_icon": {
-            "src": null
-          }
-        },
-        {
           "id": "go-to-coluna-1-suite-sala-2",
           "type": "scene_link",
           "target_scene": "coluna-1-suite-sala",
@@ -793,7 +751,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Suite Sala.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -860,7 +818,7 @@
           "marker_visible": true,
           "label": {
             "text": " Coluna 1 - Suite Varanda.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -902,7 +860,7 @@
           "marker_visible": true,
           "label": {
             "text": " Coluna 1 - Suite Quarto.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -948,7 +906,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Suite Cozinha.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -990,7 +948,7 @@
           "marker_visible": true,
           "label": {
             "text": "Coluna 1 - Suite Banheiro.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,
@@ -1053,7 +1011,7 @@
           "marker_visible": true,
           "label": {
             "text": " Coluna 1 - Suite Sala.jpg",
-            "visible": true,
+            "visible": false,
             "position_offset": {
               "x": 0,
               "y": 0.9,

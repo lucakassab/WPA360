@@ -73,7 +73,10 @@
           "target_tour": "puc",
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         },
         {
           "id": "go-to-puc-hall-de-elevador",
@@ -112,6 +115,9 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
+          },
+          "marker_icon": {
+            "src": null
           }
         },
         {
@@ -151,6 +157,9 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
+          },
+          "marker_icon": {
+            "src": null
           }
         }
       ]
@@ -215,7 +224,10 @@
           "target_tour": "puc",
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         },
         {
           "id": "go-to-puc-academia-banheiro",
@@ -254,7 +266,10 @@
           "target_tour": null,
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         }
       ]
     },
@@ -318,7 +333,10 @@
           "target_tour": null,
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         },
         {
           "id": "go-to-puc-vista-meio-salao",
@@ -357,7 +375,10 @@
           "target_tour": "puc",
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         }
       ]
     },
@@ -421,7 +442,10 @@
           "target_tour": null,
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         },
         {
           "id": "go-to-puc-gourmet-cozinha",
@@ -460,7 +484,10 @@
           "target_tour": null,
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         }
       ]
     },
@@ -524,7 +551,10 @@
           "target_tour": "puc",
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         },
         {
           "id": "go-to-puc-gourmet",
@@ -563,7 +593,10 @@
           "target_tour": null,
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         },
         {
           "id": "go-to-puc-sauna",
@@ -602,6 +635,9 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
+          },
+          "marker_icon": {
+            "src": null
           }
         }
       ]
@@ -666,7 +702,10 @@
           "target_tour": null,
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         },
         {
           "id": "go-to-puc-piscina",
@@ -705,7 +744,10 @@
           "target_tour": "puc",
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         },
         {
           "id": "go-to-puc-academia",
@@ -744,6 +786,9 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
+          },
+          "marker_icon": {
+            "src": null
           }
         }
       ]
@@ -772,9 +817,9 @@
       },
       "hotspots": [
         {
-          "id": "go-to-puc-gourmet",
+          "id": "go-to-puc-gourmet-cozinha",
           "type": "scene_link",
-          "target_scene": "puc-gourmet",
+          "target_scene": "puc-gourmet-cozinha",
           "position": {
             "x": 7.704,
             "y": -1.132,
@@ -789,7 +834,7 @@
           "billboard": true,
           "marker_visible": true,
           "label": {
-            "text": "PUC - Gourmet.jpg",
+            "text": "PUC - Gourmet Cozinha.jpg",
             "visible": true,
             "position_offset": {
               "x": 0,
@@ -808,7 +853,10 @@
           "target_tour": "puc",
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         },
         {
           "id": "puc-pergolado-inferior-hotspot",
@@ -847,6 +895,9 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
+          },
+          "marker_icon": {
+            "src": null
           }
         },
         {
@@ -886,6 +937,9 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
+          },
+          "marker_icon": {
+            "src": null
           }
         },
         {
@@ -925,6 +979,9 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
+          },
+          "marker_icon": {
+            "src": null
           }
         }
       ]
@@ -989,7 +1046,10 @@
           "target_tour": "puc",
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         }
       ]
     },
@@ -1053,7 +1113,10 @@
           "target_tour": "puc",
           "apply_hotspot_scene_yaw": false,
           "hotspot_define_scene_yaw": 0,
-          "reference_depth": 8
+          "reference_depth": 8,
+          "marker_icon": {
+            "src": null
+          }
         }
       ]
     },
@@ -1117,6 +1180,9 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
+          },
+          "marker_icon": {
+            "src": null
           }
         },
         {
@@ -1156,6 +1222,9 @@
             "scale": 1,
             "reference_depth": 8,
             "billboard": true
+          },
+          "marker_icon": {
+            "src": null
           }
         }
       ]

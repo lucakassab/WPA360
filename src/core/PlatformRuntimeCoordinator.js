@@ -5,9 +5,12 @@ export class PlatformRuntimeCoordinator {
     this.launchers = launchers;
     this.activePlatform = null;
     this.activePlatformId = null;
+    this.switchToken = 0;
+    this.renderToken = 0;
   }
 
   async switchPlatform(platformId, options = {}) {
+    const switchToken = ++this.switchToken;
     const deferRender = options.deferRender === true;
     if (!this.launchers[platformId]) {
       throw new Error(`Unknown platform: ${platformId}`);
@@ -36,16 +39,31 @@ export class PlatformRuntimeCoordinator {
     this.context.store.patch({ platformId });
 
     this.activePlatform.mount(options);
-    if (!deferRender) {
-      await this.renderCurrent(options);
+    if (switchToken !== this.switchToken || this.activePlatformId !== platformId) {
+      return null;
     }
+    if (!deferRender) {
+      return await this.renderCurrent(options);
+    }
+    return null;
   }
 
   async renderCurrent(options = {}) {
     if (!this.activePlatform) {
       return;
     }
-    await this.activePlatform.render(this.context.store.getSnapshot(), options);
+    const renderToken = ++this.renderToken;
+    const platform = this.activePlatform;
+    const platformId = this.activePlatformId;
+    const result = await platform.render(this.context.store.getSnapshot(), options);
+    if (
+      renderToken !== this.renderToken
+      || platform !== this.activePlatform
+      || platformId !== this.activePlatformId
+    ) {
+      return null;
+    }
+    return result;
   }
 
   screenToWorldFromEvent(event, options) {
